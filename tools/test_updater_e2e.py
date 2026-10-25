@@ -29,7 +29,14 @@ def main():
     parser=argparse.ArgumentParser()
     for name in ['manifest','fixture-exe','production-exe','result']:parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--install-dir',type=Path,default=Path(os.environ['LOCALAPPDATA'])/'TennoLedger')
+    parser.add_argument('--temp-dir',type=Path)
     args=parser.parse_args();args.install_dir=args.install_dir.resolve()
+    child_env=os.environ.copy()
+    if args.temp_dir:
+        args.temp_dir=args.temp_dir.resolve();args.temp_dir.mkdir(parents=True,exist_ok=True)
+        child_env.update({'TEMP':str(args.temp_dir),'TMP':str(args.temp_dir)})
+    for location in [args.install_dir.parent,Path(child_env['TEMP'])]:
+        if shutil.disk_usage(location).free<2*1024**3:raise RuntimeError('Acceptance requires at least 2 GiB free on installation and temporary volumes')
     manifest=json.loads(args.manifest.read_text(encoding='utf-8-sig'))
     installer=args.manifest.parent/Path(manifest['platforms']['windows-x86_64']['url']).name
     installed=args.install_dir/'myframe-desktop.exe';expected=sha(args.production_exe)
@@ -52,9 +59,9 @@ def main():
     server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler)
     threading.Thread(target=server.serve_forever,daemon=True).start()
     started=None;success=False
-    result={'version':manifest['version'],'profile':profile.name,'installDir':str(args.install_dir),'realMarketWrites':'NOT_RUN'}
+    result={'version':manifest['version'],'profile':profile.name,'installDir':str(args.install_dir),'realMarketWrites':'NOT_RUN','restartObservations':[]}
     try:
-        subprocess.run([str(installer),'/S',f'/D={args.install_dir}'],check=True,timeout=300)
+        subprocess.run([str(installer),'/S',f'/D={args.install_dir}'],check=True,timeout=300,env=child_env)
         wait_for(lambda:installed.is_file() and sha(installed)==expected,90,'Fresh installer did not deploy release binary')
         result['freshInstall']='PASS';print('Fresh install: PASS',flush=True)
         profile.mkdir(parents=True);database=profile/'myframe.sqlite3';token='update-e2e-'+uuid.uuid4().hex
@@ -62,7 +69,7 @@ def main():
             db.execute('CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL)')
             db.execute('INSERT INTO settings VALUES(?,?)',('release_acceptance_marker',token))
         shutil.copy2(args.fixture_exe,installed)
-        env=os.environ.copy();env['TENNOLEDGER_UPDATE_E2E_ENDPOINT']=f'http://127.0.0.1:{server.server_port}/latest.json';env['TENNOLEDGER_UPDATE_E2E_INSTALL_DIR']=str(args.install_dir)
+        env=child_env.copy();env['TENNOLEDGER_UPDATE_E2E_ENDPOINT']=f'http://127.0.0.1:{server.server_port}/latest.json';env['TENNOLEDGER_UPDATE_E2E_INSTALL_DIR']=str(args.install_dir)
         log=args.result.with_suffix('.fixture.log');log.parent.mkdir(parents=True,exist_ok=True)
         with log.open('wb') as output:
             started=subprocess.Popen([str(installed),'--acceptance-profile','updater-e2e'],env=env,stdout=output,stderr=subprocess.STDOUT,cwd=args.install_dir)
@@ -73,13 +80,14 @@ def main():
         wait_for(lambda:list((profile/'update-backups').glob('before-0.0.9-*.sqlite3')),30,'Real update_prepare backup missing')
         backups=list((profile/'update-backups').glob('before-0.0.9-*.sqlite3'))
         if marker(database)!=token or not any(marker(path)==token for path in backups):raise RuntimeError('Acceptance data was not preserved in both current DB and pre-update backup')
-        command="Get-CimInstance Win32_Process | Where-Object {$_.Name -eq 'myframe-desktop.exe'} | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress"
+        command="Get-CimInstance Win32_Process | Where-Object {$_.Name -eq 'myframe-desktop.exe' -or $_.Name -like '*-installer.exe'} | Select-Object ProcessId,ExecutablePath,CommandLine | ConvertTo-Json -Compress"
         def restarted():
             raw=subprocess.check_output(['pwsh','-NoProfile','-Command',command],text=True,encoding='utf-8').strip()
             if not raw:return False
             rows=json.loads(raw);rows=rows if isinstance(rows,list) else [rows]
-            return any(row.get('ExecutablePath','').lower()==str(installed).lower() and '--acceptance-profile' in (row.get('CommandLine') or '') for row in rows)
-        wait_for(restarted,60,'Installed production version did not restart with the isolated acceptance profile')
+            result['restartObservations'].append({'at':time.time(),'processes':rows})
+            return any((row.get('ExecutablePath') or '').lower()==str(installed).lower() and '--acceptance-profile' in (row.get('CommandLine') or '') for row in rows)
+        wait_for(restarted,180,'Installed production version did not restart with the isolated acceptance profile')
         if not any(row['path']=='/latest.json' for row in requests) or not any(row['path']=='/installer.exe' for row in requests):raise RuntimeError('Real updater requests were not observed')
         result.update({'oldVersion':'0.0.9','automaticUpgrade':'PASS','signatureVerifiedBy':'tauri-plugin-updater download','databasePreserved':'PASS','preUpdateBackup':'PASS','restart':'PASS','productionExeSha256':expected,'requests':requests});success=True
     finally:
@@ -87,7 +95,8 @@ def main():
         if not success:
             if started is not None and started.poll() is None:started.terminate();started.wait(timeout=15)
             # Recover the newly installed release after a failed fixture. No original user data is modified.
-            try:shutil.copy2(args.production_exe,installed)
+            try:
+                if started is not None:shutil.copy2(args.production_exe,installed)
             except OSError:pass
             result['status']='FAILED'
         else:result['status']='PASS'

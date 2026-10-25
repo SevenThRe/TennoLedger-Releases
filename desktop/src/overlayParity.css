@@ -1,0 +1,35 @@
+/* 3.0.4 InGameNotification.html / inGameNotifications.css. */
+html[data-overlay-kind=game-notification] .gameOverlay.compactGameNotice{display:flex;justify-content:flex-end;align-items:center;width:100%;height:100%;padding:0;border:0;border-radius:0;overflow:hidden;background:url('/reference/ui/notification-animated.gif') center/100% 100% no-repeat;animation:none}
+.noticeContentWindow{position:relative;overflow:hidden;width:88%;height:69%;margin:auto auto 17px}
+.noticeContentHolder{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;gap:2px;animation:noticeSlide 1s cubic-bezier(.82,-.01,.58,.86)}
+.noticeSource{position:relative;flex:none;width:85px;height:100%;display:flex;align-items:center;justify-content:center}
+.noticeSource img{width:72px;height:46px;object-fit:contain;margin:0 7px 17px}
+.noticeSource span{position:absolute;bottom:-1px;left:0;width:85px;text-align:center;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.compactGameNotice .noticeContentHolder>p{flex:1;min-width:0;max-height:100%;margin:0;display:block;font-size:15px;line-height:20px;text-align:center;text-overflow:ellipsis;overflow:hidden;color:var(--color-text)}
+@keyframes noticeSlide{from{transform:translateX(100%)}to{transform:none}}
+@media(prefers-reduced-motion:reduce){.noticeContentHolder{animation:none}}
+/* relicOverlay/base.css: reward summary band, rather than generic artwork cards. */
+html[data-overlay=true] .gameOverlay.relic-rewards{display:flex;flex-direction:column;gap:0;overflow:hidden;padding:0;border:2px solid var(--ui-line);border-radius:0;background:var(--color-bg-1);color:var(--color-text)}
+html[data-overlay=true] .gameOverlay.relic-rewards>header{display:none}
+.relic-rewards .overlayRewards{flex:1;min-height:0;display:flex;justify-content:center;gap:.5%;padding:7px}
+.relic-rewards .overlayRewards article{flex:1;max-width:25%;min-width:0;height:100%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1.05fr .77fr .8fr 1.5fr;gap:0;align-items:center;justify-content:space-between;padding:6px;border:0;border-radius:15px;background:var(--color-card);box-shadow:inset 0 0 0 1px var(--ui-line)}
+.relic-rewards .overlayRewards article.recommended{background:var(--color-card-active);box-shadow:inset 0 0 0 1px var(--color-tab-lighter)}
+.overlayRewardName{grid-column:1/3;grid-row:1;text-align:center;padding:0 4px;font-size:18px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.overlayRewardPrices{display:flex;align-items:center;justify-content:space-around;grid-column:1/3;grid-row:2;width:100%}
+.overlayRewardPrices>span{display:flex;align-items:center;font-size:22px;font-weight:400;gap:3px}
+.overlayRewards .overlayRewardPrices img{width:28px;height:28px;object-fit:contain}
+.overlayRewardOwnership{display:flex;align-items:center;grid-row:3;grid-column:1/3;width:80%;margin:auto;font-size:13px;text-align:center;gap:2px}
+.overlayRewardOwnership>span:first-child{flex:5;border-radius:13px 0 0 13px;white-space:nowrap;padding:3px;background:var(--color-bg-1)}
+.overlayRewardOwnership>span:last-child{flex:2;border-radius:0 13px 13px 0;padding:3px;background:var(--color-bg-1)}
+.overlayRewardOwnership .crafted{color:#78c9ad}.overlayRewardOwnership .notCrafted{color:#d5b4b9}
+.overlayRewardComponents{grid-column:1/3;grid-row:4;display:flex;justify-content:center;align-items:center;gap:3px;min-width:0;height:100%}
+.overlayRewardComponents>div{position:relative;min-width:0;max-width:46px;width:25%;height:46px;border-radius:8px;border:1px solid var(--ui-line);background:var(--color-bg-1)}
+.overlayRewardComponents>div.highlighted{border-color:var(--color-tab-lighter)}
+.overlayRewards .overlayRewardComponents img{width:100%;height:100%;object-fit:contain}
+.overlayRewardComponents>div>span{position:absolute;bottom:0;right:2px;padding:0 2px;border-radius:3px;font-size:11px;background:#101623c9}
+.gameOverlay .overlayRewardFooter{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;height:16%;margin:0;padding:4px 10px;background:var(--color-bg-2);font-size:13px;line-height:18px}
+.overlayRewardFooter>strong{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:500}
+.overlayRewardFooter>strong>img{width:23px;height:23px;object-fit:contain}
+.overlayRewardFooter>button{font-size:12px;padding:3px 8px}
+.overlayRewardFooter>span{display:flex;align-items:center;gap:5px;font-variant-numeric:tabular-nums}
+.overlayRewardFooter>span>img{width:20px;height:20px;object-fit:contain}

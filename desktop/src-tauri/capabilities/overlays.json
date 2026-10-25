@@ -1,0 +1,11 @@
+{
+  "identifier": "overlays",
+  "description": "Local game overlay windows",
+  "windows": [
+    "overlay-*"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close"
+  ]
+}

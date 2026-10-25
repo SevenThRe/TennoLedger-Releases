@@ -1,0 +1,5 @@
+export type AppPreferences={warnOnClose:boolean;launchOnSecondary:boolean;recordStats:boolean;statsTabEnabled:boolean;rememberMarketStatus:boolean;fullInventoryExperienceEnabled:boolean;takeRankIntoAccount:boolean};
+export const appPreferencesKey='myframe.appPreferences.v1';
+export const appPreferenceDefaults:AppPreferences={warnOnClose:true,launchOnSecondary:false,recordStats:true,statsTabEnabled:true,rememberMarketStatus:false,fullInventoryExperienceEnabled:false,takeRankIntoAccount:true};
+export function parseAppPreferences(value:unknown):AppPreferences{if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid preferences');const p=value as Record<string,unknown>,next={...appPreferenceDefaults};for(const key of Object.keys(next) as (keyof AppPreferences)[]){if(p[key]!==undefined){if(typeof p[key]!=='boolean')throw Error('Invalid preference: '+key);next[key]=p[key] as boolean;}}return next;}
+export function readAppPreferences(raw:string|null){try{return parseAppPreferences(JSON.parse(raw??'{}'));}catch{return {...appPreferenceDefaults};}}

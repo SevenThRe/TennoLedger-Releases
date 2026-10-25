@@ -1,0 +1,32 @@
+{
+  "name": "myframe-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4318 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "tauri": "tauri",
+    "desktop": "tauri dev",
+    "package": "tauri build",
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@radix-ui/react-icons": "^1.3.2",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-updater": "^2.14.0",
+    "echarts": "^6",
+    "i18next": "^25",
+    "pinyin-pro": "3.29.5",
+    "react": "^19",
+    "react-dom": "^19",
+    "react-i18next": "^16"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5.9",
+    "vite": "^7"
+  }
+}

@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "type": "riven-capture",
+  "mode": "comparison",
+  "comparisonEvidence": "explicit-hint",
+  "evidence": "synthetic-ocr",
+  "frameSize": [
+    1600,
+    900
+  ],
+  "cards": [
+    {
+      "side": "left",
+      "weaponId": "/Lotus/Weapons/ClanTech/Bio/BioWeapon",
+      "weaponName": "Torid",
+      "weaponNameZh": "托里德",
+      "rivenName": "Visi-crita",
+      "attributes": [
+        {
+          "slug": "base_damage_/_melee_damage",
+          "name": "Damage",
+          "nameZh": "伤害",
+          "value": 100.0,
+          "signedValue": 100.0,
+          "printedSign": "+",
+          "unit": "%",
+          "rawText": "+100% Damage",
+          "confidence": 0.98
+        },
+        {
+          "slug": "critical_chance",
+          "name": "Critical Chance",
+          "nameZh": "暴击几率",
+          "value": 75.5,
+          "signedValue": 75.5,
+          "printedSign": "+",
+          "unit": "%",
+          "rawText": "+75.5% Critical Chance",
+          "confidence": 0.98
+        },
+        {
+          "slug": "zoom",
+          "name": "Zoom",
+          "nameZh": "变焦",
+          "value": 20.2,
+          "signedValue": -20.2,
+          "printedSign": "-",
+          "unit": "%",
+          "rawText": "−20.2% Zoom",
+          "confidence": 0.98
+        }
+      ],
+      "bounds": [
+        200,
+        100,
+        250,
+        314
+      ],
+      "confidence": 0.98,
+      "warnings": [],
+      "rawBlocks": [
+        {
+          "text": "Torid Visi-crita",
+          "x": 200,
+          "y": 100,
+          "w": 250,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "+100% Damage",
+          "x": 200,
+          "y": 180,
+          "w": 250,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "+75.5% Critical Chance",
+          "x": 200,
+          "y": 220,
+          "w": 250,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "−20.2% Zoom",
+          "x": 200,
+          "y": 260,
+          "w": 250,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "MR: 12",
+          "x": 200,
+          "y": 310,
+          "w": 120,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "Rank 8/8",
+          "x": 200,
+          "y": 350,
+          "w": 120,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "Rerolls: 4",
+          "x": 200,
+          "y": 390,
+          "w": 120,
+          "h": 24,
+          "confidence": 0.98
+        }
+      ],
+      "masteryLevel": 12,
+      "rank": 8,
+      "rerolls": 4
+    },
+    {
+      "side": "right",
+      "weaponId": "/Lotus/Weapons/ClanTech/Bio/BioWeapon",
+      "weaponName": "Torid",
+      "weaponNameZh": "托里德",
+      "rivenName": "Visi-crita",
+      "attributes": [
+        {
+          "slug": "base_damage_/_melee_damage",
+          "name": "Damage",
+          "nameZh": "伤害",
+          "value": 145.0,
+          "signedValue": 145.0,
+          "printedSign": "+",
+          "unit": "%",
+          "rawText": "+145% Damage",
+          "confidence": 0.98
+        },
+        {
+          "slug": "critical_chance",
+          "name": "Critical Chance",
+          "nameZh": "暴击几率",
+          "value": 75.5,
+          "signedValue": 75.5,
+          "printedSign": "+",
+          "unit": "%",
+          "rawText": "+75.5% Critical Chance",
+          "confidence": 0.98
+        },
+        {
+          "slug": "zoom",
+          "name": "Zoom",
+          "nameZh": "变焦",
+          "value": 20.2,
+          "signedValue": -20.2,
+          "printedSign": "-",
+          "unit": "%",
+          "rawText": "−20.2% Zoom",
+          "confidence": 0.98
+        }
+      ],
+      "bounds": [
+        950,
+        100,
+        250,
+        314
+      ],
+      "confidence": 0.98,
+      "warnings": [],
+      "rawBlocks": [
+        {
+          "text": "Torid Visi-crita",
+          "x": 950,
+          "y": 100,
+          "w": 250,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "+145% Damage",
+          "x": 950,
+          "y": 180,
+          "w": 250,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "+75.5% Critical Chance",
+          "x": 950,
+          "y": 220,
+          "w": 250,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "−20.2% Zoom",
+          "x": 950,
+          "y": 260,
+          "w": 250,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "MR: 12",
+          "x": 950,
+          "y": 310,
+          "w": 120,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "Rank 8/8",
+          "x": 950,
+          "y": 350,
+          "w": 120,
+          "h": 24,
+          "confidence": 0.98
+        },
+        {
+          "text": "Rerolls: 4",
+          "x": 950,
+          "y": 390,
+          "w": 120,
+          "h": 24,
+          "confidence": 0.98
+        }
+      ],
+      "masteryLevel": 12,
+      "rank": 8,
+      "rerolls": 4
+    }
+  ],
+  "warnings": []
+}

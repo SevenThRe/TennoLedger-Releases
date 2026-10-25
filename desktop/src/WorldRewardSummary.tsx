@@ -1,0 +1,23 @@
+import {useEffect,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
+import {useTranslation} from 'react-i18next';
+import PanelIcon from './PanelIcon';
+import {useWorld} from './WorldProvider';
+import {activeReward,defaultRewardPreferences,matchesReward} from './worldModel';
+import WorldRewards from './WorldRewards';
+import WorldRewardPreferences from './WorldRewardPreferences';
+
+/** worldTimers.html reward summary; full mission rows live in its hover/click popover. */
+export default function WorldRewardSummary({now}:{now:number}){
+ const {i18n}=useTranslation(),en=i18n.language.startsWith('en'),world=useWorld();
+ const prefs=world.status.subscriptions.rewardPreferences??defaultRewardPreferences();
+ const rows=(world.status.rewardMissions??[]).filter(row=>activeReward(row,now)&&row.rewards.some(reward=>matchesReward(reward,prefs)));
+ const [open,setOpen]=useState<'missions'|'preferences'|null>(null),[position,setPosition]=useState({left:0,top:0,width:320,maxHeight:400});
+ const root=useRef<HTMLElement>(null),panel=useRef<HTMLDivElement>(null),timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined),pinned=useRef(false);
+ const cancel=()=>clearTimeout(timer.current),leave=()=>{cancel();if(!pinned.current)timer.current=setTimeout(()=>setOpen(null),200);};
+ useEffect(()=>{if(!open)return;const place=()=>{const box=root.current?.getBoundingClientRect();if(!box)return;const width=Math.min(460,innerWidth-16),below=innerHeight-box.bottom;setPosition({width,left:Math.max(8,Math.min(box.right-width,innerWidth-width-8)),top:below>=250?box.bottom+6:Math.max(8,box.top-Math.min(500,box.top-16)),maxHeight:below>=250?below-14:Math.max(100,box.top-24)});};place();const close=(e:PointerEvent)=>{if(e.target instanceof Node&&!root.current?.contains(e.target)&&!panel.current?.contains(e.target)){pinned.current=false;setOpen(null);}};const key=(e:KeyboardEvent)=>{if(e.key==='Escape'){pinned.current=false;setOpen(null);root.current?.querySelector('button')?.focus();}};window.addEventListener('resize',place);document.addEventListener('scroll',place,true);document.addEventListener('pointerdown',close);document.addEventListener('keydown',key);return()=>{cancel();window.removeEventListener('resize',place);document.removeEventListener('scroll',place,true);document.removeEventListener('pointerdown',close);document.removeEventListener('keydown',key);};},[open]);
+ useEffect(()=>()=>cancel(),[]);
+ const choose=(next:'missions'|'preferences')=>{cancel();pinned.current=open===next?!pinned.current:true;setOpen(pinned.current?next:null);};
+ const names=rows.slice(0,2).flatMap(row=>row.rewards.slice(0,1).map(reward=>reward.name));
+ return <section ref={root} className="railRewardSummary" onMouseLeave={leave}><header><button className="railRewardHeading" onMouseEnter={()=>{cancel();if(!pinned.current)setOpen('missions');}} onFocus={()=>{cancel();setOpen('missions');}} onClick={()=>choose('missions')} aria-expanded={open==='missions'}>{en?'Alerts, Invasions & events':'警报、入侵与事件'}<span className="railCount">{world.status.updatedAt?rows.length:'—'}</span><PanelIcon name="info"/></button><button className={'railIconButton'+(prefs.enabled?' selected':'')} aria-label={en?'Choose rewards and notifications':'选择奖励与通知'} aria-expanded={open==='preferences'} onClick={()=>choose('preferences')}><PanelIcon name={prefs.enabled?'bellActive':'bell'}/></button></header><button className="railRewardPreview" onMouseEnter={()=>{cancel();if(!pinned.current)setOpen('missions');}} onFocus={()=>{cancel();setOpen('missions');}} onClick={()=>choose('missions')}><PanelIcon name="gift"/><span>{!world.status.updatedAt?(en?'Loading reward missions…':'正在读取奖励任务…'):rows.length?(en?`${rows.length} missions match your rewards.`:`${rows.length} 个任务符合所选奖励。`):(en?'No matching rewards right now.':'当前暂无匹配奖励。')}<small>{rows.length?names.join(', ')+(rows.length>2?(en?', and more':'等'):''):(en?'Choose rewards with the bell':'点击铃铛选择奖励')}</small></span></button>{open&&createPortal(<div ref={panel} className="railRewardPopup" role="region" aria-label={open==='missions'?(en?'Reward missions':'奖励任务'):(en?'Reward notifications':'奖励通知')} style={position} onMouseEnter={cancel} onMouseLeave={leave}><header><strong>{open==='missions'?(en?'Alerts, Invasions & events':'警报、入侵与事件'):(en?'Reward notifications':'奖励通知')}</strong><button className="railIconButton" aria-label={en?'Close':'关闭'} onClick={()=>{pinned.current=false;setOpen(null);}}><PanelIcon name="close"/></button></header>{open==='missions'?<WorldRewards now={now}/>:<WorldRewardPreferences/>}</div>,document.body)}</section>;
+}

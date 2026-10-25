@@ -1,0 +1,87 @@
+[package]
+name = "myframe-desktop"
+version = "0.1.0"
+edition = "2021"
+default-run = "myframe-desktop"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri-plugin-updater = "2"
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.38", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+
+memchr = "=2.8.3"
+sha2 = "=0.10.9"
+regex = "1"
+tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = ["Data_Xml_Dom", "UI_Notifications", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_System_WinRT", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_UI_Shell_PropertiesSystem", "Win32_System_Registry", "Win32_System_Threading", "Win32_Security", "Win32_UI_Notifications"] }
+
+[target.'cfg(windows)'.dependencies.windows-core]
+version = "0.62.2"
+
+[profile.dev.package.myframe-desktop]
+opt-level = 2
+
+[profile.dev.package.memchr]
+opt-level = 3
+
+[dev-dependencies]
+base64 = "0.22"
+minisign-verify = "0.3"
+
+[features]
+diagnostics = []
+
+[[bin]]
+name = "arbitration-probe"
+path = "src/bin/arbitration-probe.rs"
+required-features = ["diagnostics"]
+
+[[bin]]
+name = "collector-probe"
+path = "src/bin/collector-probe.rs"
+required-features = ["diagnostics"]
+
+[[bin]]
+name = "export-probe"
+path = "src/bin/export-probe.rs"
+required-features = ["diagnostics"]
+
+[[bin]]
+name = "helper-probe"
+path = "src/bin/helper-probe.rs"
+required-features = ["diagnostics"]
+
+[[bin]]
+name = "mastery-audit"
+path = "src/bin/mastery-audit.rs"
+required-features = ["diagnostics"]
+
+[[bin]]
+name = "toast-compare"
+path = "src/bin/toast-compare.rs"
+required-features = ["diagnostics"]
+
+[[bin]]
+name = "toast-diagnose"
+path = "src/bin/toast-diagnose.rs"
+required-features = ["diagnostics"]
+
+[[bin]]
+name = "workshop-fixture"
+path = "src/bin/workshop-fixture.rs"
+required-features = ["diagnostics"]
+
+[[bin]]
+name = "world-probe"
+path = "src/bin/world-probe.rs"
+required-features = ["diagnostics"]

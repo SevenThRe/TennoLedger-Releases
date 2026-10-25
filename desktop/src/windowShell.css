@@ -1,0 +1,47 @@
+html,body,#root{height:100%;overflow:hidden}.windowShell{height:100%;position:relative;border:1px solid #666b78;border-radius:9px;overflow:hidden;background:#101522}.windowShell.maximized{border-radius:0}.windowTitlebar{height:34px;display:flex;align-items:center;background:#10141f;color:#f2f4fa;user-select:none}.windowDrag{align-self:stretch;display:flex;align-items:center;gap:7px;flex:1;padding:0 9px;font-size:15px}.windowDrag b{color:#75d6bd}.windowTools{display:flex;align-items:center;height:100%;gap:1px}.windowTools button{height:30px;min-width:29px;padding:3px 6px;border:0;border-radius:4px;background:transparent;display:flex;align-items:center;justify-content:center;font-size:17px}.windowTools button:hover{background:#2d354b}.windowTools .zoomValue{font-size:12px;min-width:40px;padding:3px 1px}.windowTools .windowClose:hover{background:#c42b3b}.windowDivider{height:17px;width:1px;background:#3d4352;margin:0 5px}.windowContent{position:absolute;inset:34px 0 0;overflow:auto;zoom:var(--ui-scale)}.windowContent .app{min-height:100%}.windowContent .app aside{height:calc((100vh - 36px)/var(--ui-scale));top:calc(35px/var(--ui-scale));overflow-y:auto}.windowError{position:absolute;top:34px;right:10px;z-index:100;background:#692d39;max-width:80%;font-size:12px}.windowTools button:focus-visible{outline:2px solid #b6f7de;outline-offset:-2px}
+/* Fixed shell: navigation and content scroll independently, with no horizontal sidebar. */
+.windowContent{overflow:hidden}.windowContent .app{height:100%;min-height:0}.windowContent .app aside{position:relative;top:auto;height:100%;min-width:0;overflow-x:hidden;overflow-y:auto;flex-shrink:0}.windowContent .app aside>*{min-width:0;max-width:100%;flex-shrink:0}.windowContent .app main{margin-left:0;flex:1;width:0;min-width:0;max-width:none;height:100%;overflow-y:auto;overflow-x:hidden}.windowContent .app aside .playerCard{width:100%;min-width:0;overflow:hidden}.windowContent .app aside nav{min-width:0}.windowContent .app aside nav button{min-width:0;max-width:100%}
+*{scrollbar-width:thin;scrollbar-color:#50586e transparent}::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:#50586e;border-radius:8px}::-webkit-scrollbar-track{background:transparent}
+.collectionWorldLayout{align-items:start;min-width:0}.collectionWorldMain{min-width:0}.compactWorld{top:0;height:calc((100vh - 36px)/var(--ui-scale) - 90px);max-height:none;min-height:0}.worldPanel>*{flex-shrink:0}.worldPanel .worldMissionList{flex:1 1 160px;min-height:80px}.worldCycles,.worldCycle,.worldControls{min-width:0}.worldCycle b{overflow:hidden;text-overflow:ellipsis}.circuitPanel{flex:0 1 auto;max-height:240px;overflow:auto;margin:6px 8px;padding:8px;background:#20283d;border-radius:9px;font-size:12px}.circuitPanel header{display:flex;flex-direction:row;gap:8px;justify-content:space-between}.circuitPanel time{font-size:11px;white-space:nowrap}.circuitPanel h4{margin:8px 0 5px;font-size:11px;color:#b9c5dd}.circuitChoices{display:flex;gap:5px}.circuitChoices>div{flex:1;min-width:0;text-align:center;background:#151c2e;border-radius:8px;padding:4px}.circuitChoices img{width:36px;height:40px;object-fit:contain}.circuitChoices span{display:block;font-size:10px;overflow-wrap:anywhere}
+/* Bound the right rail to the visible content area. Lists scroll inside it. */
+.windowContent .worldPanel.compactWorld{height:var(--world-panel-height,calc((100vh - 36px)/var(--ui-scale) - 90px));min-height:0;max-height:none;top:0;overflow-y:auto}
+.windowContent .compactWorld .worldMissionList{flex:1 1 160px;height:auto;min-height:70px}
+.windowContent .compactWorld .circuitPanel{flex:0 1 220px;min-height:100px;max-height:240px;overflow:auto}
+.windowContent .worldPanel .baroPanel{flex:none}
+.windowContent .masteryPage{min-height:0}
+.windowContent .masteryDashboard{min-height:0;height:var(--world-panel-height);overflow:auto}
+.windowContent .masteryRecommendations{min-height:220px}
+.windowContent .masteryRecBody{min-height:120px;overflow:auto}
+
+.windowContent .masteryPage .collectionWorldMain{padding:0}.windowContent .masteryPage .masteryDetailLayout:empty{margin:0}
+.windowContent .masteryPage .collectionWorldMain{height:var(--world-panel-height);min-height:0;display:flex;flex-direction:column}
+.windowContent .masteryPage .masteryDashboard{height:auto;flex:1 1 0;min-height:0}
+.windowContent .masteryPage .masteryDataTools{flex:none}
+/* Match the v3 window frame; content remains measured inside the title bar. */
+.windowShell{--window-titlebar-height:48px}.windowTitlebar{height:var(--window-titlebar-height)}.windowContent{inset:var(--window-titlebar-height) 0 0}.windowError{top:var(--window-titlebar-height)}
+
+.windowTitlebar .windowDrag{font-size:18px;font-weight:600;gap:8px}.windowTitlebar .brandMark{width:24px;height:24px;object-fit:contain}
+
+/* 3.0.4 title bar: 48px, 32px zoom surface, original bitmap masks and SVG controls. */
+.windowShell{--window-titlebar-height:48px;background:var(--color-bg-1);border-color:var(--ui-line-strong)}
+.windowTitlebar{box-sizing:border-box;height:48px;gap:14px;padding:0 10px;width:100%;max-width:100%;border-bottom:1px solid var(--ui-line);background:var(--color-bg-1);color:var(--color-text-bg);font-family:Roboto,'Microsoft YaHei',sans-serif}
+.windowTitlebar .windowDrag{flex:0 0 auto;min-width:212px;padding:0;font-size:18px;font-weight:500;letter-spacing:-.5px;gap:5px}
+.windowTitlebar .windowDrag>span{font-size:18px;letter-spacing:-.5px}
+.windowTitlebar .brandMark{width:32px;height:32px;object-fit:contain}
+.windowDragSpace{height:100%;flex:1;min-width:0}
+.windowTools{display:flex;flex:none;gap:12px;align-items:center;height:100%;color:var(--color-navigation-hover)}
+.windowZoom{box-sizing:border-box;display:flex;align-items:center;height:32px;background:var(--color-bg-2);gap:2px;padding:1px 3px;border:1px solid var(--ui-line);border-radius:8px}
+.windowTools .windowZoom button{height:28px;min-width:28px;width:28px;border-radius:5px;padding:0;margin:0;color:var(--color-icons)}
+.windowTools .windowZoom .zoomValue{width:auto;min-width:46px;font-size:14px;color:var(--color-text);font-variant-numeric:tabular-nums}
+.windowTools .windowZoomIcon{width:100%;height:100%;background:var(--color-icons);mask-position:center;mask-size:63%;mask-repeat:no-repeat;-webkit-mask-position:center;-webkit-mask-size:63%;-webkit-mask-repeat:no-repeat}
+.windowZoomIcon.zoomOut{mask-image:url('/reference/shell/zoomout.png');-webkit-mask-image:url('/reference/shell/zoomout.png')}
+.windowZoomIcon.zoomIn{mask-image:url('/reference/shell/zoomin.png');-webkit-mask-image:url('/reference/shell/zoomin.png')}
+.windowControls{display:flex;align-items:center;gap:5px}
+.windowTools .windowControls button{display:flex;align-items:center;justify-content:center;width:30px;min-width:30px;height:30px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--color-navigation-hover);cursor:pointer}
+.windowTools .windowControls button:hover{color:#dedede;background:var(--color-bg-2)}
+.windowTools .windowControls .windowClose:hover{background:#c21913}
+.windowTools .windowControls button>svg{width:30px;height:30px;pointer-events:none}
+.windowTools .windowControls button:disabled{opacity:1;cursor:default}
+.windowTitlebar .windowTools button:focus-visible{outline:2px solid var(--color-tab-lighter)}
+
+.windowLiveTitle{font-size:14px;color:var(--color-navigation-hover);flex:none}.windowTitlebar:has(.windowLiveTitle) .windowDrag{min-width:0}

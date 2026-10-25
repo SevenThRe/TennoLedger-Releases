@@ -1,0 +1,119 @@
+/* AlecaFrame 3.0.4: foundry.css shell, tabHeaders.css and trading workspaces.
+   Scope explicitly: the old global header/main/aside rules must not own a workspace. */
+.windowContent .app main.tradingPage{padding:10px 12px 12px;display:flex;flex-direction:column;gap:0;overflow:hidden;background:var(--color-bg-1);font-size:14px;line-height:1.45}
+.windowContent .tradingPage .collectionWorldLayout,.windowContent .tradingPage>.marketWorkspace{display:grid;grid-template-columns:minmax(0,1fr) 402px;gap:14px;align-items:stretch;min-width:0;min-height:0;flex:1}
+.windowContent .tradingPage .collectionWorldMain{padding:0;display:flex;flex-direction:column;border-radius:15px;overflow:hidden}
+.windowContent .tradingPage .collectionWorldMain>.rivenLayout{height:100%;min-height:0;overflow:hidden;padding:14px}
+.windowContent .tradingPage .rivenLayout>.rivenPage{min-height:0;overflow:auto;padding:0 4px 12px;container:riven-workspace/inline-size}
+.windowContent .tradingPage :is(.rivenTabs,.rivenContractTabs,.marketSectionHeader){display:none}
+.windowContent .tradingPage .rivenPageHeading{min-height:36px;margin:0 0 10px;padding:0 6px;gap:8px 12px;height:auto;background:none;border:0}
+.windowContent .tradingPage .rivenPageHeading h2,.windowContent .tradingPage .marketBoard .tabPageHeading h2{font-size:24px;line-height:30px;font-weight:500;margin:0}
+.windowContent .tradingPage .rivenPageHeading .rivenLookup{display:flex;align-items:center;gap:7px;max-width:100%;width:340px;margin-left:auto}
+.windowContent .tradingPage .rivenLookup input{width:0;min-width:0;flex:1;height:34px;font-size:12px}
+.windowContent .tradingPage .rivenLookup button{height:34px;flex:none;font-size:12px;padding:0 10px;white-space:nowrap}
+.windowContent .tradingPage .rivenLookup small{display:none}
+.windowContent .tradingPage .rivenToolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 0 12px;margin:0 0 10px;border-bottom:1px solid var(--ui-line)}
+.windowContent .tradingPage .tradingCategories{display:flex;align-items:center;gap:3px;flex:1 1 auto;min-width:0}
+.windowContent .tradingPage .tradingCategories button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:0;height:38px;padding:0 9px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--color-navigation-hover);font:inherit;font-size:14px;white-space:nowrap}
+.windowContent .tradingPage .tradingCategories button[aria-pressed=true],.windowContent .tradingPage .tradingCategories button.selected{background:var(--color-card-active);border-color:var(--ui-line-strong);color:var(--color-text)}
+.windowContent .tradingPage .tradingCategories button:hover{background:var(--color-card-hover);color:var(--color-text)}
+.windowContent .tradingPage .tradingCategories img{width:20px;height:20px;object-fit:contain;flex:none}
+.tradingCategoryMore{position:relative}
+.windowContent .tradingPage .tradingCategoryMore>button{background:var(--color-bg-1);border-color:var(--ui-line);gap:8px}
+.tradingCategoryMore>[role=menu]{position:absolute;top:calc(100% + 2px);right:0;z-index:20;display:flex;flex-direction:column;min-width:160px;padding:4px;border:1px solid var(--ui-line-strong);border-radius:7px;background:var(--color-bg-2);box-shadow:0 8px 24px #0006}
+.windowContent .tradingPage .tradingCategoryMore>[role=menu]>button{justify-content:flex-start}
+.windowContent .tradingPage .rivenInventorySearch{display:flex;align-items:center;gap:6px;margin-left:auto;flex:0 1 140px;width:140px;min-width:100px;height:38px;padding:0 10px;background:var(--color-bg-1);border:1px solid var(--ui-line);border-radius:7px;transition:none}
+.windowContent .tradingPage .rivenInventorySearch label,.windowContent .tradingPage .rivenInventorySearch img{width:18px;height:18px;flex:none}
+.windowContent .tradingPage .rivenInventorySearch input{min-width:0;width:0;flex:1;font-size:14px;padding:0;border:0;background:none}
+.windowContent .tradingPage .rivenInventorySearch button{display:grid;place-items:center;width:24px;height:28px;padding:3px;border:0;background:none;flex:none}
+.windowContent .tradingPage .rivenInventorySearch button:disabled{visibility:hidden}
+.windowContent .tradingPage .rivenSortDirection{display:grid;place-items:center;min-width:28px;width:28px;height:38px;padding:4px;border:0;background:none}
+.windowContent .tradingPage .rivenSortDirection img{width:20px;height:20px}
+.windowContent .tradingPage .rivenToolbar>select{width:150px;min-width:100px;height:38px;font-size:13px;margin:0}
+.windowContent .tradingPage .rivenFilterToggle{display:flex;align-items:center;gap:6px;height:38px;padding:0 10px;background:var(--color-bg-1);border:1px solid var(--ui-line);border-radius:7px;font-size:14px}
+.rivenFilterToggle img{width:18px;height:18px}
+.rivenFilterToggle[aria-expanded=true]{border-color:var(--color-tab-lighter)!important}
+.rivenStashFilters{margin:0 0 12px;padding:12px 14px;border:1px solid var(--ui-line-strong);border-radius:10px;background:var(--color-bg-1)}
+.rivenStashFilters>header{height:auto;background:none;border:0;display:flex;justify-content:space-between;gap:12px;margin-bottom:10px}
+.rivenStashFilterGroups{display:flex;flex-wrap:wrap;gap:14px 24px}
+.rivenStashFilterGroups fieldset{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px}
+.rivenStashFilterGroups legend{font-size:12px;color:var(--color-navigation-hover);padding:0;margin-bottom:6px}
+.rivenStashFilterGroups button{min-height:30px;padding:4px 10px;background:var(--color-bg-2);border:1px solid var(--ui-line);font:inherit;font-size:12px}
+.rivenStashFilterGroups button[aria-pressed=true]{background:var(--color-card-active);border-color:var(--color-tab-lighter)}
+.rivenStashFilterSummary{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 12px;font-size:12px}
+.rivenStashFilterSummary button{padding:4px 8px;background:var(--color-card-active);border:1px solid var(--ui-line-strong);font-size:12px}
+.windowContent .tradingPage .rivenGrid{grid-template-columns:repeat(auto-fill,minmax(min(245px,100%),1fr));gap:14px}
+.windowContent .tradingPage .rivenInventoryCard{display:flex;flex-direction:column;min-width:0;padding:17px 18px 12px;min-height:0;cursor:pointer}
+.rivenCardHeading{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;min-width:0}
+.rivenCardHeading>div{min-width:0}
+.rivenCardWeapon{display:block;font-size:13px;line-height:19px;margin-bottom:3px;color:var(--riven-positive,#d9c5f5)}
+.rivenCardHeading .rivenCapacity{display:inline-flex;gap:4px;align-items:center;font-size:13px;white-space:nowrap;color:var(--riven-positive,#d9c5f5)}
+.rivenCapacity img{width:15px;height:15px;object-fit:contain}
+.windowContent .tradingPage .rivenInventoryCard .rivenTitle{font-size:21px;line-height:27px;margin:0;padding:0;min-height:0;display:block;width:auto;text-align:left}
+.windowContent .tradingPage .rivenInventoryCard .rivenTitle>small{font-size:11px;line-height:17px}
+.windowContent .tradingPage .rivenQuality{justify-content:flex-start;gap:8px;margin:10px 0 0}
+.windowContent .tradingPage .rivenGrade{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:5px 9px;border-radius:7px;font-size:16px;line-height:22px}
+.windowContent .tradingPage .rivenGrade img{width:24px;height:24px;object-fit:contain}
+.windowContent .tradingPage .rivenWeaponArt{height:104px;flex:none;margin:6px 0}
+.windowContent .tradingPage .rivenTraits{font-size:13px;line-height:20px;display:flex;flex-direction:column;gap:5px;min-height:98px;margin-top:auto;padding:0 2px 12px}
+.windowContent .tradingPage .rivenMeta{grid-template-columns:minmax(0,1fr) auto;font-size:11px;line-height:17px}
+.rivenMeta>:nth-child(2n){text-align:right}
+.windowContent .tradingPage .marketWorkspace{height:100%;overflow:hidden}
+.windowContent .tradingPage .marketBoard{padding:14px 16px;border:1px solid var(--ui-line);border-radius:15px;overflow:hidden}
+.windowContent .tradingPage .marketOrdersView{flex:1;min-height:0;padding:0;overflow:hidden}
+.windowContent .tradingPage .marketBoard .marketCompactHeader{flex:none;min-height:36px;padding:0 10px;margin:0 0 12px;flex-wrap:wrap;gap:8px 12px}
+.windowContent .tradingPage .marketScroll{min-height:0;flex:1;overflow:auto;scrollbar-gutter:stable}
+.windowContent .tradingPage .marketConnectionTools{flex:none;min-width:0;flex-wrap:wrap}
+.windowContent .tradingPage .marketWorkspace>.collectionTradeSidebar{position:static;align-self:stretch;width:100%;height:100%;min-height:0;max-height:none;padding:0;overflow:hidden;border:1px solid var(--ui-line);border-radius:15px;background:var(--color-bg-2)}
+.windowContent .tradingPage .analyticsWorkspace{min-height:0;flex:1;padding:14px 16px 18px;overflow:auto;scrollbar-gutter:stable;container:analytics/inline-size;font-size:14px;line-height:1.45}
+.windowContent .tradingPage .analyticsPageHeading{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:3px;min-height:0;padding:2px 10px;height:auto;background:none;border:0;margin:0}
+.windowContent .tradingPage .analyticsPageHeading h2{font-size:24px;line-height:30px;font-weight:500;margin:0}
+.windowContent .tradingPage .analyticsPageHeading small{font-size:12px;line-height:18px;color:var(--color-navigation-hover)}
+.windowContent .tradingPage .analyticsEmpty{padding:38px 28px;gap:10px}
+.windowContent .tradingPage .analyticsEmpty h3{font-size:21px;line-height:27px;font-weight:500;margin:4px 0 0}
+.windowContent .tradingPage .analyticsEmpty p{margin:0 0 8px;max-width:540px;font-size:13px;line-height:20px;color:var(--color-navigation-hover)}
+.windowContent .tradingPage .analyticsEmptyActions{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:8px}
+.windowContent .tradingPage .analyticsEmptyActions button{min-height:34px;padding:0 10px;font-size:12px}
+.windowContent .tradingPage .analyticsMetric>.analyticsAmount{font-size:clamp(23px,3.2cqw,32px);font-weight:500;line-height:1.2}
+/* Restore explicit grid rows: the state and countdown share the same second row. */
+.windowContent .tradingPage .sharedCycle>span{grid-row:2;justify-self:start;align-self:start}
+.windowContent .tradingPage .sharedCycle>time{grid-row:2;align-self:start}
+.windowContent .tradingPage .sharedCycleIdentity strong{overflow:visible;text-overflow:clip}
+.windowContent .tradingPage .railVendors .baroTrigger{min-height:56px;padding:8px;gap:7px}
+.windowContent .tradingPage .railVendors .baroTrigger>img{width:20px;height:28px}
+.windowContent .tradingPage .railVendors .baroTrigger strong,.windowContent .tradingPage .railVendors .baroTrigger time{white-space:normal;overflow:visible;text-overflow:clip}
+.windowContent .tradingPage .collectionTradeTabs{height:38px;min-height:38px;display:grid;grid-template-columns:minmax(0,1.5fr) repeat(2,minmax(0,1fr));gap:4px;padding:4px 8px;background:var(--color-bg-1)}
+.windowContent .tradingPage .collectionTradeTabs button{min-height:30px;height:30px;font-size:12px;padding:0 10px;gap:7px;white-space:nowrap}
+.windowContent .tradingPage .collectionTradeSidebar{display:flex;flex-direction:column;min-height:0}
+.windowContent .tradingPage .collectionTradeSidebar>.tradeQuotePanel{flex:1;min-height:0;border:0;border-radius:0;background:var(--color-bg-2)}
+.windowContent .tradingPage .quoteListings{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.quoteComposer{flex:none;padding:8px;border:1px solid var(--ui-line);border-radius:9px;background:var(--color-bg-1);color:var(--color-text);font-size:12px}
+.quoteComposer form{margin:0;display:flex;flex-direction:column;gap:8px}
+.quoteComposer label{display:flex;flex-direction:column;gap:3px;min-width:0;font-size:12px;line-height:16px;color:var(--color-navigation-hover)}
+.quoteComposer .quotePostFields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr) minmax(0,1.8fr);gap:7px;align-items:end}
+.quoteComposer input,.quoteComposer select{box-sizing:border-box;width:100%;min-width:0;height:32px;margin:0;padding:0 9px;border:1px solid var(--ui-line);border-radius:6px;background:var(--color-bg-2);font:inherit;color:var(--color-text)}
+.quoteComposer .quotePostFields>button{height:32px;min-height:32px;min-width:0;padding:0 7px;white-space:nowrap;border-radius:6px;font:inherit;font-size:12px;border:1px solid var(--ui-line-strong)}
+.quoteComposer .quoteVariantFields{display:flex;flex-wrap:wrap;gap:8px}
+.quoteComposer .quoteVariantFields>label{flex:1 1 90px}
+.quoteComposer .sideNotice{font-size:12px;overflow-wrap:anywhere;margin:8px 0 0}
+.quoteComposer>.marketAccount{max-height:320px;overflow:auto}
+@container riven-workspace (max-width:800px){.windowContent .tradingPage .rivenToolbar>.tradingCategories{flex-basis:100%}.windowContent .tradingPage .rivenInventorySearch{margin-left:0;flex:1}}
+@media(max-aspect-ratio:3/2){
+ .windowContent .tradingPage .collectionWorldLayout,.windowContent .tradingPage>.marketWorkspace{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) 336px;gap:8px}
+ .windowContent .tradingPage .unifiedWorldRail,.windowContent .tradingPage .marketWorkspace>.collectionTradeSidebar{height:336px;min-height:0;max-height:336px}
+}
+
+.windowContent .tradingPage .rivenMarketRail[hidden]{display:none}
+.windowContent .tradingPage .rivenTraits{align-items:flex-start;justify-content:flex-start;text-align:left}
+.windowContent .tradingPage .rivenQuality{padding:0}
+.windowContent .tradingPage .rivenGrade.Perfect{color:#e0c2ff;background:#ad80dd1f;border:1px solid #cfa4f75c}
+.windowContent .tradingPage .rivenGrade.Good{color:#a6dfc3;background:#7dc49f1a;border:1px solid #a6dfc355}
+.windowContent .tradingPage .rivenGrade.HasPotential{color:#e1cd8e;background:#ceb55e1a;border:1px solid #e1cd8e55}
+.windowContent .tradingPage .rivenGrade.Bad{color:#f0a4a9;background:#d77d851a;border:1px solid #f0a4a955}
+
+/* The column headings belong to the list scroller, whose toolbar is outside it. */
+.windowContent .tradingPage .marketOrderColumns{top:0}
+.windowContent .tradingPage .marketOrdersView>.marketToolbar{position:relative;top:auto;flex:none;padding:2px 0 12px;margin:0 0 8px;border-bottom:1px solid var(--ui-line)}
+.windowContent .tradingPage .marketSortTools .marketOrderSearch{display:flex;align-items:center;gap:6px;width:140px;max-width:140px;min-width:100px;height:38px;margin:0;padding:0 10px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-1)}
+.windowContent .tradingPage .marketOrderSearch input{width:0;flex:1;min-width:0;background:none;border:0;outline:0;font-size:14px}
+.windowContent .tradingPage .marketSortTools .marketFilterToggle{width:auto;min-width:0;height:38px;display:flex;gap:6px;align-items:center;padding:0 10px;border:1px solid var(--ui-line);border-radius:7px;font-size:14px}

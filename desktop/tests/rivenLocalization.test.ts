@@ -1,0 +1,3 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';
+import {rivenAttributeName} from '../src/rivenLocalization.ts';
+test('official Chinese terms replace raw English labels without changing identifiers',()=>{assert.equal(rivenAttributeName('multishot','Multishot'),'多重射击');assert.equal(rivenAttributeName('critical_damage','Critical Damage'),'暴击伤害');assert.equal(rivenAttributeName('zoom','Zoom'),'变焦');assert.equal(rivenAttributeName('status_chance','Status Chance'),'触发几率');assert.equal(rivenAttributeName('multishot','Multishot','en'),'Multishot');assert.equal(rivenAttributeName('future_stat','Future Stat'),'Future Stat');});

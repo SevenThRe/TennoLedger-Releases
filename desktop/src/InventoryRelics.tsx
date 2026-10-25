@@ -1,0 +1,28 @@
+import {useAppPreferences} from './useAppPreferences';
+import {useEffect,useMemo,useState} from 'react';
+import type {Relic,Inventory} from './relicModel';
+import type {InventoryViewPreferences} from './inventoryViewModel';
+import {matchesInventoryFilters,type InventoryFilters} from './inventoryFiltersModel';
+import {relicOwned} from './relicAliases';
+import {refinementLabel,relicEraLabel} from './relicLabels';
+import {relicImage} from './relicImage';
+import {searchText} from './searchText';
+import {useRelicFavorites} from './useRelicFavorites';
+import {isRelicFavorite} from './relicFavorites';
+import {loadUpgradeBook} from './upgradeQuotes';
+import {marketOrderQuotes} from './marketModel';
+import {native} from './api';
+import {openInventoryTrade} from './inventoryTrade';
+import RelicOverview from './RelicOverview';
+export default function InventoryRelics({relics,snapshot,en,search,filters,preferences}:{relics:Relic[];snapshot:Inventory|null;en:boolean;search:string;filters:InventoryFilters;preferences:InventoryViewPreferences}){
+ const [opened,setOpened]=useState<Relic|null>(null),[limit,setLimit]=useState(60),[prices,setPrices]=useState<Record<string,number|null>>({}),{favorites,toggleFavorite,favoriteError}=useRelicFavorites();
+ const L=(zh:string,english:string)=>en?english:zh;
+ const [appPreferences]=useAppPreferences(),[showAll,setShowAll]=useState(false);
+ const rows=useMemo(()=>relics.map(relic=>({relic,amount:relicOwned(snapshot,relic),price:prices[relic.id]??null,favorite:isRelicFavorite(favorites,relic,relics)})).filter(row=>row.amount!==null&&row.amount>0&&searchText(search,row.relic.name,row.relic.base,relicEraLabel(row.relic.era,en),refinementLabel(row.relic.refinement,en))&&matchesInventoryFilters(filters,{itemOwned:null,copies:row.amount,vaulted:row.relic.vaulted,listed:null,prime:null,favorite:row.favorite,price:row.price,completeSet:null})).sort((a,b)=>{if(preferences.order==='name')return (preferences.descending?-1:1)*a.relic.name.localeCompare(b.relic.name);const av=preferences.order==='platPrice'?a.price:a.amount,bv=preferences.order==='platPrice'?b.price:b.amount;return av===null?bv===null?0:1:bv===null?-1:(preferences.descending?bv-av:av-bv)||a.relic.name.localeCompare(b.relic.name);}),[relics,snapshot,en,search,filters,preferences,prices,favorites]);
+ const visible=appPreferences.fullInventoryExperienceEnabled||showAll?rows:rows.slice(0,Math.min(100,limit));
+ const quoteRelics=relics.filter(relic=>(relicOwned(snapshot,relic)??0)>0&&searchText(search,relic.name,relic.base)).slice(0,appPreferences.fullInventoryExperienceEnabled||showAll?Infinity:Math.min(100,limit));
+ const quoteKey=quoteRelics.map(relic=>relic.id).join('|');
+ useEffect(()=>{if(!native)return;let live=true;for(const relic of quoteRelics)if(relic.marketSlug&&prices[relic.id]===undefined)void loadUpgradeBook(relic.marketSlug,'pc').then(book=>{const quote=marketOrderQuotes(book.orders,{subtype:relic.refinement.toLowerCase()}).find(row=>row.type==='sell');if(live)setPrices(old=>({...old,[relic.id]:quote?quote.platinum/(quote.perTrade??1):null}));}).catch(()=>{if(live)setPrices(old=>({...old,[relic.id]:null}));});return()=>{live=false;};},[quoteKey]);
+ useEffect(()=>{setLimit(60);setShowAll(false);},[search,filters,preferences.order,preferences.descending]);
+ return <><div className={'inventoryGrid'+(preferences.view==='compact'?' inventoryCompact':'')}>{visible.map(({relic,amount,price,favorite})=><article className={'inventoryCard'+(preferences.view==='compact'?' compactInventoryCard':'')} key={relic.id}><button className="inventoryArt" onClick={()=>setOpened(relic)}><img src={relicImage(relic.era,relic.refinement)} alt=""/></button><div className="inventoryIdentity"><button className="inventoryName" onClick={()=>setOpened(relic)}>{relic.base} {refinementLabel(relic.refinement,en)}</button><div className="inventoryNumbers">{L('拥有','Owned')} ×{amount}<button aria-label={L('收藏 ','Favorite ')+relic.name} aria-pressed={favorite} onClick={()=>toggleFavorite(relic,relics)}>{favorite?'★':'☆'}</button></div></div><div className="inventoryCardFooter"><div className="inventoryUnitQuote"><span>{L('单件价格','Price each')}</span><strong>{price??'—'}<img src="/reference/ui/platinum.png" alt={L('白金','Platinum')}/></strong></div>{relic.marketSlug&&<button className="inventoryTradeButton" onClick={()=>openInventoryTrade({id:relic.id,slug:relic.marketSlug!,name:relic.base+' '+refinementLabel(relic.refinement,en),englishName:relic.name,subtype:relic.refinement.toLowerCase()})}>{L('交易','Trade')} ›</button>}</div></article>)}</div>{favoriteError&&<p role="alert">{favoriteError}</p>}{!appPreferences.fullInventoryExperienceEnabled&&!showAll&&rows.length>limit&&<button onClick={()=>{if(limit>=100)setShowAll(true);else setLimit(n=>Math.min(100,n+60));}}>{limit>=100?L('显示全部匹配结果','Show all matches'):L('显示更多','Show more')}</button>}{!rows.length&&<p>{snapshot?L('没有符合条件的遗物','No matching relics'):L('等待库存同步','Waiting for inventory sync')}</p>}{opened&&<RelicOverview snapshot={snapshot} relic={opened} variants={relics} counts={snapshot?.counts??{}} complete={!!snapshot?.complete} en={en} onClose={()=>setOpened(null)}/>}</>;
+}

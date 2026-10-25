@@ -1,0 +1,23 @@
+/* Stable world panel, fluid card columns, and breathing room under the toolbar. */
+.foundryWorldLayout .collectionLayout .itemGrid {
+ grid-template-columns: repeat(auto-fill,minmax(min(100%,300px),1fr));
+}
+.collectionPage .collectionDataTools { margin-bottom:12px; }
+.assetCards{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.assetCards article{padding:14px 14px 14px 58px;min-height:78px;background:#191f30;border-color:#2b3448;border-radius:8px}.assetCards .assetIcon{position:absolute;left:14px;top:24px;width:30px;height:30px;object-fit:contain}.assetCards strong{font-size:22px;margin-top:5px;font-variant-numeric:tabular-nums}.assetCards .cardIndex{display:none}
+.collectionPage .compactTools>.catalogSearch{order:2;display:flex;align-items:center;width:34px;max-width:100%;height:32px;border-radius:18px;background:#28314b;padding:0 8px;gap:6px;box-sizing:border-box;overflow:hidden;transition:width .2s ease}.catalogSearch>label{display:grid;place-items:center;flex:none;width:18px;cursor:text}.catalogSearch>label img{width:18px;height:18px;object-fit:contain}.collectionTools .catalogSearch input:not([type=checkbox]){width:100%;min-width:0;border:0;background:transparent;padding:4px 0;border-radius:0;font-size:13px}.catalogSearch button{display:grid;place-items:center;flex:none;background:transparent;border:0;padding:4px;width:25px;height:26px}.catalogSearch button img{width:16px;height:16px;object-fit:contain}.collectionPage .filterControls{height:32px;padding:0 3px}.collectionPage .filterControls button{height:32px;padding:6px 8px}.collectionPage .filterTrigger img{width:19px;height:19px}.worldTabs button{display:flex;justify-content:center;align-items:center;gap:5px}.worldTabs button>img{width:17px;height:17px;object-fit:contain;flex:none}
+@media(max-width:1100px){.assetCards{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}}
+
+/* Compact search expands on hover or keyboard focus. */
+.collectionPage .compactTools>.catalogSearch:hover,
+.collectionPage .compactTools>.catalogSearch:focus-within,
+.collectionPage .compactTools>.catalogSearch.hasValue{width:200px}
+
+.collectionTools .catalogSearch input:not([type=checkbox]){outline:none;box-shadow:none;flex:1}
+.collectionTools .catalogSearch input:focus,
+.collectionTools .catalogSearch input:focus-visible{outline:none;box-shadow:none}
+.catalogSearch:not(.hasValue):not(:hover):not(:focus-within) button{visibility:hidden}
+@media(prefers-reduced-motion:reduce){.collectionPage .compactTools>.catalogSearch{transition:none}}
+.collectionPage .collectionDataTools{margin-bottom:18px!important}.collectionPage .collectionLayout{margin-top:18px}.collectionPage .inventoryGrid{gap:12px}.settings .dataMenuBody{position:static;display:flex;gap:12px}.settingsTransfers{display:flex;gap:12px;align-items:center;margin:16px 0}
+
+/* Original grid starts directly below filter summaries, without an extra spacer. */
+.collectionPage .collectionLayout{margin-top:0}.collectionPage .inventoryGrid{gap:10px}

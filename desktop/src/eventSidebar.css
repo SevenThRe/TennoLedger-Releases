@@ -1,0 +1,8 @@
+/* Keep the compact event cards while sharing the functional local trade tab. */
+.eventSidebar>.collectionTradeSidebar{position:static;top:auto;align-self:stretch;height:100%;max-height:none;flex:1;min-height:0}
+.eventSidebar .collectionTradeTabs{padding:4px 8px;gap:2px;border:0;border-bottom:1px solid #30394c;border-radius:0;background:transparent;flex:none}
+.eventSidebar .collectionTradeTabs button{white-space:nowrap;min-width:0;padding:6px 5px;font-size:11px}
+.eventSidebar .collectionTradeTabs button[aria-pressed=true]{background:#333d59;border-color:#646f8d;border-radius:7px}
+.eventSidebar .tradeQuotePanel{border:0;border-radius:0;background:#101522}
+.eventSidebar .eventRailBody{overflow:visible}
+.windowContent .app aside.collectionTradeSidebar{width:100%;padding:0;border:0;background:transparent;z-index:auto;overflow:hidden}

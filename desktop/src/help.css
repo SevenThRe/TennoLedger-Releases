@@ -1,0 +1,390 @@
+/* AlecaFrame 3.0.4 main.html About layout; project identity and diagnostics remain factual. */
+.helpPage.aboutTab{box-sizing:border-box;display:flex;flex-direction:column;gap:20px;min-width:0;min-height:100%;padding:14px 16px 18px;overflow-y:auto;justify-content:flex-start;color:var(--color-text,#fff);font:inherit;font-size:14px}.helpPage.aboutTab>*{flex-shrink:0}.aboutIntro{display:flex;align-items:center;justify-content:space-between;gap:20px}.aboutIntro h2{font-size:18px;line-height:26px;font-weight:500;margin:0}.aboutIntro p{margin:3px 0 0;color:var(--color-navigation-hover,#ccccce);font-size:12px;line-height:18px}.aboutBrand{width:44px;height:44px;object-fit:contain;opacity:.7}.aboutMainLinkContainer{display:flex;flex-wrap:wrap;gap:12px;width:100%}.aboutMainLinkItem{box-sizing:border-box;display:flex;flex:1 1 290px;flex-direction:row;align-items:center;gap:16px;border:1px solid var(--ui-line,#ffffff14);padding:20px;border-radius:10px;background:var(--color-bg-1,#101623);cursor:pointer;transition:120ms linear;font:inherit;font-weight:400;font-size:17px;min-width:0;color:inherit;text-decoration:none;text-align:left}.aboutMainLinkItem:hover{background:var(--color-card-hover,#272f47);border-color:var(--ui-line-strong,#ffffff24)}.aboutMainLinkText{display:flex;flex-direction:column;gap:7px;min-width:0}.aboutMainLinkItem.aboutSupportCard{order:-1;flex-basis:100%;flex-wrap:wrap;padding:24px;background:var(--color-card-active,#313a58);border-color:var(--color-tab-lighter,#b6a3e7)}.aboutMainLinkItem.aboutSupportCard:hover{background:var(--color-tab,#432289)}.aboutSupportCard .aboutMainLinkText{flex:1 1 220px}.aboutSupportCard .aboutMainLinkText strong{font-size:20px}.aboutMainLinkText strong{font-size:17px;font-weight:500}.aboutMainLinkText span{font-size:14px;line-height:1.5;color:var(--color-navigation-hover,#ccccce)}.aboutMainLinkItemImage{width:44px;height:44px;flex-shrink:0;background-size:contain;background-position:center;background-repeat:no-repeat}.aboutMainLinkItemImage.wiki{background-image:url('/reference/ui/book.png')}.aboutMainLinkItemImage.faq{background-image:url('/reference/ui/question.png')}.aboutMainLinkItemImage.discord{background-image:url('/reference/ui/discord.png')}.aboutMainLinkItemImage.patreon{color:var(--color-tab-lighter,#b6a3e7)}.aboutMainLinkContainerOuter{flex-shrink:0}.helpReplay{margin:auto 0 0;padding:20px;border:1px solid var(--ui-line,#ffffff14);border-radius:10px;background:var(--color-bg-1,#101623);font-size:14px;line-height:1.6}.helpReplay h3{margin:0 0 8px;font-size:17px;font-weight:500}.helpReplay p{margin:0;color:var(--color-navigation-hover,#ccccce)}.helpReplay>div{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.helpReplay button{padding:7px 12px;border:1px solid var(--ui-line-strong,#ffffff24);border-radius:7px;background:var(--color-bg-2,#171e30);color:inherit;font:inherit;font-size:13px;cursor:pointer}.aboutFooter{display:flex;align-items:center;flex-wrap:wrap;gap:16px 24px}.aboutFooter .credits{flex:1 1 280px;color:var(--color-navigation-hover,#ccccce);font-size:12px;line-height:18px}.aboutUpdateColumn{display:flex;flex-direction:column;align-items:center;gap:8px;margin-left:auto;max-width:100%}.aboutVersionLabel{color:var(--color-navigation-hover,#ccccce);font-size:14px}.aboutVersionLabel span{color:var(--color-text,#fff)}.aboutTab .buttonUpdate{position:static;align-self:flex-start;display:grid;place-items:center;box-sizing:border-box;width:208px;min-height:40px;padding:10px 16px;border:1px solid var(--ui-line-strong,#ffffff24);border-radius:7px;white-space:nowrap;background:var(--color-tab,#432289);color:inherit;font:inherit;font-size:14px;cursor:pointer}.aboutTab button:disabled{opacity:.45;cursor:default}.aboutUpdateColumn>small{overflow-wrap:anywhere;max-width:320px;font-size:12px;color:var(--color-navigation-hover,#ccccce)}
+.connectionHelpShade{position:fixed;inset:48px 0 0;z-index:550;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:30px;background:#000000cf}.connectionHelpDialog{box-sizing:border-box;width:600px;max-width:100%;max-height:100%;display:flex;flex-direction:column;min-height:0;border:1px solid var(--ui-line,#ffffff20);border-radius:12px;background:var(--color-bg-1,#101623);color:var(--color-text,#fff);font:inherit;font-size:14px;overflow:hidden}.connectionHelpDialog>header{height:56px;min-height:56px;box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 19px;border-bottom:1px solid var(--ui-line,#ffffff20);background:var(--color-bg-2,#171e30)}.connectionHelpDialog h2{margin:0;font-size:18px;font-weight:500}.connectionHelpDialog>header button{display:grid;place-items:center;width:30px;height:30px;padding:7px;border:0;border-radius:5px;background:none;cursor:pointer}.connectionHelpDialog>header img{width:15px;height:15px;object-fit:contain}.connectionHelpBody{display:flex;flex-direction:column;gap:26px;padding:15px;overflow:auto;min-height:0;flex:1;margin-bottom:4px}.connectionHelpDialog svg.marketIcon{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.helpDiagnosticActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.helpDiagnosticActions button{padding:6px 10px;border:1px solid var(--ui-line-strong,#ffffff24);border-radius:6px;background:var(--color-bg-1,#101623);color:inherit;font:inherit;font-size:12px;cursor:pointer}.connectionHelpDialog button:disabled{opacity:.45;cursor:default}.connectionHelpDialog .connectionHelpFooter{flex-wrap:wrap}.connectionHelpDialog .connectionHelpFooter button{padding:8px 12px}.helpPage :is(button,a):focus-visible{outline:2px solid var(--color-tab-lighter,#b6a3e7);outline-offset:3px}
+
+/* The tour covers the workspace. The existing title bar remains available. */
+.welcomeRoot { position: absolute; inset: 48px 0 0; z-index: 90; pointer-events: none; container: welcome / size; }
+.welcomeRoot[v-cloak] { display: none; }
+.welcomeTour.modalFULLSize { inset: 0; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; min-width: 0; min-height: 0; padding: 0; overflow: hidden; pointer-events: auto; border-radius: 0 0 10px 10px; background: var(--color-bg-2); color: var(--color-text); font-size: 14px; line-height: 1.5; }
+.welcomeTour *, .welcomeTour *::before, .welcomeTour *::after { box-sizing: border-box; }
+.welcomeTour button { width: auto; height: auto; min-width: 0; font: inherit; color: inherit; cursor: pointer; border: 1px solid transparent; transition: background-color 150ms, border-color 150ms; }
+.welcomeTour button:disabled { cursor: default; opacity: .45; }
+.welcomeTour button:focus-visible { outline: 2px solid var(--color-tab-lighter); outline-offset: 3px; }
+.welcomeTour .marketIcon { width: 20px; height: 20px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.welcomeTour p, .welcomeTour h1, .welcomeTour h2, .welcomeTour h3 { margin: 0; }
+.welcomeHeader { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; flex-shrink: 0; gap: 20px; padding: 16px 32px; border-bottom: 1px solid var(--ui-line); }
+.welcomeQuiet { display: flex; align-items: center; gap: 10px; }
+.welcomeTour .welcomeQuiet { justify-self: end; min-height: 40px; background: var(--color-card); border-color: var(--ui-line-strong); border-radius: 8px; padding: 8px 14px; font-size: 13px !important; font-weight: 500; white-space: nowrap; }
+.welcomeTour .welcomeQuiet:hover:not(:disabled) { background: var(--color-card-active); border-color: var(--color-tab-lighter); }
+.welcomeQuiet .marketIcon { width: 22px; height: 22px; stroke-width: 2.4; }
+.welcomeSteps { display: flex; flex-wrap: wrap; gap: 6px; }
+.welcomeSteps button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 7px 12px; background: transparent; border-radius: 8px; color: var(--color-navigation-hover); font-size: 13px; }
+.welcomeSteps button > span { font-size: 12px; opacity: .55; }
+.welcomeSteps button:hover { background: var(--color-card-hover); }
+.welcomeSteps button.selected { color: var(--color-text); background: var(--color-card-active); border-color: var(--ui-line-strong); }
+.welcomeSteps button.selected > span { opacity: 1; }
+.welcomeBody { flex: 1; min-height: 0; overflow: auto; padding: 28px 36px; overscroll-behavior: contain; }
+.welcomeIntro { display: flex; flex-direction: column; justify-content: center; gap: 64px; min-height: 100%; max-width: 1080px; margin: auto; padding: 36px 0; text-align: center; }
+.welcomeIntroCopy { width: 100%; max-width: 840px; margin: 0 auto; }
+.welcomeIntro h1 { font-size: 56px; line-height: 1.15; font-weight: 500; letter-spacing: -1.4px; margin-bottom: 20px; }
+.welcomeLead { max-width: 100%; margin: 0 auto !important; font-size: clamp(13px, 2cqw, 18px); opacity: .7; line-height: 1.65; white-space: nowrap; }
+.welcomeStats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 36px 32px; width: 100%; max-width: 860px; margin: 0 auto; }
+.welcomeStat { display: flex; grid-column: span 2; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+.welcomeStat:nth-child(-n+2) { grid-column: span 3; }
+.welcomeStat strong { font-size: 64px; line-height: 1.1; font-weight: 500; letter-spacing: -2px; font-variant-numeric: tabular-nums; }
+.welcomeStat span { font-size: 15px; opacity: .6; }
+.welcomeInGame { display: grid; min-height: 100%; max-width: 1680px; margin: auto; }
+.welcomeTextButton { display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; background: transparent; color: var(--color-tab-lighter) !important; text-align: left; border-radius: 4px; font-size: 13px !important; }
+.welcomeTextButton:hover { color: var(--color-text) !important; }
+.welcomeTextButton .marketIcon { width: 16px; height: 16px; }
+.welcomeScreenshot { display: grid; place-items: center; position: relative; min-width: 0; min-height: 300px; overflow: hidden; border: 1px solid var(--ui-line); border-radius: 12px; background: var(--color-bg-1); }
+.welcomeScreenshot img { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.welcomeScreenshotCrop { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+.welcomeScreenshotPlaceholder { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 24px; text-align: center; color: var(--color-text); opacity: .35; }
+.welcomeScreenshotPlaceholder svg { width: 40px; height: 32px; margin-bottom: 9px; fill: none; stroke: currentColor; stroke-width: 1; }
+.welcomeScreenshotPlaceholder span { font-size: 14px; }
+.welcomeScreenshotPlaceholder small { font-size: 12px; }
+.welcomeSectionHeading { margin-bottom: 20px; }
+.welcomeSectionHeading h2 { font-size: 28px; font-weight: 500; letter-spacing: -.35px; line-height: 1.25; }
+.welcomeSectionHeading p { margin-top: 8px; opacity: .7; }
+.welcomeTitleRow { display: flex; align-items: center; gap: 12px; }
+.welcomeBadge { display: inline-flex; align-items: center; border: 1px solid var(--ui-line); border-radius: 5px; padding: 2px 7px; font-size: 12px; opacity: .65; }
+.welcomeExplorer { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 32px; height: 100%; min-height: 440px; max-width: 1680px; margin: auto; }
+.welcomeTabList { padding: 0 9px 0 0; overflow-y: auto; overscroll-behavior: contain; }
+.welcomeTabGroup + .welcomeTabGroup { margin-top: 18px; }
+.welcomeGroupName { font-size: 12px; opacity: .45; padding: 0 10px 5px; }
+.welcomeTabList button { display: flex; align-items: center; justify-content: flex-start; gap: 9px; width: 100%; padding: 7px 10px; margin: 2px 0; background: transparent; text-align: left; border-radius: 7px; font-size: 13px; }
+.welcomeTabList button:hover { background: var(--color-card-hover); }
+.welcomeTabList button.selected { background: var(--color-card-active); border-color: var(--ui-line-strong); }
+.welcomeTabList .menuItemIcon { width: 18px; height: 18px; flex: 0 0 18px; opacity: .75; background-color: var(--color-text); }
+.welcomeTabDetail { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.welcomeTabDetail > .welcomeScreenshot { flex: 1; min-height: 250px; }
+.welcomeDetailFoot { padding-top: 16px; }
+.welcomeFeatures { padding-left: 17px; margin: 0; font-size: 13px; line-height: 1.8; opacity: .75; }
+.welcomeFeatures li::marker { color: var(--color-navigation-hover); }
+.welcomeInGame { grid-template-columns: 320px minmax(0, 1fr); gap: 40px; }
+.welcomeInGameCopy { align-self: center; }
+.welcomeInGameVisual { display: flex; flex-direction: column; min-width: 0; }
+.welcomeInGameVisual > .welcomeScreenshot { flex: 1; }
+.welcomeInGameTextOnly { align-items: center; justify-content: center; }
+.welcomeInGameTextOnly .welcomeInGameDetails { width: 100%; max-width: 760px; box-sizing: border-box; padding: 28px 32px; border: 1px solid var(--ui-line); border-radius: 12px; background: var(--color-bg-1); text-align: center; }
+.welcomeInGameTextOnly .welcomeInGameDetails h3 { font-size: 24px; margin-bottom: 12px; }
+.welcomeInGameTextOnly .welcomeFeatures { display: inline-block; max-width: 100%; box-sizing: border-box; text-align: left; }
+.welcomeInGameList { display: flex; flex-direction: column; gap: 6px; }
+.welcomeInGameList button { display: flex; align-items: center; justify-content: flex-start; gap: 12px; padding: 10px 12px; border-radius: 8px; background: transparent; text-align: left; }
+.welcomeInGameList button:hover { background: var(--color-card-hover); }
+.welcomeInGameList button.selected { background: var(--color-card-active); border-color: var(--ui-line-strong); }
+.welcomeInGameList .menuItemIcon { width: 22px; height: 22px; min-width: 22px; flex: 0 0 22px; opacity: .75; background-color: currentColor; }
+.welcomeInGameList .menuItemIcon.prime { -webkit-mask-image: url('/reference/ui/prime.png'); }
+.welcomeInGameList .menuItemIcon.trade { -webkit-mask-image: url('/reference/ui/trade.png'); }
+.welcomeInGameList button:hover .menuItemIcon, .welcomeInGameList button.selected .menuItemIcon { opacity: 1; }
+.welcomeInGameDetails { padding-top: 18px; }
+.welcomeInGameDetails h3 { font-size: 16px; font-weight: 500; margin-bottom: 5px; }
+.welcomeInGameDetails > p { opacity: .75; font-size: 14px; }
+.welcomeInGameDetails .welcomeFeatures { margin-top: 8px; }
+.welcomeInGameDetails .welcomeInGameNote { font-size: 12px; opacity: .55; margin-top: 10px; }
+.welcomeConnect { display: flex; flex-direction: column; justify-content: center; width: 100%; min-height: 100%; max-width: 1080px; box-sizing: border-box; margin: auto; padding: 12px 0; }
+.welcomeConnect > .welcomeSectionHeading { margin-bottom: 28px; text-align: center; }
+.welcomeConnectColumns { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 60px; }
+.welcomeSetup { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 24px; }
+.welcomeSetup li { display: flex; gap: 16px; align-items: flex-start; }
+.welcomeSetup li > span { display: grid; place-items: center; flex: 0 0 28px; height: 28px; border: 1px solid var(--ui-line-strong); border-radius: 8px; font-size: 13px; }
+.welcomeSetup strong { font-weight: 500; font-size: 15px; }
+.welcomeSetup p { font-size: 14px; opacity: .7; margin-top: 5px; }
+.welcomeOverwolf strong, .welcomeSetupHelp strong { font-size: 15px; font-weight: 500; }
+.welcomeOverwolf p { font-size: 14px; opacity: .8; margin-top: 8px; }
+.welcomeOverwolf .welcomeTextButton { margin-top: 8px; }
+.welcomeSetupHelp { padding-top: 24px; margin-top: 24px; border-top: 1px solid var(--ui-line); }
+.welcomeSetupHelp p { font-size: 13px; opacity: .65; margin: 8px 0 10px; }
+.welcomeFooter { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 32px; border-top: 1px solid var(--ui-line); }
+.welcomeReplayHint { font-size: 12px; opacity: .45; }
+.welcomeFooterActions { display: flex; gap: 8px; }
+.welcomeButton { display: inline-flex; justify-content: center; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 8px; background: var(--color-card); border-color: var(--ui-line) !important; font-size: 13px !important; }
+.welcomeButton:hover:not(:disabled) { background: var(--color-card-hover); }
+.welcomeTour .welcomePrimary { width: 260px; flex: 0 0 260px; white-space: nowrap; background: var(--color-tab); border-color: var(--color-tab-hover) !important; }
+.welcomePrimary:hover:not(:disabled) { background: var(--color-tab-hover); }
+@container welcome (max-width: 1100px) {
+    .welcomeHeader { padding: 12px 24px; gap: 12px; }
+    .welcomeBody { padding: 24px; }
+    .welcomeIntro { gap: 48px; }
+    .welcomeIntro h1 { font-size: 46px; }
+    .welcomeStat strong { font-size: 56px; }
+    .welcomeInGame { grid-template-columns: 290px minmax(0, 1fr); gap: 28px; }
+    .welcomeExplorer { grid-template-columns: 170px minmax(0, 1fr); gap: 24px; }
+    .welcomeConnectColumns { gap: 32px; }
+}
+@container welcome (max-width: 760px) {
+    .welcomeHeader { padding: 10px 18px; gap: 10px; }
+    .welcomeSteps button { padding: 6px 10px; }
+    .welcomeBody { padding: 20px; }
+    .welcomeIntro { gap: 40px; padding: 24px 0; }
+    .welcomeIntro h1 { font-size: 36px; letter-spacing: -.8px; }
+    .welcomeStats { gap: 28px 20px; }
+    .welcomeStat strong { font-size: 48px; }
+    .welcomeInGame { grid-template-columns: 1fr; gap: 24px; }
+    .welcomeInGameVisual > .welcomeScreenshot { min-height: 340px; }
+    .welcomeExplorer { grid-template-columns: 145px minmax(0, 1fr); gap: 18px; }
+    .welcomeTabList button { padding: 7px; font-size: 12px; }
+    .welcomeConnect { padding: 4px 0; }
+    .welcomeConnectColumns { grid-template-columns: 1fr; gap: 28px; }
+    .welcomeFooter { padding: 12px 18px; }
+    .welcomeReplayHint { display: none; }
+    .welcomeFooterActions { margin-left: auto; }
+}
+@container welcome (max-height: 600px) {
+    .welcomeHeader { padding-top: 10px; padding-bottom: 10px; }
+    .welcomeBody { padding-top: 18px; padding-bottom: 18px; }
+    .welcomeIntro { gap: 36px; padding: 20px 0; }
+    .welcomeIntro h1 { font-size: 36px; margin-bottom: 16px; }
+    .welcomeFooter { padding-top: 10px; padding-bottom: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .welcomeTour *, .welcomeTour *::before, .welcomeTour *::after { transition: none !important; } }
+
+.helpModalContainer,
+.helpModalChecklistGlobalContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+
+.connectionHelpSummary {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid #806039;
+    border-radius: 10px;
+    background: #30281e;
+}
+
+.connectionHelpSummary > svg {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    color: #ffce7b;
+}
+
+.connectionHelpSummary strong {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 24px;
+}
+
+.connectionHelpSummary p {
+    margin: 5px 0 0;
+    font-size: 13px;
+    line-height: 1.5;
+    opacity: 0.85;
+}
+
+.connectionHelpSummary.ready {
+    background: rgba(78, 174, 126, 0.1);
+    border-color: rgba(159, 227, 194, 0.25);
+}
+
+.connectionHelpSummary.ready > svg { color: #9fe3c2; }
+
+.helpLocalRequirement {
+    margin: 0;
+    color: var(--color-navigation-hover);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.helpLocalRequirement > strong {
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+.helpDataUpdate {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 1px solid var(--ui-line-strong);
+    border-radius: 10px;
+    background: var(--color-bg-2);
+}
+
+.helpDataUpdate > svg {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    color: var(--color-tab-lighter);
+}
+
+.helpDataUpdate strong {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 22px;
+}
+
+.helpDataUpdate p {
+    margin: 5px 0 0;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.helpDataUpdate .helpDataUpdateAlternative {
+    font-size: 13px;
+    color: var(--color-navigation-hover);
+}
+
+.helpModalChecklistGlobalContainer {
+    gap: 10px;
+}
+
+.helpChecklistHeading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    margin-top: 4px;
+    line-height: 22px;
+}
+
+.helpChecklistHeading > strong {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.helpChecklistHeading > span {
+    font-size: var(--ui-font-small, 12px);
+    color: var(--color-navigation-hover);
+}
+
+.helpChecklistDescription {
+    margin: 0;
+    color: var(--color-navigation-hover);
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.modalHelpChecklistContainer {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--ui-line);
+    border-radius: 10px;
+    background: var(--color-bg-2);
+    overflow: hidden;
+}
+
+.modalHelpChecklistItem {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding: 12px 14px;
+}
+
+.modalHelpChecklistItem + .modalHelpChecklistItem {
+    border-top: 1px solid var(--ui-line);
+}
+
+.modalHelpChecklistItem.error {
+    background: rgba(255, 206, 123, 0.04);
+}
+
+.helpCheckMark {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    box-sizing: border-box;
+    border: 1px solid var(--ui-line-strong);
+    border-radius: 5px;
+    color: var(--color-navigation);
+}
+
+.helpCheckMark > svg {
+    width: 18px;
+    height: 18px;
+}
+
+.ok .helpCheckMark {
+    color: #9fe3c2;
+    background: rgba(78, 174, 126, 0.1);
+    border-color: rgba(159, 227, 194, 0.25);
+}
+
+.error .helpCheckMark {
+    color: #ffce7b;
+    background: #30281e;
+    border-color: #806039;
+}
+
+.helpCheckHeading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    line-height: 22px;
+}
+
+.helpCheckHeading > strong {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.helpCheckStatus {
+    font-size: var(--ui-font-caption, 11px);
+    white-space: nowrap;
+    color: var(--color-navigation-hover);
+}
+
+.ok .helpCheckStatus { color: #9fe3c2; }
+.error .helpCheckStatus { color: #ffce7b; }
+
+.helpCheckContent p,
+.connectionCheckError {
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 6px 0 0;
+    color: var(--color-navigation-hover);
+}
+
+.connectionCheckError {
+    margin: 0;
+    color: #ffce7b;
+}
+
+.connectionHelpFooter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+    padding: 12px 20px;
+    border-top: 1px solid var(--ui-line);
+}
+
+.connectionHelpFooter a {
+    font-size: 13px;
+    color: var(--color-tab-lighter);
+}
+
+.connectionHelpFooter a:hover { color: var(--color-text); }
+
+.connectionHelpFooter button {
+    width: auto;
+    height: auto;
+    padding: 8px 18px;
+    border: 1px solid var(--ui-line-strong);
+    border-radius: 7px;
+    background: var(--color-tab);
+    color: var(--color-text);
+    font: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.connectionHelpFooter button:hover { background: var(--color-tab-hover); }
+
+
+.windowCloseConfirm{position:fixed;inset:0;z-index:220;background:#060a13c0;display:grid;place-items:center}.windowCloseConfirm>section{background:#1a2235;border:1px solid #44516c;border-radius:12px;padding:24px;max-width:440px}.windowCloseConfirm button{padding:8px 16px;margin:8px;border:1px solid #48536b;border-radius:7px;background:#29334b;color:inherit}
+
+.welcomeRoot{position:fixed;inset:48px 0 0;z-index:500;container:welcome / size;pointer-events:auto}.welcomeRoot>.welcomeTour{position:absolute;inset:0;box-sizing:border-box}.welcomeTour .menuItemIcon{mask-repeat:no-repeat;mask-position:center;mask-size:contain}.welcomeTour .welcomeLead{white-space:normal}.welcomeTour .welcomeScreenshotCrop image{pointer-events:none}.connectionHelpDialog .helpCheckMark .marketIcon{width:18px;height:18px}.connectionHelpDialog .connectionHelpSummary>.marketIcon{width:24px;height:24px}.connectionHelpDialog .helpDataUpdate>.marketIcon{width:22px;height:22px}.welcomeTour .welcomeIntro h1{color:inherit}.welcomeRoot :is(button,a):focus-visible{outline:2px solid var(--color-tab-lighter,#b6a3e7);outline-offset:3px}
+@media(max-width:650px){.helpPage.aboutTab{padding:12px}.connectionHelpShade{padding:12px}.aboutMainLinkItem{flex-basis:100%}.aboutUpdateColumn{margin-left:0}.welcomeTour .welcomePrimary{width:180px;flex-basis:180px}}

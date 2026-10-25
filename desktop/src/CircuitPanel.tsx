@@ -1,0 +1,12 @@
+import {circuitWarframeStatus,installedCircuitIncarnon} from './circuitStatus';
+import {useCollectionSnapshot,ownsCircuitReward} from './useCollectionSnapshot';
+import {useEffect,useState} from 'react';
+import type {CircuitSchedule} from './worldModel';
+import {countdown} from './worldModel';
+export default function CircuitPanel({schedules,now,en}:{schedules:CircuitSchedule[];now:number;en:boolean}){
+ const snapshot=useCollectionSnapshot();
+ const [items,setItems]=useState<{id:string;maxRank:number;name:string;zh:string;image:string}[]>([]);
+ useEffect(()=>{fetch('/catalog.json').then(r=>r.json()).then(d=>setItems(d.items)).catch(()=>{});},[]);
+ const active=schedules.find(s=>Number(s.Activation?.$date?.$numberLong)<=now&&Number(s.Expiry?.$date?.$numberLong)>now);
+ return <section className="circuitPanel"><header><b>{en?'The Circuit':'回廊轮换'}</b>{active&&<time>{countdown(new Date(Number(active.Expiry.$date.$numberLong)).toISOString(),now,en)}</time>}</header>{active?active.CategoryChoices.filter(c=>['EXC_NORMAL','EXC_HARD'].includes(c.Category)).map(c=><div key={c.Category}><h4>{c.Category==='EXC_HARD'?(en?'Steel Path · Incarnon':'钢铁之路 · 灵化武器'):(en?'Normal · Warframes':'普通 · 战甲')}</h4><div className="circuitChoices">{c.Choices.map(name=>{const i=items.find(i=>i.name.toLowerCase()===name.toLowerCase());const installed=c.Category==='EXC_HARD'&&installedCircuitIncarnon(snapshot?.incarnon,name,items);const owned=ownsCircuitReward(snapshot,name,i?.id,c.Category==='EXC_HARD')||installed;const status=circuitWarframeStatus(snapshot,c.Category==='EXC_NORMAL'?i:undefined);return <div key={name} className={owned||status.complete?'owned':''} title={name+(status.mastered?(en?' · Mastered':' · 已精通'):'')+(status.subsumed?(en?' · Subsumed':' · 已吞噬'):'')+(owned?(en?' · Owned':' · 已拥有'):'')+(installed?(en?' · Incarnon installed':' · 已安装灵化'):'')}><div className="circuitBadges">{status.mastered&&<img src="/reference/ui/mastered_laurel.png" alt={en?'Mastered':'已精通'}/ >}{status.subsumed&&<img src="/reference/ui/helminth.png" alt={en?'Subsumed':'已吞噬'}/>}</div>{owned&&!status.complete&&<b className="circuitOwned" title={installed?(en?'Incarnon installed':'已安装灵化'):(en?'Owned':'已拥有')} aria-label={installed?(en?'Incarnon installed':'已安装灵化'):(en?'Owned':'已拥有')}>✓</b>}{i?.image&&<img src={i.image} alt=""/>}<span>{!en&&i?.zh&&!i.zh.includes('�')?i.zh:name}</span></div>;})}</div></div>):<p>{en?'Current rotation unavailable':'当前轮换数据暂不可用'}</p>}</section>;
+}

@@ -1,0 +1,11 @@
+export type MarketPreferences={bulkOrderPriceSource:'live'|'local-cache'|'aleca-public';marketInGameOnly:boolean;autoKeepEnabled:boolean;skipWarningAutoKeep:boolean;autoCompleteTrades:boolean};
+export const marketPreferenceKey='myframe.market.preferences.v1',marketPreferenceEvent='myframe-market-preferences-changed';
+export const marketPreferenceDefaults:MarketPreferences={bulkOrderPriceSource:'aleca-public',marketInGameOnly:true,autoKeepEnabled:false,skipWarningAutoKeep:false,autoCompleteTrades:true};
+export function parseMarketPreferences(raw:string|null):MarketPreferences{try{const v=JSON.parse(raw??'{}');return {bulkOrderPriceSource:v?.bulkOrderPriceSource==='live'?'live':v?.bulkOrderPriceSource==='local-cache'?'local-cache':'aleca-public',marketInGameOnly:typeof v?.marketInGameOnly==='boolean'?v.marketInGameOnly:true,autoKeepEnabled:v?.autoKeepEnabled===true,skipWarningAutoKeep:v?.skipWarningAutoKeep===true,autoCompleteTrades:v?.autoCompleteTrades!==false};}catch{return {...marketPreferenceDefaults};}}
+export const marketAutoKey=(accountId:string,platform:string)=>'myframe.marketAuto.v1:'+JSON.stringify([accountId,platform]);
+export const restoreMarketAuto=(prefs:MarketPreferences,raw:string|null)=>prefs.autoKeepEnabled&&raw==='true';
+type Store={getItem:(key:string)=>string|null;setItem:(key:string,value:string)=>void};
+const bookKey=(slug:string,platform:string)=>'myframe.marketBook.v1:'+JSON.stringify([platform,slug]);
+/** Public complete books only; 15 minute TTL, exact platform and slug namespace. */
+export function readMarketBook<T>(storage:Pick<Store,'getItem'>,slug:string,platform:string,now=Date.now()):{rows:T[];fetchedAt:string}|null{try{const v=JSON.parse(storage.getItem(bookKey(slug,platform))??'null'),age=now-Date.parse(v?.fetchedAt);return typeof v?.fetchedAt==='string'&&Array.isArray(v?.rows)&&v.rows.length<=10000&&Number.isFinite(age)&&age>=0&&age<900000?{rows:v.rows,fetchedAt:v.fetchedAt}:null;}catch{return null;}}
+export function saveMarketBook<T>(storage:Store,slug:string,platform:string,rows:T[],fetchedAt=new Date().toISOString()){if(!Number.isFinite(Date.parse(fetchedAt))||rows.length>10000)return;try{storage.setItem(bookKey(slug,platform),JSON.stringify({rows,fetchedAt}));}catch{}}

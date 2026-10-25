@@ -1,0 +1,2 @@
+import {useState,useEffect} from 'react';
+export default function MasteryBadge({rank,className}:{rank?:number|null;className?:string}){const [failed,setFailed]=useState(false);useEffect(()=>setFailed(false),[rank]);const local=rank!=null&&rank>=0&&rank<=40;return <img className={className} src={!failed&&local?`/reference/mastery/${rank}.webp`:'/reference/ui/mastery.png'} alt="" onError={()=>setFailed(true)}/>;}

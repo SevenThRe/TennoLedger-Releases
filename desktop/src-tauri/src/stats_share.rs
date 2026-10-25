@@ -1,0 +1,67 @@
+use crate::{AppState,domain::Dataset};
+use serde_json::{json,Value};
+use rusqlite::OptionalExtension;
+use std::collections::{BTreeMap,BTreeSet};
+use sha2::{Digest,Sha256};
+const FIELDS:&[&str]=&["played","relicOpened","trades","plat","ducats","endo","credits","aya","vitus"];
+fn selected(fields:&[String])->Result<(),String>{let unique:BTreeSet<_>=fields.iter().collect();if fields.is_empty()||fields.len()>FIELDS.len()||unique.len()!=fields.len()||fields.iter().any(|f|!FIELDS.contains(&f.as_str())){return Err("请选择有效统计字段".into());}Ok(())}
+fn snapshot(data:&Dataset,fields:&[String])->Result<Value,String>{
+ selected(fields)?;
+ let mut groups:BTreeMap<String,Vec<&BTreeMap<String,Value>>>=BTreeMap::new();
+ for row in &data.general_data_points {if let Some(at)=row.get("ts").and_then(Value::as_str).and_then(|s|chrono::DateTime::parse_from_rfc3339(s).ok()){groups.entry(at.with_timezone(&chrono::Utc).format("%Y-%m-%d").to_string()).or_default().push(row);}}
+ let mut confirmed=BTreeMap::new();for(id,ts)in data.trades.iter().map(|t|(&t.id,&t.ts)).chain(data.exchanges.iter().map(|t|(&t.id,&t.ts))){if !id.is_empty(){if let Ok(at)=chrono::DateTime::parse_from_rfc3339(ts){confirmed.insert(id,at);}}}
+ let mut trades:BTreeMap<String,BTreeSet<String>>=BTreeMap::new();for(id,at)in confirmed{let day=at.with_timezone(&chrono::Utc).format("%Y-%m-%d").to_string();trades.entry(day.clone()).or_default().insert(id.clone());groups.entry(day).or_default();}
+ let mut rows=vec![];
+ for(day,mut points)in groups{points.sort_by_key(|p|p.get("ts").and_then(Value::as_str).and_then(|s|chrono::DateTime::parse_from_rfc3339(s).ok()));let mut row=serde_json::Map::new();row.insert("ts".into(),json!(day.clone()+"T23:59:59Z"));for f in fields{
+  let numeric=|p:&&BTreeMap<String,Value>|p.get(f).and_then(Value::as_u64).filter(|n|*n<=9_007_199_254_740_991);
+  let values:Vec<u64>=points.iter().filter_map(numeric).collect();
+  let historical=if values.is_empty(){None}else{values.iter().try_fold(0u64,|a,b|a.checked_add(*b)).filter(|n|*n<=9_007_199_254_740_991)};
+  if f=="relicOpened"||f=="trades"{row.insert(format!("{f}Partial"),json!(values.len()<points.len()||(!values.is_empty()&&historical.is_none())||(f=="trades"&&historical.is_none())));}
+  let value=match f.as_str(){"played"=>json!(1),"trades"=>{let events=trades.get(&day).map_or(0,|ids|ids.len() as u64);historical.map(|n|n.max(events)).or_else(||(events>0).then_some(events)).map(Value::from).unwrap_or(Value::Null)},"relicOpened"=>historical.map(Value::from).unwrap_or(Value::Null),_=>points.iter().rev().find(|p|p.contains_key(f)).and_then(numeric).map(Value::from).unwrap_or(Value::Null)};
+  row.insert(f.clone(),value);
+ }if fields.iter().any(|f|!matches!(f.as_str(),"played"|"trades"|"relicOpened")){row.insert("balanceSample".into(),json!(!points.is_empty()));}rows.push(Value::Object(row));}
+ Ok(json!({"generalDataPoints":rows}))
+}
+fn service_url(url:&str)->Result<reqwest::Url,String>{let mut u=reqwest::Url::parse(url).map_err(|_|"统计服务地址无效")?;let loopback=matches!(u.host_str(),Some("localhost"|"127.0.0.1"|"[::1]"|"::1"));if !(u.scheme()=="https"||u.scheme()=="http"&&loopback)||!u.username().is_empty()||u.password().is_some()||u.query().is_some()||u.fragment().is_some()||!matches!(u.path(),""|"/"){return Err("统计服务需要HTTPS地址；本机可用HTTP，地址不应包含路径或令牌".into());}u.set_path("/");Ok(u)}
+fn client_tag(db:&rusqlite::Connection,scope:&str)->Result<String,String>{let key=format!("stats_share_tag:{scope}");let current:Option<String>=db.query_row("SELECT value FROM settings WHERE key=?1",[&key],|r|r.get(0)).optional().map_err(|e|e.to_string())?;if let Some(tag)=current{return Ok(tag);}let seed=format!("{}:{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e|e.to_string())?.as_nanos());let tag=format!("{:x}",Sha256::digest(seed.as_bytes()));db.execute("INSERT INTO settings(key,value) VALUES(?1,?2)",rusqlite::params![key,tag]).map_err(|e|e.to_string())?;Ok(tag)}
+type Consents=BTreeMap<String,Vec<String>>;
+fn consents(db:&rusqlite::Connection,key:&str)->Result<Consents,String>{let value:Option<String>=db.query_row("SELECT value FROM settings WHERE key=?1",[key],|r|r.get(0)).optional().map_err(|e|e.to_string())?;let grants:Consents=match value{Some(v)=>serde_json::from_str(&v).map_err(|_|"本地分享授权记录无效")?,None=>BTreeMap::new()};if grants.len()>1000{return Err("本地分享授权过多".into());}for fields in grants.values(){selected(fields)?;}Ok(grants)}
+fn granted_snapshot(data:&Dataset,id:&str,permissions:&Consents)->Result<Option<Value>,String>{permissions.get(id).map(|fields|snapshot(data,fields)).transpose()}
+fn bounded_json(reader:impl std::io::Read)->Result<Value,String>{use std::io::Read;let mut bytes=vec![];reader.take(2*1024*1024+1).read_to_end(&mut bytes).map_err(|_|"统计服务响应读取失败")?;if bytes.len()>2*1024*1024{return Err("统计服务响应过大".into());}serde_json::from_slice(&bytes).map_err(|_|"统计服务响应无效".into())}
+#[tauri::command]
+pub async fn stats_share(action:String,url:String,admin_token:String,expected_scope:String,id:Option<String>,fields:Option<Vec<String>>,expires_days:Option<u32>,title:Option<String>,state:tauri::State<'_,AppState>)->Result<Value,String>{
+ let base=service_url(&url)?;if admin_token.len()<32||admin_token.len()>512||!admin_token.bytes().all(|b|b.is_ascii_graphic()){return Err("管理密钥格式无效".into());}
+ let (data,tag,consent_key,permissions)={let db=state.0.lock().map_err(|_|"数据库锁错误")?;db.require_expected_scope(Some(&expected_scope))?;let tag=client_tag(&db.db,&expected_scope)?;let key=format!("stats_share_consent:{tag}:{:x}",Sha256::digest(base.as_str().as_bytes()));let permissions=consents(&db.db,&key)?;(db.load()?,tag,key,permissions)};
+ let creating=action=="create";let requested_fields=fields.clone();
+ let mut result=tauri::async_runtime::spawn_blocking(move||{
+  let client=reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(20)).redirect(reqwest::redirect::Policy::none()).user_agent("TennoLedger/0.1.0").build().map_err(|_|"无法创建统计连接")?;
+  let send=|method:reqwest::Method,path:&str,body:Option<Value>|->Result<Value,String>{let endpoint=base.join(path).map_err(|_|"统计路径无效")?;let mut request=client.request(method,endpoint).bearer_auth(&admin_token);if let Some(body)=body{request=request.json(&body);}let response=request.send().map_err(|_|"统计服务连接失败，请检查地址和网络")?;if !response.status().is_success(){return Err(format!("统计服务返回HTTP {}",response.status().as_u16()));}if response.content_length().is_some_and(|n|n>2*1024*1024){return Err("统计服务响应过大".into());}bounded_json(response)};
+  if action=="create"{let fields=fields.ok_or("请选择统计字段")?;let days=expires_days.unwrap_or(30);if !(1..=365).contains(&days){return Err("链接有效期应为1至365天".into());}let title=title.unwrap_or_else(||"TennoLedger".into());if title.len()>256||title.chars().count()>64||title.chars().any(char::is_control){return Err("分享名称无效".into());}return send(reqwest::Method::POST,"api/admin/shares",Some(json!({"clientTag":tag,"fields":fields,"title":title,"expiresAt":(chrono::Utc::now()+chrono::Duration::days(i64::from(days))).to_rfc3339(),"snapshot":snapshot(&data,&fields)?})));}
+  let list=send(reqwest::Method::GET,"api/admin/shares",None)?;let remote=list["shares"].as_array().filter(|g|g.len()<=1000).ok_or("统计列表格式无效")?;let shares:Vec<Value>=remote.iter().filter(|g|g.is_object()&&g["clientTag"].as_str()==Some(tag.as_str())).cloned().map(|mut g|{let fields=g["id"].as_str().and_then(|id|permissions.get(id));g["syncAuthorized"]=json!(fields.is_some());if let Some(fields)=fields{g["fields"]=json!(fields);}g}).collect();
+  if action=="list"{return Ok(json!({"shares":shares}));}
+  if action=="revoke"{let id=id.ok_or("请选择分享")?;if !id.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-')||!shares.iter().any(|g|g["id"].as_str()==Some(&id)){return Err("此分享不属于当前账号".into());}return send(reqwest::Method::DELETE,&format!("api/admin/shares/{id}"),None);}
+  if action=="update"{let mut updated=0;let mut skipped=0;for share in shares {if share["revoked"].as_bool()==Some(true)||share["expiresAt"].as_str().and_then(|s|chrono::DateTime::parse_from_rfc3339(s).ok()).is_none_or(|s|s<=chrono::Utc::now()){continue;}let id=share["id"].as_str().filter(|s|!s.is_empty()&&s.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-')).ok_or("分享标识无效")?;let Some(snapshot)=granted_snapshot(&data,id,&permissions)?else{skipped+=1;continue;};send(reqwest::Method::PUT,&format!("api/admin/shares/{id}"),Some(json!({"snapshot":snapshot})))?;updated+=1;}return Ok(json!({"updated":updated,"skippedWithoutLocalConsent":skipped}));}
+  Err("未知统计操作".into())
+ }).await.map_err(|_|"统计服务任务失败")??;
+ if creating{let fields=requested_fields.ok_or("缺少本地授权字段")?;selected(&fields)?;let id=result["id"].as_str().filter(|id|id.len()==36&&id.bytes().all(|b|b.is_ascii_alphanumeric()||b==b'-')).ok_or("统计服务分享标识无效")?.to_owned();let db=state.0.lock().map_err(|_|"数据库锁错误")?;let mut permissions=consents(&db.db,&consent_key)?;if permissions.len()>=1000&&!permissions.contains_key(&id){return Err("本地分享授权过多".into());}permissions.insert(id,fields.clone());db.db.execute("INSERT INTO settings(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value",rusqlite::params![consent_key,serde_json::to_string(&permissions).map_err(|_|"授权保存失败")?]).map_err(|_|"本地分享授权保存失败")?;result["fields"]=json!(fields);result["syncAuthorized"]=json!(true);}
+ Ok(result)
+}
+#[cfg(test)]mod tests{use super::*;#[test]fn fields_never_include_private_data(){let data=crate::domain::parse(r#"{"generalDataPoints":[{"ts":"2026-10-25T00:00:00Z","plat":100,"credits":400,"secret":"hidden"}]}"#).unwrap();let v=snapshot(&data,&vec!["plat".into()]).unwrap();let row=&v["generalDataPoints"][0];assert_eq!(row["plat"],100);assert!(row.get("credits").is_none());assert!(row.get("secret").is_none());assert!(v.get("trades").is_none());assert!(snapshot(&data,&vec!["partner".into()]).is_err());assert!(snapshot(&data,&vec!["plat".into(),"plat".into()]).is_err());}
+ #[test]fn loopback_and_https_only(){assert!(service_url("http://127.0.0.1:4389").is_ok());assert!(service_url("https://stats.example.com").is_ok());for url in ["http://public.example.com","https://user:pass@example.com","https://example.com?token=x","https://example.com/private","file:///C:/a"]{assert!(service_url(url).is_err());}}
+ #[test]fn utc_days_partial_counts_and_latest_field_observation(){
+ let data=crate::domain::parse(r#"{"generalDataPoints":[{"ts":"2026-10-25T01:00:00+08:00","plat":12,"relicOpened":3,"trades":2},{"ts":"2026-10-24T18:00:00Z","plat":15},{"ts":"2026-10-24T19:00:00Z","credits":50},{"ts":"2026-10-25T19:00:00Z","plat":null}]}"#).unwrap();
+ let v=snapshot(&data,&vec!["plat".into(),"relicOpened".into(),"trades".into(),"played".into()]).unwrap();let rows=v["generalDataPoints"].as_array().unwrap();assert_eq!(rows.len(),2);assert_eq!(rows[0]["plat"],15);assert_eq!(rows[0]["relicOpened"],3);assert_eq!(rows[0]["relicOpenedPartial"],true);assert_eq!(rows[0]["trades"],2);assert_eq!(rows[0]["tradesPartial"],true);assert!(rows[1]["plat"].is_null());assert!(rows[1]["relicOpened"].is_null());assert_eq!(rows[0]["balanceSample"],true);
+ }
+ #[test]fn confirmed_trade_day_counts_without_exposing_partner_and_no_double_count(){
+ let mut data=Dataset::default();let exchange=crate::domain::Exchange{id:"same".into(),ts:"2026-10-25T01:00:00Z".into(),partner:"PRIVATE".into(),kind:"trade".into(),sent:vec![],received:vec![],reference_item:None};data.exchanges=vec![exchange.clone(),exchange];
+ let v=snapshot(&data,&vec!["played".into(),"trades".into(),"plat".into()]).unwrap();assert_eq!(v["generalDataPoints"][0]["played"],1);assert_eq!(v["generalDataPoints"][0]["trades"],1);assert_eq!(v["generalDataPoints"][0]["balanceSample"],false);assert!(v["generalDataPoints"][0]["plat"].is_null());assert!(!v.to_string().contains("PRIVATE"));
+ }
+ #[test]fn local_consents_are_scoped_durable_and_fail_closed(){
+ let db=rusqlite::Connection::open_in_memory().unwrap();db.execute_batch("CREATE TABLE settings(key TEXT PRIMARY KEY,value TEXT NOT NULL)").unwrap();let a=client_tag(&db,"A").unwrap();let b=client_tag(&db,"B").unwrap();assert_ne!(a,b);assert_eq!(client_tag(&db,"A").unwrap(),a);
+ db.execute("INSERT INTO settings VALUES('consent-A',?1)",[r#"{"grant":["plat"]}"#]).unwrap();assert_eq!(consents(&db,"consent-A").unwrap()["grant"],vec!["plat"]);assert!(consents(&db,"consent-B").unwrap().is_empty());db.execute("UPDATE settings SET value=?1 WHERE key='consent-A'",[r#"{"grant":["partner"]}"#]).unwrap();assert!(consents(&db,"consent-A").is_err());
+ }
+
+ #[test]fn remote_fields_cannot_expand_local_grants_or_select_another_account(){let data=crate::domain::parse(r#"{"generalDataPoints":[{"ts":"2026-10-25T00:00:00Z","plat":10,"credits":123456}]}"#).unwrap();let mut grants=Consents::new();grants.insert("A-grant".into(),vec!["plat".into()]);let remote=json!({"id":"A-grant","fields":["plat","credits"]});let snapshot=granted_snapshot(&data,remote["id"].as_str().unwrap(),&grants).unwrap().unwrap();assert_eq!(snapshot["generalDataPoints"][0]["plat"],10);assert!(snapshot["generalDataPoints"][0].get("credits").is_none());assert!(granted_snapshot(&data,"B-grant",&grants).unwrap().is_none());}
+ #[test]fn chunked_responses_are_bounded_and_invalid_json_never_echoes_input(){assert_eq!(bounded_json(&b"{\"ok\":true}"[..]).unwrap()["ok"],true);let large=vec![b' ';2*1024*1024+1];assert_eq!(bounded_json(&large[..]).unwrap_err(),"统计服务响应过大");let error=bounded_json(&b"PRIVATE_REMOTE_TOKEN"[..]).unwrap_err();assert!(!error.contains("PRIVATE"));}
+
+}

@@ -1,0 +1,7 @@
+import {useTranslation} from 'react-i18next';
+import {useAccounts} from './AccountProvider';
+import {native} from './api';
+export default function AccountProfiles(){
+ const {i18n}=useTranslation(),en=i18n.language.startsWith('en'),accounts=useAccounts(),qa=import.meta.env.DEV&&!native&&new URLSearchParams(location.search).get('qa')==='accounts';
+ return <section className="settingsGroup"><h2>{en?'Saved accounts':'已保存的账号资料'}</h2>{qa&&<p role="status">QA · {en?'Fixture accounts':'演示账号'}</p>}<div className="settingRow"><label htmlFor="saved-account">{en?'Account':'账号'}</label><select id="saved-account" aria-label={en?'Saved account':'已保存账号'} value={accounts.scope} disabled={(!native&&!qa)||accounts.switching||!accounts.ready} onChange={e=>void accounts.select(e.target.value).catch(()=>{})}>{accounts.profiles.map(profile=><option key={profile.accountScope} value={profile.accountScope}>{profile.unassigned?(en?'Previous data (unassigned)':'旧资料（未归属）'):profile.name||(en?'Unnamed account':'未命名账号')}</option>)}</select></div><p className="settingsAccountHint">{en?'Inventory, favorites and history are kept separately. Backups include all saved accounts.':'库存、收藏与历史分别保存，备份包含所有已保存账号。'}</p>{accounts.switching&&<p role="status">{en?'Switching…':'正在切换…'}</p>}{accounts.error&&<p role="alert" className="settingsError">{accounts.error} <button onClick={()=>void accounts.refresh()}>{en?'Retry':'重试'}</button></p>}</section>;
+}

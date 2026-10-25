@@ -1,0 +1,29 @@
+.windowContent .app main.resourcesPage{padding:8px 10px 12px}
+.resourcesPage>header{height:40px;min-height:40px;margin:0 0 8px;flex-direction:row;justify-content:flex-end}
+.resourcesPage>header>div:first-child{display:none}
+.resourceInventory{height:var(--world-panel-height,calc(100vh - 115px));min-height:0;display:flex;flex-direction:column;border:1px solid #34394b;border-radius:15px;background:#191f30;padding:16px 14px;color:#edf0fa}
+.resourceInventory>h2{font-size:24px;margin:0 10px 16px;font-weight:600}
+.resourceToolbar{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex:none}
+.resourceToolbar input{flex:1;min-width:80px;height:40px;background:#10141f;border:1px solid #34394b;border-radius:8px;padding:0 12px;color:inherit}
+.resourceToolbar select{height:40px;background:#10141f;padding:6px 12px}
+.resourceOwnership{display:flex;padding:3px;background:#10141f;border:1px solid #34394b;border-radius:8px}
+.resourceOwnership button{padding:7px 10px;border:1px solid transparent;background:transparent;white-space:nowrap}
+.resourceOwnership button[aria-pressed=true]{background:#343c56;border-color:#b19bf3}
+.resourceScroll{flex:1;min-height:0;overflow:auto;padding-right:6px;overscroll-behavior:contain}
+.resourceCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:10px}
+.resourceCards article{min-width:0;display:flex;align-items:center;flex-direction:column;padding:20px 15px 12px;background:#21283d;border:1px solid #3b4153;border-radius:10px;font-size:13px}
+.resourceCards article>img{width:64px;height:58px;object-fit:contain;margin-bottom:14px}
+.resourceCards article>strong{text-align:center;min-height:32px}
+.resourceAmount{font-size:21px;margin:0 0 10px}.resourceAmount small{font-size:11px;margin-left:5px}
+.resourceNeeds{width:100%;border-top:1px solid #3b4153;padding-top:3px;font-size:12px}.resourceNeeds p{display:flex;justify-content:space-between;gap:8px;margin:9px 0}.resourceNeeds p>span:last-child{color:#aeb5c8}
+.resourceCards article>button{background:transparent;border:0;margin-top:4px;padding:8px 0;color:#ccd5ef;font-size:12px}
+@media(max-width:1100px){.resourceToolbar{flex-wrap:wrap}.resourceToolbar input{flex-basis:40%}}
+/* Current installed resource workspace geometry. Original SVG section icons are local references. */
+.resourceInventory.resourceWorkspace{container:resources / size;position:relative;border:0;border-radius:0;background:var(--color-bg-2);padding:0;color:var(--color-text);gap:12px;overflow:hidden}
+.resourceInventory>nav.resourceViews{display:flex;align-items:center;gap:6px;margin:0;padding:0 0 8px;border-bottom:1px solid var(--ui-line);flex-shrink:0}.resourceViews button{display:flex;align-items:center;gap:7px;padding:7px 10px;font-size:13px;color:var(--color-navigation-hover);border:0;border-radius:7px;background:transparent}.resourceViews button[aria-pressed=true]{background:var(--color-card-active);color:var(--color-text);border:0}.resourceSectionIcon{display:inline-block;width:20px;height:20px;background:currentColor;mask-size:90%;mask-position:center;mask-repeat:no-repeat;-webkit-mask-size:90%;-webkit-mask-position:center;-webkit-mask-repeat:no-repeat;flex-shrink:0}
+.resourceInventory.resourceWorkspace>h2{font-size:24px;font-weight:500;line-height:30px;margin:0;padding:0 2px}
+.resourceInventory.resourceWorkspace .resourceToolbar{margin-bottom:0;gap:8px}.resourceToolbar input,.resourceToolbar select,.resourceOwnership{background:var(--color-bg-1);border-color:var(--ui-line);color:var(--color-text);border-radius:7px}.resourceOwnership button[aria-pressed=true]{background:var(--color-card-active);border-color:var(--ui-line-strong)}
+.resourceCards{grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:10px}.resourceCards>.resourceInventoryCard{display:flex;flex-direction:column;gap:10px;min-width:0;width:100%;height:auto;padding:15px;border:1px solid var(--ui-line);border-radius:10px;background:var(--color-card);color:var(--color-text);font:inherit;cursor:pointer}.resourceCards>.resourceInventoryCard:hover{border-color:var(--ui-line-strong);background:var(--color-card-hover)}.resourceInventoryIdentity{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0;width:100%;text-align:center}.resourceInventoryIdentity img{width:62px;height:62px;object-fit:contain}.resourceInventoryIdentity strong{max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:14px;line-height:19px;font-weight:500}.resourceInventoryIdentity .resourceAmount{font-size:20px;font-variant-numeric:tabular-nums;margin:0}.resourceAmount small{font-size:11px;color:var(--color-navigation-hover)}
+.resourceNeeds{width:100%;padding-top:4px;border-top:1px solid var(--ui-line);display:flex;flex-direction:column;gap:8px}.resourceNeeds>span{display:flex;justify-content:space-between;gap:8px;text-align:left;font-size:11px}.resourceNeeds>span>span{color:var(--color-navigation-hover)}.resourceNeeds strong{font-weight:400;color:var(--color-text);text-align:right}.resourceSourceLink{display:flex;justify-content:center;align-items:center;gap:5px;color:var(--color-navigation-hover);font-size:12px}.resourceSourceLink svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
+.resourceShowMore{display:block;margin:12px auto;padding:7px 12px;border:1px solid var(--ui-line-strong);border-radius:7px;background:var(--color-bg-1);color:var(--color-text);font-size:12px;cursor:pointer}.resourceCards:focus-visible{outline:2px solid var(--color-tab-lighter)}
+@container resources (max-width:470px){.resourceCards{grid-template-columns:repeat(2,minmax(0,1fr))}.resourceCards>.resourceInventoryCard{padding:12px 9px}.resourceToolbar{flex-wrap:wrap}.resourceToolbar input{flex-basis:100%}.resourceToolbar select{max-width:none;flex:1}}

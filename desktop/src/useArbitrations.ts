@@ -1,0 +1,8 @@
+import {useEffect,useState} from 'react';
+import {useWorld,worldQA} from './WorldProvider';
+import {native} from './api';
+import {arbitrationPreferences,arbitrationSummary,type ArbitrationPreferences} from './arbitrationModel';
+export type WorldNode={name:string;zh:string;planet:string;planetZh:string;missionType:string;faction:string};
+let nodesRequest:Promise<Record<string,WorldNode>>|undefined;
+export function useWorldNodes(){const [nodes,setNodes]=useState<Record<string,WorldNode>>({});useEffect(()=>{let live=true;nodesRequest??=fetch('/world-nodes.json').then(r=>{if(!r.ok)throw Error('Node catalog unavailable');return r.json();}).then(x=>x.nodes).catch(()=>{nodesRequest=undefined;return {};});void nodesRequest.then(x=>{if(live)setNodes(x);});return()=>{live=false;};},[]);return nodes;}
+export function useArbitrations(){const world=useWorld(),[now,setNow]=useState(Date.now()),[error,setError]=useState('');useEffect(()=>{const tick=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(tick);},[]);const preferences=arbitrationPreferences(world.status.subscriptions);const summary=arbitrationSummary(world.status.arbitrations,preferences,now,world.status.subscriptions.arbitrationEnabled);async function save(patch:Partial<ArbitrationPreferences>,enabled?:boolean){try{await world.save({...world.status.subscriptions,arbitrationEnabled:enabled??world.status.subscriptions.arbitrationEnabled,arbitrationPreferences:{...preferences,...patch,...(patch.alertFilter?{legacyMatch:null}:{})}});setError('');}catch(e){setError(String(e));}}return {...world,...summary,preferences,now,error,save,canEdit:world.loaded&&!world.busy&&(native||worldQA)};}

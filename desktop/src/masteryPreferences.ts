@@ -1,0 +1,3 @@
+import {useState,useEffect} from 'react';
+const key='myframe.mastery.preferences';
+export function useMasteryPreferences(){const read=()=>{try{const x=JSON.parse(localStorage.getItem(key)||'{}');return {includeForma:x.includeForma!==false,hideFounders:x.hideFounders===true};}catch{return {includeForma:true,hideFounders:false};}};const [value,setValue]=useState(read);useEffect(()=>{const update=()=>setValue(read());window.addEventListener('mastery-preferences',update);return()=>window.removeEventListener('mastery-preferences',update);},[]);return [value,(next:typeof value)=>{setValue(next);try{localStorage.setItem(key,JSON.stringify(next));}catch{}window.dispatchEvent(new Event('mastery-preferences'));}] as const;}

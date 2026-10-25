@@ -1,0 +1,6 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {readAppPreferences,parseAppPreferences,appPreferenceDefaults} from '../src/appPreferencesModel.ts';
+test('old preferences gain compatible defaults, recording remains explicit',()=>{assert.deepEqual(readAppPreferences(null),appPreferenceDefaults);assert.equal(parseAppPreferences({recordStats:false}).recordStats,false);assert.equal(parseAppPreferences({}).warnOnClose,true);assert.throws(()=>parseAppPreferences({recordStats:'false'}));assert.deepEqual(readAppPreferences('bad'),appPreferenceDefaults);});
+
+test('Stats visibility and recording are independent preferences',()=>{const p=parseAppPreferences({statsTabEnabled:false,recordStats:true});assert.equal(p.statsTabEnabled,false);assert.equal(p.recordStats,true);assert.equal(parseAppPreferences({}).statsTabEnabled,true);});
+
+test("reference inventory and rank settings migrate with defaults and persist false",()=>{const old=parseAppPreferences({});assert.equal(old.fullInventoryExperienceEnabled,false);assert.equal(old.takeRankIntoAccount,true);const disabled=parseAppPreferences({fullInventoryExperienceEnabled:false,takeRankIntoAccount:false});assert.equal(disabled.fullInventoryExperienceEnabled,false);assert.equal(disabled.takeRankIntoAccount,false);assert.throws(()=>parseAppPreferences({takeRankIntoAccount:"false"}));});

@@ -1,0 +1,19 @@
+import {useState,useEffect,useRef} from 'react';
+import {useTranslation} from 'react-i18next';
+import PanelIcon from './PanelIcon';
+import {railTime} from './worldRailModel';
+import {useWorld,worldQA} from './WorldProvider';
+import {native} from './api';
+import {duviriCycle} from './arbitrationModel';
+import {stateZh,toggleValue} from './worldModel';
+import './worldCycles.css';
+export default function WorldCycles({now}:{now:number}){
+ const {i18n}=useTranslation(),en=i18n.language.startsWith('en'),L=(zh:string,eng:string)=>en?eng:zh,world=useWorld(),[open,setOpen]=useState<string|null>(null),[error,setError]=useState('');
+ const root=useRef<HTMLElement>(null);
+ useEffect(()=>{const key=(event:KeyboardEvent)=>{if(event.key==='Escape')setOpen(null);};const outside=(event:PointerEvent)=>{if(event.target instanceof Node&&!root.current?.contains(event.target))setOpen(null);};window.addEventListener('keydown',key);window.addEventListener('pointerdown',outside);return()=>{window.removeEventListener('keydown',key);window.removeEventListener('pointerdown',outside);};},[]);
+ const p=world.status.subscriptions,order=['earth','cetus','vallis','cambion'],names:Record<string,string>=en?{earth:'Earth',cetus:'Cetus',vallis:'Orb Vallis',cambion:'Cambion Drift'}:{earth:'地球',cetus:'希图斯',vallis:'奥布山谷',cambion:'魔胎之境'},locations:Record<string,string>=en?{earth:'Earth',cetus:'Plains of Eidolon',vallis:'Venus',cambion:'Deimos'}:{earth:'地球',cetus:'夜灵平野',vallis:'金星',cambion:'火卫二'},duviri=duviriCycle(now);
+ const label=(state:string)=>en?state.charAt(0).toUpperCase()+state.slice(1):stateZh[state]??state;
+ const time=(end:string)=>railTime(end,now);
+ const toggle=async(id:string)=>{try{await world.save({...p,cycleStates:toggleValue(p.cycleStates,id)});setError('');}catch(e){setError(String(e));}};
+ return <section ref={root} className="sharedWorldCycles"><h3>{L('世界周期','World cycles')}</h3>{!native&&worldQA&&<small>{L('演示数据 · 非实时世界状态','Fixture preview · Not live world state')}</small>}{error&&<p role="alert">{error}</p>}<div className="sharedCycleGrid">{world.status.cycles.filter(c=>c.id!=='duviri').slice().sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id)).map(c=><article className={"sharedCycle "+c.state} key={c.id}><img src={'/reference/ui/'+({earth:'earth.png',cetus:'earth.png',vallis:'venus.png',cambion:'deimos.png'}[c.id]??'world.png')} alt=""/><div className="sharedCycleIdentity"><strong>{names[c.id]??c.name}</strong><small>{locations[c.id]??c.name}</small></div><button aria-label={L('周期提醒 ','Cycle reminders ')+(names[c.id]??c.name)} aria-expanded={open===c.id} className={p.cycleStates.some(s=>s.startsWith(c.id+':'))?'selected':''} disabled={!world.loaded||world.busy||!native&&!worldQA} onClick={()=>setOpen(open===c.id?null:c.id)}><PanelIcon name={p.cycleStates.some(s=>s.startsWith(c.id+':'))?'bellActive':'bell'}/></button><span className={c.state}>{label(c.state)}</span><time>{time(c.expiry)}</time>{open===c.id&&<div className="sharedCycleOptions">{[c.state,c.nextState].filter((s,i,a)=>a.indexOf(s)===i).map(state=><label key={state}><span>{label(state)}</span><input type="checkbox" disabled={world.busy} checked={p.cycleStates.includes(`${c.id}:${state}`)} onChange={()=>void toggle(`${c.id}:${state}`)}/></label>)}</div>}</article>)}<article className="sharedDuviri"><img src="/reference/ui/duviriExperience.png" alt=""/><div><strong>{L('双衍王境','Duviri')}</strong><time>{time(duviri.expiry)}</time><span><b data-spiral={duviri.state}>{label(duviri.state)}</b>, {L('下个','next')} <b data-spiral={duviri.nextState}>{label(duviri.nextState)}</b></span></div></article></div>{!world.status.cycles.length&&<small>{!native&&!worldQA?L('在桌面程序中查看实时周期','Open the desktop app for live cycles'):world.status.error?L('世界周期暂不可用','World cycles unavailable'):L('正在读取世界周期…','Loading world cycles…')}</small>}</section>;
+}

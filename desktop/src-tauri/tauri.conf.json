@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TennoLedger",
+  "version": "0.1.0",
+  "identifier": "org.myframe.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:4318",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "TennoLedger · 天诺手账",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1000,
+        "minHeight": 680,
+        "theme": "Dark",
+        "decorations": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: https://cdn.alecaframe.com https://wiki.warframe.com https://warframe.market; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/tenno-ledger.ico"
+    ],
+    "resources": {
+      "collector-bin/myframe-collector/": "collector/",
+      "helper-bin/": "helper/"
+    },
+    "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "SimpChinese",
+          "English"
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIzQkEyQzRFNjBDQjhENTQKUldSVWpjdGdUaXk2czdsUlVSNkNaR0JROVdZdHQ5b25QL3gwSXBaL090eVFMTGthTFRqejM0UFMK",
+      "windows": {
+        "installMode": "passive"
+      },
+      "endpoints": [
+        "https://github.com/SevenThRe/TennoLedger-Releases/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

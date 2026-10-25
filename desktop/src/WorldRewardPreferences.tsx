@@ -1,0 +1,17 @@
+import {searchText} from './searchText';
+import {useState,useEffect} from 'react';
+import {useTranslation} from 'react-i18next';
+import {useWorld,worldQA} from './WorldProvider';
+import {defaultRewardPreferences,toggleValue,rewardDisplayName} from './worldModel';
+import {native} from './api';
+import './worldRewards.css';
+export default function WorldRewardPreferences(){
+ const {i18n}=useTranslation(),en=i18n.language.startsWith('en'),L=(zh:string,eng:string)=>en?eng:zh;
+ const world=useWorld(),p=world.status.subscriptions.rewardPreferences??defaultRewardPreferences(),[error,setError]=useState(''),[query,setQuery]=useState(''),[limit,setLimit]=useState(60),[choices,setChoices]=useState<{id:string;name:string;zh?:string}[]>([]);
+ const disabled=world.busy||!world.loaded||!native&&!worldQA;
+ useEffect(()=>{let alive=true;void fetch('/catalog.json').then(r=>{if(!r.ok)throw Error();return r.json();}).then(data=>{if(!alive)return;const rows=new Map<string,{id:string;name:string;zh?:string}>();const index=new Map<string,{name:string;zh?:string;category?:string}>((data.items??[]).map((item:{id:string;name:string;zh?:string;category?:string})=>[item.id,item]));for(const item of data.items??[]){for(const part of item.recipe?.parts??[]){if(part.itemId.startsWith('/Lotus/Types/Recipes/Weapons/'))rows.set(part.itemId,{id:part.itemId,name:rewardDisplayName({id:part.itemId,name:part.itemId.split('/').at(-1),category:'weapon'},index.get(part.itemId),[item],true),zh:rewardDisplayName({id:part.itemId,name:part.itemId.split('/').at(-1),category:'weapon'},index.get(part.itemId),[item],false)});}}setChoices([...rows.values()]);}).catch(()=>{if(alive)setError(L('奖励部件目录暂不可用','Reward part catalog unavailable'));});return()=>{alive=false;};},[]);
+ const update=async(patch:Partial<typeof p>)=>{try{await world.save({...world.status.subscriptions,rewardPreferences:{...p,...patch}});setError('');}catch(e){setError(String(e));}};
+ return <section className="worldPreferences"><h3>{L('稀有奖励提醒','Rare reward alerts')}</h3>{error&&<p role="alert">{error}</p>}{([['enabled',L('启用稀有奖励提醒','Enable rare reward alerts')],['catalyst',L('Orokin 催化剂','Orokin Catalyst')],['reactor',L('Orokin 反应堆','Orokin Reactor')],['exilus',L('特殊功能槽连接器','Exilus adapters')]] as const).map(([key,label])=><label className="worldPreferenceRow" key={key}><span>{label}</span><input type="checkbox" disabled={disabled} checked={p[key]} onChange={()=>void update({[key]:!p[key]})}/></label>)}
+  <details><summary>{L('武器部件','Weapon parts')} · {p.weaponParts.length}</summary><input disabled={disabled} value={query} onChange={e=>{setQuery(e.target.value);setLimit(60);}} aria-label={L('筛选奖励部件','Filter reward parts')}/><div className="worldWeaponChoices" onScroll={e=>{const element=e.currentTarget;if(element.scrollHeight-element.scrollTop-element.clientHeight<100)setLimit(n=>n+60);}}>{choices.filter(item=>searchText(query,item.name,item.zh??'',item.id)).slice(0,limit).map(item=><label className="worldPreferenceRow" key={item.id}><span>{en?item.name:item.zh||item.name}</span><input type="checkbox" disabled={disabled} checked={p.weaponParts.includes(item.id)} onChange={()=>void update({weaponParts:toggleValue(p.weaponParts,item.id)})}/></label>)}{p.weaponParts.filter(id=>!choices.some(item=>item.id===id)).map(id=><label className="worldPreferenceRow" key={id}><span>{id.split('/').at(-1)}</span><input type="checkbox" disabled={disabled} checked onChange={()=>void update({weaponParts:p.weaponParts.filter(item=>item!==id)})}/></label>)}</div></details>
+ </section>;
+}

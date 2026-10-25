@@ -1,0 +1,74 @@
+/* AlecaFrame 3.0.4 shared item dialog and foundryDetails.html structure. */
+.itemDetailsShade{background:#000000d9}
+.itemDetailsModal{box-sizing:border-box;container:foundry-item / inline-size;display:flex;flex-direction:column;width:1120px;max-width:calc(100% - 24px);max-height:calc(100% - 24px);min-width:0;border:1px solid var(--ui-line-strong);border-radius:16px;background:var(--color-bg-1);color:var(--color-text);box-shadow:0 24px 80px #00000073;overflow:hidden;position:relative}
+.itemDetailsModal:focus{outline:none}
+.itemDetailsModal .itemDetailsHeader{display:grid!important;grid-template-columns:64px minmax(0,1fr) 34px 30px;align-items:center!important;gap:12px;padding:10px 10px 10px 18px;border-bottom:1px solid var(--ui-line);background:var(--color-bg-2);flex:none;margin:0;height:auto;min-height:0}
+.itemDetailsArtwork{display:grid;place-items:center;width:64px;height:64px;border-radius:9px;background:var(--color-bg-1)}
+.itemDetailsArtwork>img{width:88%;height:88%;object-fit:contain}
+.itemDetailsTitle{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.itemDetailsTitle h2{margin:0;font-size:26px;font-weight:500;line-height:32px;overflow-wrap:anywhere}
+.itemDetailsBadge{display:inline-flex;align-items:center;gap:5px;padding:2px 6px;border:1px solid var(--ui-line);border-radius:5px;background:var(--color-bg-1);font-size:var(--ui-font-caption,12px);line-height:16px;color:var(--color-navigation-hover)}
+.itemDetailsModal svg{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.itemDetailsModal .detailStar,.itemDetailsModal .itemDetailsClose{display:inline-flex;align-items:center;justify-content:center;flex:none;width:30px;height:30px;padding:0;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--color-navigation-hover);cursor:pointer}
+.itemDetailsModal .detailStar:not([aria-pressed=true]):hover,.itemDetailsModal .itemDetailsClose:hover{background:var(--color-card-hover);color:var(--color-text)}
+.itemDetailsModal .detailStar[aria-pressed=true]{color:#edc867;border-color:#edc86766;background:#edc86712}
+.itemDetailsModal .detailStar[aria-pressed=true] svg{fill:currentColor}
+.itemDetailsModal .detailStar svg{width:21px;height:21px}
+.itemDetailsHeader>.detailStar{width:34px;height:34px;border-color:var(--ui-line)}
+.itemDetailsHeader>.itemDetailsClose{grid-column:4;align-self:start}
+.itemDetailsContent{display:flex;flex-direction:column;gap:12px;padding:12px 16px 14px;min-height:0;overflow-y:auto}
+.itemDetailsContent>*{flex-shrink:0}
+.itemDetailsPanel{min-width:0;padding:12px;border:1px solid var(--ui-line);border-radius:10px}
+.itemDetailsSectionHeading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px 10px;padding:0 2px 9px}
+.itemDetailsSectionHeading h3{margin:0;font-size:16px;line-height:22px;font-weight:500}
+.itemDetailsSectionHeading>span{font-size:var(--ui-font-caption,12px);line-height:16px;color:var(--color-navigation-hover)}
+.itemDetailsDescription{margin:0;font-size:13px;line-height:20px;color:var(--color-navigation-hover);overflow-wrap:anywhere;white-space:pre-line}
+.itemDetailsButton{display:inline-flex;align-items:center;justify-content:center;gap:7px;width:auto;height:34px;padding:0 12px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-1);color:var(--color-text);font:inherit;font-size:var(--ui-font-small,13px);line-height:18px;white-space:nowrap;cursor:pointer;text-decoration:none}
+.itemDetailsButton:hover{background:var(--color-card-hover);border-color:var(--ui-line-strong)}
+.foundryItemIntro{padding:0 2px}
+.foundryItemLinks{display:flex;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-top:10px}
+.itemDetailsModal .wikiLinks{display:flex;gap:8px;margin:0;font-size:var(--ui-font-small,13px)}
+.itemDetailsModal .wikiLinks a{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-1);color:var(--color-text);text-decoration:none}
+.itemDetailsModal .wikiLinks a:hover{background:var(--color-card-hover);border-color:var(--ui-line-strong)}
+.foundryItemAcquisition{display:grid;grid-template-columns:300px minmax(0,1fr);gap:12px;align-items:stretch}
+.foundryItemAcquisition.single{grid-template-columns:minmax(0,1fr)}
+.foundryComponentList{display:flex;flex-direction:column;gap:5px;max-height:410px;overflow-y:auto}
+.foundryComponentRow{position:relative;min-width:0}
+.foundryComponentSelect{box-sizing:border-box;display:grid;grid-template-columns:36px minmax(0,1fr);align-items:center;gap:8px;min-width:0;width:100%;height:auto;min-height:62px;padding:8px 36px 8px 8px;text-align:left;border:1px solid var(--ui-line);border-radius:8px;background:var(--color-bg-1);color:var(--color-navigation-hover);font:inherit;cursor:pointer;transition:background-color 140ms ease,border-color 140ms ease}
+.foundryComponentSelect.selected{border-color:var(--color-tab-lighter);background:var(--color-card-active);color:var(--color-text)}
+.foundryComponentSelect:not(.selected):hover{border-color:var(--ui-line-strong);background:var(--color-card-hover);color:var(--color-text)}
+.foundryComponentRow.owned .foundryComponentSelect:not(.selected){background:#78c9ad0b;border-color:#78c9ad30}
+.foundryComponentSelect>img{width:36px;height:38px;object-fit:contain}
+.foundryComponentText{display:flex;flex-direction:column;gap:4px;min-width:0}
+.foundryComponentText>strong{font-size:13px;line-height:18px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.foundryComponentText>span{font-size:var(--ui-font-caption,12px);line-height:16px;color:var(--color-navigation-hover)}
+.foundryComponentRow.owned .foundryComponentText>span{color:#a7dfcc}
+.itemDetailsModal .foundryComponentRow>.detailStar{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:28px;height:30px}
+.foundryComponentDetails{display:flex;flex-direction:column;contain:size;min-height:360px;overflow-y:auto}
+.foundryComponentDetails>*{flex-shrink:0}
+.foundrySelectedComponentHeader{display:grid;grid-template-columns:44px minmax(0,1fr) 160px;gap:8px 10px;align-items:center}
+.foundrySelectedComponentHeader>img{width:44px;height:46px;object-fit:contain}
+.foundrySelectedComponentHeader>div{min-width:0}
+.foundrySelectedComponentHeader h3{margin:0 0 3px;font-size:17px;line-height:23px;font-weight:500;overflow-wrap:anywhere}
+.foundrySelectedComponentHeader .itemDetailsDescription{font-size:var(--ui-font-small,13px);line-height:18px}
+.detailTradeButton{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:34px;padding:0 10px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-sell);color:var(--color-text);font:inherit;font-size:13px;cursor:pointer}
+.detailTradeButton strong{display:flex;align-items:center;gap:4px;font-weight:500}.detailTradeButton img{width:16px;height:16px;object-fit:contain}.detailTradeButton:hover{background:var(--color-sell-hover)}
+.foundrySingleOwnership{min-height:20px;padding-left:54px;margin-top:4px;font-size:var(--ui-font-caption,12px);color:var(--color-navigation-hover)}
+.foundryLocationsHeading{margin-top:14px;padding-top:10px;border-top:1px solid var(--ui-line)}
+.itemDetailsLocationList{flex:1 1 0;min-height:0;overflow-y:auto;padding-right:3px}
+.itemDetailsLocationRow{box-sizing:border-box;position:relative;display:grid;grid-template-columns:28px minmax(0,1fr) auto 16px;align-items:center;gap:7px;width:100%;height:auto;padding:8px 7px;border:0;border-radius:6px;background:transparent;color:var(--color-text);text-align:left;font:inherit}
+.itemDetailsLocationRow+ .itemDetailsLocationRow{margin-top:7px}
+.itemDetailsLocationRow+ .itemDetailsLocationRow::before{content:'';position:absolute;top:-4px;left:0;right:0;height:1px;background:var(--ui-line)}
+.itemDetailsLocationRow>img{width:28px;height:30px;object-fit:contain}.itemDetailsLocationRow>span{font-size:var(--ui-font-small,13px);line-height:18px;overflow-wrap:anywhere;min-width:0}.itemDetailsLocationRow>strong{font-size:var(--ui-font-small,13px);font-weight:500;white-space:nowrap}
+.itemDetailsLocationRow small{display:flex;flex-wrap:wrap;gap:6px;margin-top:3px;font-size:var(--ui-font-caption,12px);line-height:var(--ui-line-caption,16px);color:var(--color-navigation-hover)}
+.itemDetailsLocationRow.owned{background:#78c9ad18}.itemDetailsLocationRow.owned small{color:#a7dfcc;font-weight:500}.itemDetailsLocationRow.owned:hover{background:#78c9ad26}
+button.itemDetailsLocationRow{cursor:pointer}button.itemDetailsLocationRow:hover{background:var(--color-card-hover)}
+.itemDetailsNote{margin:0;padding:9px;font-size:var(--ui-font-small,13px);line-height:19px;color:var(--color-navigation-hover)}
+.foundryItemStats{padding:0}.foundryItemStats>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;cursor:pointer;list-style:none}.foundryItemStats>summary h3{display:flex;align-items:center;gap:8px;margin:0;font-size:16px;line-height:22px;font-weight:500}.foundryItemStats summary::-webkit-details-marker{display:none}.foundryItemStats:not([open])>summary>svg{transform:rotate(-90deg)}
+.foundryStatsContent{display:flex;flex-direction:column;gap:12px;padding:0 12px 12px}.foundryStatGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:6px}.foundryStat{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;padding:8px 12px;background:var(--color-bg-2);border:1px solid var(--ui-line);border-radius:7px}.foundryStat>span{color:var(--color-navigation-hover);font-size:var(--ui-font-caption,12px);line-height:16px}.foundryStat>strong{font-size:15px;line-height:20px;font-weight:500;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.foundryPassive{padding:0 4px;font-size:var(--ui-font-small,13px);line-height:19px}.foundryPassive strong{font-weight:500}.foundryPassive p{margin:3px 0 0;color:var(--color-navigation-hover)}
+.foundryAbilities{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.foundryAbility{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:start;gap:10px;padding:10px 12px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-2);min-width:0}.foundryAbilityIcon{position:relative;display:grid;place-items:center;width:44px;height:44px;border-radius:7px;background:var(--color-bg-1);color:var(--color-tab-lighter)}.foundryAbilityIcon img{width:38px;height:38px;object-fit:contain}.foundryAbilityIcon span{position:absolute;right:-3px;bottom:-3px;padding:0 4px;border:1px solid var(--ui-line);border-radius:4px;background:var(--color-bg-1);font-size:var(--ui-font-caption,12px);line-height:var(--ui-line-caption,16px)}.foundryAbility h4{margin:0 0 5px;font-size:13px;line-height:19px;font-weight:500}.foundryAbility p{margin:0;color:var(--color-navigation-hover);font-size:var(--ui-font-small,13px);line-height:19px;overflow-wrap:anywhere}
+@container foundry-item (max-width:760px){.foundryItemAcquisition{grid-template-columns:minmax(0,1fr)}.foundryComponentList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));max-height:230px}}
+@container foundry-item (max-width:520px){.itemDetailsHeader{grid-template-columns:48px minmax(0,1fr) 30px 30px!important;gap:8px;padding-left:10px}.itemDetailsArtwork{width:48px;height:48px}.itemDetailsTitle h2{font-size:20px;line-height:26px}.foundryComponentList{grid-template-columns:minmax(0,1fr)}.foundrySelectedComponentHeader{grid-template-columns:44px minmax(0,1fr)}.detailTradeButton{grid-column:1/-1}.foundryAbilities{grid-template-columns:minmax(0,1fr)}}
+
+.itemDetailsEmpty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:240px;padding:24px;text-align:center}.itemDetailsEmpty p{margin:0}

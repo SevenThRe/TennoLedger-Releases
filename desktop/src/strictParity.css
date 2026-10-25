@@ -1,0 +1,135 @@
+/* Shipped 3.0.4 color.css/base.css and sidePanel.css. Local Chinese fallback only. */
+@font-face{font-family:Roboto;src:url('/fonts/Roboto-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:Roboto;src:url('/fonts/Roboto-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:Roboto;src:url('/fonts/Roboto-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+:root{font-family:Roboto,'Microsoft YaHei','Noto Sans CJK SC',sans-serif;--color-bg-1:#101623;--color-bg-2:#171e30;--color-bg-3:#20283e;--color-card:#20283e;--color-card-hover:#272f47;--color-card-active:#313a58;--color-tab:#432289;--color-tab-hover:#5e44af;--color-tab-active:#5923cb;--color-tab-lighter:#b59dff;--color-buy:#1c4d46;--color-buy-hover:#24675d;--color-buy-active:#11a64f;--color-sell:#512939;--color-sell-hover:#75314c;--color-sell-active:#af2d2d;--color-navigation:#8a8c95;--color-navigation-hover:#ccccce;--color-navigation-active:#fff;--color-text:#fff;--color-text-bg:#fff;--color-icons:#fff;--color-icons-bg:#fff;--ui-line:rgba(255,255,255,.12);--ui-line-strong:rgba(255,255,255,.22);--ui-font-small:13px;--ui-font-caption:12px;--ui-line-small:19px;--ui-line-caption:18px;color:var(--color-text);background:var(--color-bg-1)}
+body,button,input,select,textarea{font-family:inherit}
+.sideIcon{width:18px;height:18px;flex-shrink:0}
+.windowContent main{background:var(--color-bg-2);color:var(--color-text)}
+.windowContent main :is(.collectionWorldMain,.statsDashboard,.statsContent,.marketBoard,.marketSide,.rivenWorkspace,.relicPlanner,.resourceInventory,.plannerPage){background-color:var(--color-bg-2);color:var(--color-text)}
+.windowContent main :is(.collectionTools input,.collectionTools select,.worldRailContent select,.tradeQuoteTools input){color:var(--color-text);background-color:var(--color-bg-2);border-color:var(--ui-line)}
+.windowContent main :is(.resourceViews,.shardNavigation,.rivenTabs,.statsMetrics) button[aria-pressed=true]{background:var(--color-tab-active);color:var(--color-text-bg)}
+.windowContent main :is(.collectionTools button,.resourceViews button,.rivenTabs button):focus-visible{outline:2px solid var(--color-tab-lighter);outline-offset:1px}
+.windowContent main .buyPill{background:var(--color-buy);color:var(--color-text-bg)}
+.windowContent main .buyPill:hover{background:var(--color-buy-hover)}
+.windowContent main .sellPill{background:var(--color-sell);color:var(--color-text-bg)}
+.windowContent main .sellPill:hover{background:var(--color-sell-hover)}
+/* sidePanel.css: one coherent activity pane, independently scrolling tabs. */
+.unifiedWorldRail{background:var(--color-bg-2);border-color:var(--ui-line);border-radius:10px;color:var(--color-text)}
+.unifiedWorldRail .collectionTradeTabs{display:grid;grid-template-columns:minmax(0,1.5fr) repeat(2,minmax(0,1fr));height:38px;padding:4px 8px;gap:4px;border-bottom:0;background:var(--color-bg-1)}
+.unifiedWorldRail .collectionTradeTabs button{height:30px;padding:0 10px;font-size:12px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--color-navigation-hover);transition:background-color 120ms,border-color 120ms,color 120ms}
+.unifiedWorldRail .collectionTradeTabs button[aria-pressed=true]{background:var(--color-card-active);border-color:var(--ui-line-strong);color:var(--color-text);font-weight:500}
+.railTabIcon{display:inline-block;width:19px;height:19px;flex:none;background:currentColor;mask:center / contain no-repeat}
+.railTabTimers{mask-image:url('/reference/ui/world.png');mask-size:87%}
+.railTabFissures{mask-image:url('/reference/ui/fissure.webp')}
+.railTabMarket{mask-image:url('/reference/ui/market.png')}
+.collectionTradeSidebar .worldRailContent{background:var(--color-bg-2);padding:8px;color:var(--color-text)}
+.worldRailContent .railVendors{gap:8px;margin-bottom:8px}
+.railVendors .baroTrigger{min-height:76px;padding:12px;gap:10px;border-radius:10px;border-color:var(--ui-line);background:var(--color-bg-1);color:var(--color-text)}
+.railVendors .baroTrigger:hover{background:var(--color-card-hover);border-color:var(--ui-line-strong)}
+.railVendors .baroTrigger.present{background:var(--color-bg-1);border-color:#78c9ad55}
+.railVendors .baroTrigger>img{width:30px;height:38px}
+.railVendorCopy{gap:5px;overflow:hidden}
+.railVendorCopy strong{font-size:13px;line-height:19px;overflow:hidden;text-overflow:ellipsis}
+.railVendorCopy time{font-size:12px;line-height:16px;color:var(--color-navigation-hover);overflow:hidden;text-overflow:ellipsis}
+.worldRailContent .railResets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:3px 0;border-color:var(--ui-line);margin-bottom:8px}
+.railResets>button{display:flex;align-items:center;gap:4px;height:28px;width:100%;padding:2px 3px;border:0;background:transparent;color:inherit;font-size:13px;margin:0;border-radius:6px}
+.railResets>button:hover{background:var(--color-card-hover)}
+.railCircuitPreview{display:flex;gap:2px;margin-left:auto;min-width:0}
+.railCircuitPreview img{width:18px;height:18px;object-fit:contain}
+.railResetPopup{position:absolute;z-index:30;left:0;right:0;top:100%;padding:12px;border:1px solid var(--ui-line-strong);border-radius:10px;background:var(--color-bg-2);box-shadow:0 8px 24px #0007}
+.railResetPopup>strong{display:block;margin-bottom:8px;font-size:13px}
+.railResetPopup>div{display:flex;align-items:center;justify-content:space-between;min-height:28px;font-size:12px;gap:8px}
+.railResetPopup>div span{color:var(--color-navigation-hover)}
+.sharedWorldCycles{padding:0;margin:0 0 8px}
+.sharedWorldCycles>h3{padding:0 4px;margin:0 0 8px;font-size:12px;line-height:18px;color:var(--color-navigation-hover);font-weight:400}
+.sharedCycleGrid{gap:8px}
+.sharedCycle{grid-template-columns:40px minmax(0,1fr) 24px;gap:8px 9px;padding:12px 12px 6px;border:1px solid var(--ui-line);border-radius:10px;background:var(--color-bg-1);color:var(--color-text)}
+.sharedCycle>img{width:40px;height:40px;grid-row:1}
+.sharedCycleIdentity{min-width:0;display:flex;flex-direction:column;gap:3px}
+.sharedCycleIdentity strong{font-size:13px;line-height:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sharedCycleIdentity small{font-size:12px;line-height:17px;color:var(--color-navigation-hover);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sharedCycle>button{width:24px;height:24px;align-self:start;margin:-2px -4px 0 0;color:var(--color-navigation-hover)}
+.sharedCycle>button svg{width:16px;height:16px}
+.sharedCycle>button.selected{color:#dcca97}
+.sharedCycle>span{grid-column:1/3;font-size:13px;line-height:23px;color:var(--color-navigation-hover)}
+.sharedCycle>span:is(.day,.warm,.fass){color:#e4c48f}
+.sharedCycle>span:is(.night,.cold,.vome){color:#adc9f1}
+.sharedCycle>time{grid-column:2/4;grid-row:2;font-size:14px;line-height:23px;font-weight:400;color:var(--color-text)}
+.sharedDuviri{padding:12px;gap:12px;border-color:var(--ui-line);background:var(--color-bg-1);color:var(--color-text)}
+.sharedDuviri>img{width:40px;height:40px}
+.sharedDuviri strong{font-size:13px;line-height:19px}
+.sharedDuviri time{float:right;font-size:14px;line-height:23px}
+.sharedDuviri span{font-size:12px;line-height:18px;color:var(--color-navigation-hover)}
+.sharedDuviri b{font-weight:400}
+.sharedDuviri [data-spiral=joy]{color:#e4c48f}.sharedDuviri [data-spiral=anger]{color:#f09d8b}.sharedDuviri [data-spiral=sorrow]{color:#adc9f1}.sharedDuviri [data-spiral=fear]{color:#b69bdc}.sharedDuviri [data-spiral=envy]{color:#8dd5bd}
+.worldRailContent .railForecast{padding:10px 12px;margin-top:0;border-color:var(--ui-line);border-radius:10px;background:var(--color-bg-1)}
+.railForecastPair{grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr);gap:5px}
+.railForecastSlot{gap:6px;padding:9px 10px;border-radius:7px;border-color:var(--ui-line);background:var(--color-bg-2);min-height:128px}
+.railForecastSlot>span{font-size:12px;line-height:18px;color:var(--color-navigation-hover)}
+.railForecastSlot strong{font-size:13px;line-height:20px;font-weight:500}
+.railForecastSlot small{font-size:12px;line-height:18px;color:var(--color-navigation-hover)}
+.railForecastSlot>b{margin-top:auto;padding-top:2px;font-size:14px;line-height:21px;font-weight:500}
+.railFissureHeading{display:grid;grid-template-columns:minmax(0,1fr) 150px 88px 28px;gap:6px;align-items:center;padding:0 2px;margin-bottom:6px}
+.railFissureHeading h3{font-size:13px;line-height:19px;margin:0;white-space:nowrap}
+.railFissureHeading select{min-width:0;height:28px;padding:0 7px;font-size:12px;border:1px solid var(--ui-line);border-radius:6px}
+.railCount{display:inline-block;min-width:18px;padding:0 4px;margin-left:4px;border:1px solid var(--ui-line);border-radius:4px;font-size:10px;line-height:16px;color:var(--color-navigation-hover);text-align:center}
+.railFissureGroups{overflow-y:auto;scrollbar-gutter:stable;padding-right:2px;min-height:0}
+.railFissureGroup{display:grid;grid-template-columns:43px minmax(0,1fr);border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-1);margin-bottom:5px}
+.railTierHeading{position:sticky;top:0;align-self:start;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:5px 2px;font-size:10px;line-height:15px;color:var(--color-navigation-hover)}
+.railTierHeading img{width:21px;height:21px;object-fit:contain}
+.railFissureRows{min-width:0}
+.railFissureGroup .railFissure{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;padding:5px 7px 5px 3px;min-height:46px;border:1px solid transparent;border-bottom-color:var(--ui-line)}
+.railFissureGroup .railFissure:last-child{border-bottom-color:transparent}
+.railFissureIdentity{min-width:0;display:flex;flex-direction:column;gap:1px}
+.railFissureIdentity>strong{display:flex;flex-wrap:wrap;align-items:center;gap:2px 5px;font-size:13px;line-height:19px}
+.railFissureIdentity>span{font-size:12px;line-height:18px;color:var(--color-navigation-hover)}
+.railFissure time{font-size:13px;color:var(--color-text);white-space:nowrap}
+.railFissure time.soon{padding:2px 7px;color:#ffda8a;background:#d9a44126;box-shadow:inset 0 0 0 1px #d9a44188;border-radius:5px}
+.railSteelPath{width:14px;height:14px;object-fit:contain}
+.referenceResurgenceHeading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;font-size:13px}
+.referenceResurgenceHeading>span{font-size:12px;color:var(--color-navigation-hover)}
+.referenceResurgenceRewards{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:6px}
+.referenceResurgenceRewards>button{display:flex;flex-direction:column;align-items:center;gap:5px;min-height:90px;padding:6px 4px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-1);color:var(--color-text);font-size:13px;line-height:19px;text-align:center}
+.referenceResurgenceRewards>button.owned{background:linear-gradient(#78c9ad0b,#78c9ad0b),var(--color-bg-1);border-color:#78c9ad42}
+.referenceResurgenceRewards>button>img{width:38px;height:38px;object-fit:contain}
+.referenceResurgenceRewards>button>small{margin-top:auto;font-size:12px;color:#a7dfcc}
+.railStormBadge{padding:0 4px;border:1px solid var(--ui-line);border-radius:4px;font-size:12px;line-height:16px;color:var(--color-navigation-hover);font-weight:400}
+.railRewardSummary{margin-top:8px;min-width:0}
+.railRewardSummary>header,.railRewardPopup>header{display:flex!important;flex-direction:row!important;align-items:center;gap:6px;justify-content:space-between;margin:0 0 6px!important;padding:0!important}
+.railRewardHeading{display:flex;align-items:center;gap:5px;min-width:0;padding:0;border:0;background:transparent;color:var(--color-text);font-size:13px;font-weight:600;text-align:left}
+.railRewardHeading>.sideIcon{width:14px;height:14px;color:var(--color-navigation-hover)}
+.railRewardPreview{display:flex;align-items:center;gap:10px;width:100%;min-height:60px;padding:10px;border:1px solid var(--ui-line);border-radius:8px;background:var(--color-bg-1);color:var(--color-text);font-size:13px;line-height:19px;text-align:left}
+.railRewardPreview>.sideIcon{width:28px;height:28px;color:var(--color-navigation-hover)}
+.railRewardPreview small{display:block;font-size:12px;line-height:18px;color:var(--color-navigation-hover)}
+.railRewardPopup{position:fixed;z-index:580;overflow:auto;padding:12px;background:var(--color-bg-2);border:1px solid var(--ui-line-strong);border-radius:10px;box-shadow:0 8px 28px #0008;color:var(--color-text);font-size:13px}
+.railRewardPopup .worldRewards{margin-top:0}
+.railRewardPopup .worldRewards>details:first-child>summary{display:none}
+.afResultsMore{grid-column:1/-1;display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;padding:14px;font-size:13px;color:var(--color-navigation-hover)}
+.afResultsMore>button{height:30px;padding:0 12px;border:1px solid var(--ui-line);border-radius:6px;background:var(--color-tab);color:var(--color-text)}
+.settingsInlineControls{display:flex;align-items:center;gap:8px;flex:none}
+.settingsInlineControls select{max-width:190px}
+.settingsPage .settingsInlineControls>button{height:32px;padding:0 12px;border:1px solid var(--ui-line-strong);border-radius:6px;background:var(--color-bg-3);font-size:13px}
+.marketAuthShade{position:fixed;right:auto;bottom:auto;z-index:620;border-radius:10px}
+.statsSharingDialog .statsSharing{margin:0;padding:16px;background:var(--color-bg-2);color:var(--color-text);border:1px solid var(--ui-line);border-radius:10px}
+.statsSharingDialog .settingRow{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:44px;padding:8px 0;border-bottom:1px solid var(--ui-line);font-size:13px}
+.statsSharingDialog .settingRow>label,.statsSharingDialog .settingRow>span{flex:1;min-width:0}
+.statsSharingDialog :is(input:not([type=checkbox]),select){height:34px;max-width:65%;min-width:0;padding:6px 9px;background:var(--color-bg-1);color:var(--color-text);border:1px solid var(--ui-line-strong);border-radius:6px;font:inherit}
+.statsSharingDialog .settingsActions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.statsSharingDialog .settingsActions button{padding:6px 12px;background:var(--color-bg-3);border-color:var(--ui-line-strong);font-size:13px}
+/* The original main column and activity pane start together and scroll independently. */
+.windowContent .app main:is(.collectionPage,.relicPage){padding:10px 12px 12px}
+.windowContent .collectionWorldLayout{height:var(--world-panel-height);min-height:0;overflow:hidden}
+.windowContent .collectionWorldMain{height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;border:1px solid var(--ui-line);border-radius:14px;padding:12px;background:var(--color-bg-2)}
+.windowContent .collectionWorldMain>.pageSectionHeading{display:flex;align-items:center;min-height:40px;height:auto;margin:0 0 10px;padding:0;border:0;background:transparent}
+.pageSectionHeading>h1{font-size:20px;line-height:26px;font-weight:500;margin:0}
+.windowContent .unifiedWorldRail{height:100%;min-height:0;max-height:100%}
+.windowContent .app .unifiedWorldRail .collectionTradeSidebar>div:not(.collectionTradeTabs){flex:1 1 0;min-height:0;max-height:calc(100% - 38px);overflow:auto}
+.windowContent .collectionWorldMain:has(>.relicPlanner){display:flex;flex-direction:column}
+.windowContent .collectionWorldMain>.panel.relicPlanner{flex:1;min-height:0;height:100%;margin:0;padding:0;border:0;border-radius:0;overflow:hidden}
+.windowContent .relicPlannerBody{flex:1;min-height:0;overflow:hidden}
+.windowContent .relicGrid{flex:1;max-height:none;min-height:0;height:100%;overflow:auto}
+.railFissureRail{container:rail-fissures / inline-size}
+@container rail-fissures (max-width:387px){.railFissureHeading{grid-template-columns:minmax(0,1fr) 140px 85px 28px}.railFissureHeading h3{font-size:12px}}
+@container rail-fissures (max-width:347px){.railFissureHeading{gap:4px}.railFissureHeading .railCount{display:none}}
+@container rail-fissures (max-width:317px){.railFissureHeading{grid-template-columns:minmax(0,150px) minmax(0,1fr) 28px}.railFissureHeading h3{grid-column:1/3}.railFissureHeading>select{grid-row:2}.railFissureHeading>select:nth-of-type(2){grid-column:2/-1}.railFissureHeading>button{grid-row:1;grid-column:3}}

@@ -1,0 +1,60 @@
+/* AlecaFrame 3.0.4 foundry.css account summary / tooltip dimensions. */
+.windowContent .navigationV3>.accountCard{box-sizing:border-box;position:relative;z-index:2;flex:none;width:100%;min-height:68px;height:68px;margin:0;padding:0;border:1px solid var(--ui-line);border-radius:10px;background:var(--color-bg-2);overflow:visible;cursor:pointer;transition:background-color 120ms ease,border-color 120ms ease}
+.windowContent .navigationV3>.accountCard:hover{border-color:var(--ui-line-strong)}
+.windowContent .navigationV3>.accountCard.cached{background:#30281e;border-color:#806039}
+.windowContent .navigationV3>.accountCard.cached:hover{border-color:#c0914f}
+.windowContent .navigationV3>.accountCard.unavailable{background:#57242e;border-color:#c85569}
+.windowContent .navigationV3>.accountCard.unavailable:hover{background:#652b37;border-color:#ed8597}
+.windowContent .navigationV3>.accountCard.accountOpen{border-color:var(--color-tab-lighter)}
+.app aside.navigationV3 .accountCard .playerDisclosure{display:block;box-sizing:border-box;width:100%;height:100%;min-height:0;padding:0;margin:0;border:0;border-radius:inherit;background:transparent;color:var(--color-text);font:inherit;cursor:pointer}
+.accountIdentity{box-sizing:border-box;display:grid;grid-template-columns:44px minmax(0,1fr) 14px;grid-template-rows:1fr 1fr;grid-template-areas:'avatar name more' 'avatar status more';gap:2px 6px;width:100%;height:100%;padding:8px}
+.accountEmblem{grid-area:avatar;align-self:center;justify-self:center;width:44px;height:44px;position:relative;display:grid;place-items:center}
+.accountEmblem>img{width:44px;height:44px;object-fit:contain}
+.accountEmblem>b{position:absolute;bottom:0;right:0;font-size:var(--ui-font-caption,12px);line-height:16px;border:1px solid var(--ui-line-strong);color:var(--color-tab-lighter);background:var(--color-bg-1);padding:1px 4px;border-radius:6px;font-weight:400}
+.accountName{grid-area:name;align-self:end;min-width:0;width:100%;text-align:left;font-size:15px;font-weight:600;line-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.accountCompactStatus{grid-area:status;display:flex;align-self:start;align-items:center;gap:5px;max-width:100%;height:22px;padding:0;font-size:var(--ui-font-small,13px);font-weight:500;min-width:0;white-space:nowrap}
+.accountCompactStatus>svg{width:16px;height:16px;flex:none}
+.accountStatusCopy{display:flex;flex-direction:column;gap:3px;min-width:0;text-align:left;overflow:hidden}
+.accountStatusCopy>span{overflow:hidden;text-overflow:ellipsis}
+.accountStatusCopy small{font-size:var(--ui-font-small,13px);font-weight:400;line-height:var(--ui-line-small,18px);color:#ffbdc8}
+.accountCompactStatus.current,.accountSync.current .accountSyncHeading{color:#9fe3c2}
+.accountCompactStatus.cached,.accountSync.cached .accountSyncHeading{color:#ffce7b;font-weight:600}
+.accountCompactStatus.unavailable{color:#ffe6eb;font-weight:600}
+.accountSync.unavailable .accountSyncHeading{color:#efa8ae}
+.accountCard:not(.hasData) .accountIdentity{grid-template-columns:minmax(0,1fr) 14px;grid-template-areas:'status more' 'status more'}
+.accountCard:not(.hasData) .accountCompactStatus{grid-row:1/-1;align-self:center;height:auto;gap:8px;font-size:14px}
+.accountCard:not(.hasData) .accountCompactStatus>svg{width:24px;height:24px}
+.accountChevron{grid-area:more;align-self:center;justify-self:end;width:14px;height:14px;color:var(--color-navigation-hover)}
+.accountOpen .accountChevron{transform:rotate(90deg);color:var(--color-tab-lighter)}
+.accountPopover{position:fixed;z-index:500;display:flex;flex-direction:column;gap:8px;transform-origin:top left;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:16px;border:1px solid var(--ui-line-strong);border-radius:12px;background:var(--color-bg-1);box-shadow:0 12px 32px #00000052;color:var(--color-text);font:14px/1.4 Roboto,'Microsoft YaHei',sans-serif}
+.accountPopoverName{display:block;min-width:0;overflow-wrap:anywhere;font-size:16px;font-weight:600;line-height:20px;margin:0}
+.accountPrime{margin:0 0 8px}
+.accountPrime>div:first-child{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px}
+.accountPrime>div>span{font-size:var(--ui-font-small,13px);font-weight:400}
+.accountPrime b{font-size:20px;line-height:24px;font-weight:600;color:var(--color-tab-lighter);font-variant-numeric:tabular-nums}
+.accountPrimeTrack{height:5px;overflow:hidden;border-radius:5px;background:var(--color-bg-3)}
+.accountPrimeTrack>span{display:block;height:100%;background:var(--color-tab-lighter);border-radius:inherit}
+.accountAssets{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:0}
+.accountAsset{display:grid;grid-template-columns:26px minmax(0,1fr);gap:3px 8px;min-width:0;padding:10px;border:1px solid var(--ui-line);border-radius:8px;background:transparent}
+.accountAsset>img{grid-row:span 2;flex:none;width:26px;height:36px;object-fit:contain;align-self:center}
+.accountAsset>div{display:flex;flex-direction:column;min-width:0;gap:3px}
+.accountAsset span{color:var(--color-text);opacity:.8;font-size:14px;line-height:14px}
+.accountAsset strong{color:var(--color-text);font-size:16px;line-height:20px;font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
+.accountSync{position:relative;margin-top:8px;padding:12px 14px;border:1px solid var(--ui-line);border-radius:9px;background:var(--color-bg-2)}
+.accountSync.current{display:grid;grid-template-columns:minmax(0,1fr) 32px;grid-template-areas:'status info' 'updated info';gap:6px 12px;align-items:center}
+.accountSyncHeading{grid-area:status;display:flex;align-items:center;gap:8px;font-size:14px;line-height:20px}
+.accountSyncHeading>svg{width:20px;height:20px;flex:none}
+.accountSyncHeading>strong{font-weight:600}
+.accountSync p{margin:10px 0;font-size:13px;line-height:1.5;opacity:.85}
+.accountSyncTime{grid-area:updated;display:flex;flex-wrap:wrap;gap:3px 8px;font-size:var(--ui-font-small,13px);line-height:1.5;color:var(--color-text);opacity:.7}
+.accountSyncTime time{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.accountSyncInfo{grid-area:info;display:grid;place-items:center;width:32px;height:32px;padding:6px;border:0;border-radius:7px;background:transparent;color:var(--color-navigation-hover);cursor:pointer}
+.accountSyncInfo>svg{width:20px;height:20px}.accountSyncInfo:hover{background:var(--color-card-hover);color:var(--color-tab-lighter)}
+.accountTroubleshoot{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;height:auto;min-height:36px;margin-top:12px;padding:9px 12px;border:1px solid var(--ui-line-strong);border-radius:7px;background:var(--color-tab);color:var(--color-text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.accountTroubleshoot>svg{width:18px;height:18px;flex:none}.accountTroubleshoot:hover{background:var(--color-tab-hover)}
+@media(max-width:950px){
+ .navigationV3:not(:hover):not(:has(:focus-visible)):not(:has(.accountOpen)):not(.navigationMenuOpen) .accountIdentity{grid-template-columns:minmax(0,1fr);grid-template-rows:40px 16px;grid-template-areas:'avatar' 'status';gap:2px;padding:4px}
+ .navigationV3:not(:hover):not(:has(:focus-visible)):not(:has(.accountOpen)):not(.navigationMenuOpen) .accountCompactStatus{justify-content:center;height:auto;min-height:16px;gap:0}
+ .navigationV3:not(:hover):not(:has(:focus-visible)):not(:has(.accountOpen)):not(.navigationMenuOpen) :is(.accountStatusCopy,.accountChevron,.accountName){display:none}
+ .navigationV3:not(:hover):not(:has(:focus-visible)):not(:has(.accountOpen)):not(.navigationMenuOpen) .accountEmblem,.navigationV3:not(:hover):not(:has(:focus-visible)):not(:has(.accountOpen)):not(.navigationMenuOpen) .accountEmblem>img{width:38px;height:38px}
+}

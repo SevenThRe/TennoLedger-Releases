@@ -1,0 +1,6 @@
+type Row=Record<string,any>;
+export type MarketCategory='all'|'parts'|'relics'|'mods'|'arcanes'|'misc'|'sets';
+export function marketOrderCategory(market:Row,local?:Row):Exclude<MarketCategory,'all'>{const slug=String(market.slug??'');const tags=new Set<string>(market.tags??[]);if(slug.endsWith('_set'))return 'sets';if(slug.endsWith('_relic')||local?.category==='relic'||tags.has('relic'))return 'relics';if(local?.category==='arcane'||tags.has('arcane'))return 'arcanes';if(local?.category==='mod'||tags.has('mod')||tags.has('riven'))return 'mods';if(tags.has('component')||tags.has('blueprint')||local?.category==='component'||local?.category==='blueprint'||/_(barrel|blade|blueprint|chassis|neuroptics|systems|receiver|stock|handle|string|grip|ornament|pouch|link|carapace|cerebrum)$/.test(slug))return 'parts';return 'misc';}
+export function orderMissing(order:Row,owned:number|null){return order.type==='sell'&&owned!==null&&owned<order.quantity;}
+export function canCopyMarketPrice(value:unknown,current:number){return typeof value==='number'&&Number.isInteger(value)&&value>0&&value<=800000&&value!==current;}
+export function significantMarketPrice(value:number,current:number){return Number.isFinite(current)&&current>0&&Math.abs(value-current)>=Math.max(5,current*.2);}

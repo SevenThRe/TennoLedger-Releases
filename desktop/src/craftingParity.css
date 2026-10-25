@@ -1,0 +1,135 @@
+/* Shared item-detail primitives, scoped to the independent app. */
+.modalShade.craftingShade{background:#000000d9;position:fixed;inset:auto;z-index:180;display:flex;align-items:center;justify-content:center;padding:0}
+.craftingModal.craftingTreeDialog{box-sizing:border-box;display:flex;flex-direction:column;border:1px solid var(--ui-line-strong);border-radius:16px;background:var(--color-bg-1);color:var(--color-text);overflow:hidden;outline:none;padding:0;margin:0}
+.craftingModal>.craftingParityHeader{display:grid;grid-template-columns:56px minmax(0,1fr) 30px;align-items:center;gap:12px;padding:10px 10px 10px 18px;border-bottom:1px solid var(--ui-line);background:var(--color-bg-2);flex:none;margin:0;min-height:0;height:auto}
+.craftingHeaderArtwork{display:grid;place-items:center;width:56px;height:56px;border-radius:9px;background:var(--color-bg-1)}
+.craftingModal img{width:100%;height:100%;object-fit:contain;-webkit-user-drag:none}.craftingModal .craftingHeaderArtwork img{width:88%;height:88%}
+.craftingParityTitle{min-width:0}.craftingModal .craftingParityTitle h2{margin:3px 0 0;font-size:26px;line-height:32px;font-weight:500}
+.craftingModal svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.craftingModal .itemDetailsPanel{padding:12px;border:1px solid var(--ui-line);border-radius:10px;background:var(--color-bg-1)}
+.craftingModal aside.craftingInspector{position:static;top:auto;width:auto;height:auto;max-width:none;min-width:0;padding:12px}
+.craftingModal .itemDetailsChoice{box-sizing:border-box;border:1px solid var(--ui-line);border-radius:8px;background:var(--color-bg-1);color:var(--color-navigation-hover);cursor:pointer;font:inherit;transition:background-color 140ms ease,border-color 140ms ease;outline:none}
+.craftingModal .itemDetailsChoice.selected{border-color:var(--color-tab-lighter);background:var(--color-card-active);color:var(--color-text)}
+.craftingModal .itemDetailsChoice:not(.selected):hover{border-color:var(--ui-line-strong);background:var(--color-card-hover);color:var(--color-text)}
+.craftingModal .itemDetailsButton,.craftingModal .itemDetailsIconButton,.craftingModal>.craftingParityHeader>button{display:inline-flex;align-items:center;justify-content:center;gap:5px;box-sizing:border-box;padding:6px 9px;height:34px;width:auto;min-height:0;flex:none;border:1px solid var(--ui-line);border-radius:7px;background:transparent;color:var(--color-text);font:inherit;font-size:12px;text-decoration:none;cursor:pointer}
+.craftingModal>.craftingParityHeader>button{align-self:start;width:30px;height:30px;padding:0;border-color:transparent;color:var(--color-navigation-hover)}
+.craftingModal .itemDetailsButton:hover,.craftingModal .itemDetailsIconButton:hover,.craftingModal>.craftingParityHeader>button:hover{background:var(--color-card-hover)}
+.craftingModal .itemDetailsSectionHeading{display:flex;align-items:center;justify-content:space-between;gap:10px}.craftingModal .itemDetailsSectionHeading h3{margin:0;font-weight:500}.craftingModal .itemDetailsSectionHeading>span{font-size:11px;color:var(--color-navigation-hover)}
+.craftingModal .itemDetailsLocationList{overflow:auto;scrollbar-width:thin}.craftingModal .itemDetailsLocationRow{display:grid;align-items:center;width:100%;border:0;border-bottom:1px solid var(--ui-line);border-radius:6px;background:transparent;text-align:left;color:var(--color-text);font:inherit}.craftingModal button.itemDetailsLocationRow{cursor:pointer}.craftingModal button.itemDetailsLocationRow:hover{background:var(--color-card-hover)}
+.craftingModal .itemDetailsLocationImage{width:24px;height:24px}.craftingModal .itemDetailsLocationRow.owned{background:#78c9ad18}.craftingModal .foundryDropMeta{display:flex;gap:8px;font-size:10px;color:var(--color-navigation-hover)}
+.craftingModal .itemDetailsCoin{width:18px;height:18px;flex-shrink:0}.craftingModal .itemDetailsNote{font-size:12px;line-height:19px;color:var(--color-navigation-hover)}
+.craftingModal .itemDetailsEmpty{display:flex;align-items:center;justify-content:center;flex-direction:column;position:absolute;inset:0;padding:25px;text-align:center}
+.craftingModal .craftingNodeImage,.craftingModal .craftingResourceImage,.craftingModal .craftingSelectedImage{display:inline-block;flex-shrink:0}
+/* Crafting uses the shared item-detail frame, controls, choices and drop rows. */
+.craftingModal.craftingTreeDialog { width: min(1500px, 96%); height: 94%; max-height: calc(100% - 24px); container: crafting-dialog / inline-size; }
+.craftingHeader { grid-template-columns: 56px minmax(0, 1fr) 30px; }
+.craftingHeader .itemDetailsArtwork { display: grid; place-items: center; width: 56px; height: 56px; }
+.craftingHeader .itemDetailsArtwork svg { width: 30px; height: 30px; color: var(--color-tab-lighter); }
+.craftingHeader .itemDetailsClose { grid-column: 3; }
+.craftingEyebrow { color: var(--color-navigation-hover); font-size: var(--ui-font-caption, 11px); line-height: 16px; }
+.craftingBody { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 10px 14px 14px; flex: 1; min-height: 0; overflow-y: auto; }
+.craftingToolbar { display: flex; align-items: center; gap: 12px; flex-shrink: 0; min-height: 32px; }
+.craftingHideCompleted { display: flex; align-items: center; gap: 7px; font-size: var(--ui-font-small, 12px); white-space: nowrap; cursor: pointer; }
+.craftingLegend { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: var(--ui-font-caption, 11px); }
+.craftingLegend > span, .craftingNodeState { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.craftingTreeDialog .owned { --craft-state: #a7dfcc; }
+.craftingTreeDialog .craftable { --craft-state: var(--color-tab-lighter); }
+.craftingTreeDialog .missing { --craft-state: #edc867; }
+.craftingLegend > span, .craftingNodeState, .craftingOwnership > div > strong { color: var(--craft-state); }
+.craftingLegend svg, .craftingNodeState svg { width: 14px; height: 14px; }
+.craftingZoomControls { display: flex; align-items: center; gap: 3px; margin-left: auto; flex-shrink: 0; }
+.craftingModal .craftingZoomControls .itemDetailsButton { height: 30px; padding: 0 8px; }
+.craftingModal .craftingZoomControls .craftingZoomValue { min-width: 51px; border-color: transparent; background: transparent; font-variant-numeric: tabular-nums; }
+.craftingTreeDialog button:disabled { opacity: .45; cursor: default; }
+.craftingTreeDialog button:focus-visible { outline: 2px solid var(--color-tab-lighter); outline-offset: 2px; }
+.craftingWorkspace { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 10px; flex: 1 0 290px; min-height: 290px; }
+.craftingCanvas { position: relative; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--ui-line); border-radius: 10px; background: var(--color-bg-2); cursor: grab; touch-action: none; user-select: none; }
+.craftingCanvas.dragging, .craftingCanvas.dragging button { cursor: grabbing; }
+.craftingTreeDiagram { position: absolute; left: 0; top: 0; width: max-content; padding: 16px; transform-origin: 0 0; transition: none; }
+.craftingCanvasHint { position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 12px; border-top: 1px solid var(--ui-line); background: var(--color-bg-2); color: var(--color-navigation-hover); font-size: var(--ui-font-caption, 10px); line-height: 16px; pointer-events: none; }
+.craftingCanvasEmpty { position: absolute; inset: 0; min-height: 0; cursor: default; }
+.craftingCanvasEmpty > svg { width: 36px; height: 36px; color: var(--color-tab-lighter); }
+.craftingBranch { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 7px; width: max-content; }
+.craftingModal .craftingNode { position: relative; display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 8px; width: 184px; min-height: 76px; height: auto; padding: 8px; text-align: left; }
+.craftingNode.owned:not(.selected) { background: color-mix(in srgb, #78c9ad 7%, var(--color-bg-1)); border-color: #78c9ad50; }
+.craftingNode.craftable:not(.selected) { border-color: color-mix(in srgb, var(--color-tab-lighter) 45%, transparent); }
+.craftingNodeImage { width: 38px; height: 42px; background: center / contain no-repeat; }
+.craftingNodeText { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.craftingNodeName { font-size: 13px; line-height: 17px; font-weight: 500; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.craftingNodeMeta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px 5px; font-size: var(--ui-font-caption, 10px); line-height: 16px; }
+.craftingNodeMeta > strong { color: var(--color-text); font-size: 13px; font-weight: 500; white-space: nowrap; }
+.craftingChildren { position: relative; display: flex; margin-top: 30px; }
+.craftingChildren.completed { opacity: .6; }
+.craftingChildren::before { content: ''; position: absolute; bottom: 100%; height: 30px; left: 50%; border-left: 1px solid var(--ui-line-strong); }
+.craftingChildren > .craftingBranch { padding-top: 15px; }
+.craftingChildren > .craftingBranch::before { content: ''; position: absolute; top: 0; left: 0; right: 0; border-top: 1px solid var(--ui-line-strong); }
+.craftingChildren > .craftingBranch:first-child::before { left: 50%; }
+.craftingChildren > .craftingBranch:last-child::before { right: 50%; }
+.craftingChildren > .craftingBranch > .craftingNode::before { content: ''; position: absolute; bottom: 100%; height: 15px; left: 50%; border-left: 1px solid var(--ui-line-strong); }
+.craftingChildren.leaves { flex-direction: column; gap: 5px; padding: 8px; border: 1px solid var(--ui-line); border-radius: 9px; background: var(--color-bg-1); margin-top: 22px; }
+.craftingChildren.leaves::before { height: 23px; }
+.craftingChildren.leaves > .craftingBranch { padding: 0; }
+.craftingChildren.leaves > .craftingBranch::before, .craftingChildren.leaves > .craftingBranch > .craftingNode::before { display: none; }
+.craftingModal .craftingChildren.leaves .craftingNode { width: 184px; min-height: 60px; padding: 6px; background: var(--color-bg-2); }
+.craftingModal .craftingChildren.leaves .craftingNode.selected { background: var(--color-card-active); }
+.craftingInspector { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; contain: size; }
+.craftingInspector > * { flex-shrink: 0; }
+.craftingSelectedHeading { display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: center; gap: 10px; }
+.craftingSelectedImage { width: 46px; height: 52px; background: center / contain no-repeat; }
+.craftingSelectedHeading h3 { margin: 3px 0 4px; font-size: 17px; font-weight: 500; line-height: 22px; overflow-wrap: anywhere; }
+.craftingRequired { color: var(--color-navigation-hover); font-size: var(--ui-font-small, 12px); }
+.craftingOwnership { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.craftingOwnership > div { display: flex; flex-direction: column; gap: 4px; padding: 7px 9px; border: 1px solid var(--ui-line); border-radius: 7px; background: var(--color-bg-2); }
+.craftingOwnership span { font-size: var(--ui-font-caption, 10px); color: var(--color-navigation-hover); }
+.craftingOwnership strong { font-size: 17px; line-height: 22px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.craftingRecipeFacts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 2px; font-size: var(--ui-font-caption, 11px); }
+.craftingRecipeFacts > span { display: inline-flex; align-items: center; gap: 4px; }
+.craftingRecipeFacts small { font-size: inherit; color: var(--color-navigation-hover); }
+.craftingRecipeFacts strong { font-weight: 500; }
+.craftingSelectedActions { display: flex; flex-wrap: wrap; gap: 5px; }
+.craftingSelectedActions:empty { display: none; }
+.craftingModal .craftingMarket { width: 100%; height: 34px; min-height: 34px; flex: 0 0 auto; font-size: var(--ui-font-caption, 11px); }
+.craftingLocationsHeading { border-top: 1px solid var(--ui-line); padding-top: 12px; padding-bottom: 0; margin-top: 1px; }
+.craftingLocationsHeading h3 { font-size: 14px; }
+.craftingLocations { flex: 1 0 120px; min-height: 100px; max-height: none; }
+.craftingLocations .itemDetailsLocationRow { grid-template-columns: 24px minmax(0, 1fr) auto; gap: 6px; padding: 8px 3px; }
+.craftingLocations .itemDetailsLocationRow > span:nth-child(2) { font-size: var(--ui-font-caption, 11px); line-height: 17px; }
+.craftingLocations .itemDetailsLocationRow > strong { font-size: var(--ui-font-caption, 11px); }
+.craftingUsedFor { display: flex; flex-direction: column; gap: 5px; padding-top: 10px; border-top: 1px solid var(--ui-line); }
+.craftingModal .craftingUsedFor > button { display: flex; align-items: center; gap: 7px; width: 100%; height: auto; min-height: 38px; padding: 5px 7px; text-align: left; font-size: var(--ui-font-small, 12px); }
+.craftingUsedFor > button > span:nth-child(2) { flex: 1; }
+.craftingSummary { flex-shrink: 0; padding: 10px 12px; }
+.craftingSummaryHeading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 0 2px 10px; border-bottom: 1px solid var(--ui-line); }
+.craftingSummaryHeading .itemDetailsSectionHeading { padding: 0; justify-content: flex-start; }
+.craftingSummaryHeading h3 { font-size: 15px; }
+.craftingTotals { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-left: auto; font-size: var(--ui-font-caption, 11px); color: var(--color-navigation-hover); }
+.craftingTotals > span { display: inline-flex; align-items: center; gap: 5px; }
+.craftingTotals strong { color: var(--color-text); font-weight: 500; font-size: 13px; }
+.craftingMissingLists { display: flex; flex-direction: column; gap: 9px; padding-top: 10px; max-height: 170px; overflow-y: auto; }
+.craftingMissingGroup { display: grid; grid-template-columns: 85px minmax(0, 1fr); align-items: start; gap: 9px; }
+.craftingMissingGroup h4 { display: flex; align-items: center; gap: 6px; margin: 7px 0 0; font-size: var(--ui-font-small, 12px); font-weight: 500; }
+.craftingMissingGroup h4 > span { color: var(--color-navigation-hover); font-size: var(--ui-font-caption, 10px); }
+.craftingMissingItems { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.craftingModal .craftingResource { display: flex; align-items: center; gap: 7px; width: auto; max-width: 100%; height: 34px; padding: 3px 9px 3px 5px; font-size: var(--ui-font-caption, 11px); }
+.craftingResourceImage { display: inline-block; width: 24px; height: 24px; flex-shrink: 0; background: center / contain no-repeat; }
+.craftingResource > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.craftingResource > strong { font-weight: 500; color: #edc867; white-space: nowrap; }
+.craftingNone { display: inline-flex; align-items: center; gap: 5px; color: #a7dfcc; font-size: var(--ui-font-caption, 11px); min-height: 34px; }
+.craftingLoading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; border-radius: 0 0 10px 10px; background: color-mix(in srgb, var(--color-bg-1) 94%, transparent); z-index: 2; font-size: 13px; }
+@container crafting-dialog (max-width: 920px) {
+    .craftingLegend { display: none; }
+    .craftingWorkspace { grid-template-columns: minmax(0, 1fr) 270px; }
+    .craftingTotals { margin-left: 0; }
+}
+@container crafting-dialog (max-width: 650px) {
+    .craftingToolbar { flex-wrap: wrap; gap: 5px 8px; }
+    .craftingWorkspace { display: flex; flex-direction: column; flex: none; min-height: 0; }
+    .craftingCanvas { height: 340px; flex-shrink: 0; }
+    .craftingInspector { contain: none; max-height: 370px; }
+    .craftingCanvasHint { font-size: var(--ui-font-caption, 9px); padding-inline: 8px; }
+    .craftingMissingGroup { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+    .craftingMissingGroup h4 { margin-top: 0; }
+    .craftingBody { padding: 8px; }
+}
+
+.craftingModal .craftingMarket{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-2);color:var(--color-text);cursor:pointer}.craftingMarket strong{display:inline-flex;align-items:center;gap:4px}.craftingModal .craftingMarket img{width:15px;height:15px}

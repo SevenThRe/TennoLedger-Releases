@@ -1,0 +1,12 @@
+import {useEffect,useState} from 'react';
+import {useTranslation} from 'react-i18next';
+import {invoke} from '@tauri-apps/api/core';
+import {native} from './api';
+type MenuScale={mode:'full'|'legacy'|'custom';percent:number};
+export default function MenuScaleSettings(){
+ const {i18n}=useTranslation(),en=i18n.language.startsWith('en'),L=(zh:string,english:string)=>en?english:zh;
+ const [value,setValue]=useState<MenuScale>({mode:'full',percent:100}),[ready,setReady]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ useEffect(()=>{let live=true;if(native)void invoke<MenuScale>('warframe_menu_scale').then(v=>{if(live){setValue(v);setReady(true);}}).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[]);
+ async function save(next:MenuScale){setBusy(true);setError('');try{setValue(await invoke<MenuScale>('warframe_set_menu_scale',{preferences:next}));}catch(e){setError(String(e));}finally{setBusy(false);}}
+ return <section className="settingGroup"><h2>{L('Warframe 菜单缩放','Warframe menu scale')}</h2><div className="settingRow"><span>{L('与 Warframe 的菜单缩放设置保持一致','Match the Menu Scale setting in Warframe')}</span><div className="settingsInlineControls"><select aria-label={L('菜单缩放模式','Menu Scale mode')} disabled={!ready||busy} value={value.mode} onChange={e=>void save({...value,mode:e.target.value as MenuScale['mode']})}><option value="full">{L('完整（推荐）','Full (Best)')}</option><option value="legacy">{L('旧版（仅 ≤1080p）','Legacy (ONLY ≤1080p)')}</option><option value="custom">{L('自定义','Custom')}</option></select><button disabled={!ready||busy} title={L('如近期改过游戏设置，请重新启动游戏后再检测','If you changed game settings recently, restart the game before autodetecting')} onClick={async()=>{setBusy(true);setError('');try{setValue(await invoke<MenuScale>('warframe_detect_menu_scale'));}catch(e){setError(String(e));}finally{setBusy(false);}}}>{L('自动检测','Autodetect')}</button></div></div>{value.mode==='custom'&&<label className="settingRow"><span>{L('自定义菜单缩放值','Custom Menu Scale value')}</span><input key={value.percent} type="number" aria-label={L('自定义菜单缩放值','Custom Menu Scale value')} min={25} max={400} defaultValue={value.percent} disabled={!ready||busy} onBlur={e=>{const percent=Number(e.target.value);if(Number.isInteger(percent)&&percent>=25&&percent<=400&&percent!==value.percent)void save({...value,percent});else e.target.value=String(value.percent);}}/></label>}{error&&<p role="alert">{error}</p>}</section>;
+}

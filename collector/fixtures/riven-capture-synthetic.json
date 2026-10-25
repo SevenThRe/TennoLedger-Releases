@@ -1,0 +1,114 @@
+[
+  {
+    "text": "Torid Visi-crita",
+    "x": 200,
+    "y": 100,
+    "w": 250,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "+100% Damage",
+    "x": 200,
+    "y": 180,
+    "w": 250,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "+75.5% Critical Chance",
+    "x": 200,
+    "y": 220,
+    "w": 250,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "−20.2% Zoom",
+    "x": 200,
+    "y": 260,
+    "w": 250,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "MR: 12",
+    "x": 200,
+    "y": 310,
+    "w": 120,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "Rank 8/8",
+    "x": 200,
+    "y": 350,
+    "w": 120,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "Rerolls: 4",
+    "x": 200,
+    "y": 390,
+    "w": 120,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "Torid Visi-crita",
+    "x": 950,
+    "y": 100,
+    "w": 250,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "+145% Damage",
+    "x": 950,
+    "y": 180,
+    "w": 250,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "+75.5% Critical Chance",
+    "x": 950,
+    "y": 220,
+    "w": 250,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "−20.2% Zoom",
+    "x": 950,
+    "y": 260,
+    "w": 250,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "MR: 12",
+    "x": 950,
+    "y": 310,
+    "w": 120,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "Rank 8/8",
+    "x": 950,
+    "y": 350,
+    "w": 120,
+    "h": 24,
+    "confidence": 0.98
+  },
+  {
+    "text": "Rerolls: 4",
+    "x": 950,
+    "y": 390,
+    "w": 120,
+    "h": 24,
+    "confidence": 0.98
+  }
+]

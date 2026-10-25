@@ -1,0 +1,36 @@
+import {useEffect,useMemo,useRef,useState} from 'react';
+import {invoke} from '@tauri-apps/api/core';
+import MarketAccount,{useMarketSession} from './MarketAccount';
+import {MarketActionGate} from './marketActions';
+import {inMarketContext} from './marketRequestContext';
+import {native} from './api';
+import {defaultMarketExtras,specialNumbers,marketSubtypeLabel,type MarketExtras} from './marketSpecial';
+import {quoteOrderPayload,type QuoteMarketItem} from './quoteOrderModel';
+import type {InventoryTradeTarget} from './inventoryTrade';
+
+/** One composer shared by Inventory, Analytics and the Market order workspace. */
+export default function QuoteOrderComposer({target,mode,suggested,en,onPosted,onVariant}:{target:InventoryTradeTarget;mode:'sell'|'buy';suggested:number|null;en:boolean;onPosted:()=>void;onVariant:(patch:Partial<Pick<InventoryTradeTarget,'rank'|'subtype'|'charges'|'amberStars'|'cyanStars'|'perTrade'>>)=>void}){
+ const session=useMarketSession(),[item,setItem]=useState<QuoteMarketItem|null>(null),[quantity,setQuantity]=useState(1),[price,setPrice]=useState<number|''>(''),[rank,setRank]=useState(target.rank??0),[extra,setExtra]=useState<MarketExtras>({}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[receipt,setReceipt]=useState<'idle'|'posted'|'uncertain'>('idle'),[login,setLogin]=useState(false),[attempt,setAttempt]=useState(0);
+ const edited=useRef(false),context=useMemo(()=>({}),[session.connected,session.accountId,session.sessionGeneration,session.platform,target.slug]),active=useRef<object|null>(context),gate=useMemo(()=>new MarketActionGate(),[context]);active.current=context;
+ useEffect(()=>()=>{if(active.current===context)active.current=null;},[context]);
+ useEffect(()=>{let alive=true;setItem(null);setError('');setReceipt('idle');setQuantity(target.perTrade??1);edited.current=false;
+  if(native)void invoke<{data:QuoteMarketItem[]}>('market_request',{action:'items',key:'',platform:target.platform??session.platform??'pc',token:'',body:{}}).then(result=>{if(!Array.isArray(result.data))throw Error('Invalid market catalog');const matches=result.data.filter(row=>row.slug===target.slug);if(matches.length!==1)throw Error(en?'Item unavailable for posting':'无法确认可挂售的市场物品');if(alive){const item=matches[0],next={...defaultMarketExtras(item),...(target.subtype?{subtype:target.subtype}:{})};for(const field of ['charges','amberStars','cyanStars','perTrade'] as const)if(target[field]!=null)next[field]=target[field];setItem(item);setExtra(next);setRank(target.rank??0);onVariant({...(item.maxRank!=null?{rank:target.rank??0}:{}),subtype:next.subtype,charges:next.charges,amberStars:next.amberStars,cyanStars:next.cyanStars,perTrade:next.perTrade});}}).catch(e=>{if(alive)setError(String(e));});
+  return()=>{alive=false;};
+ },[target.slug,session.platform,session.sessionGeneration,attempt]);
+ useEffect(()=>{if(!edited.current)setPrice(suggested??'');},[suggested,mode,target.slug]);
+ useEffect(()=>{setRank(target.rank??0);},[target.rank]);
+ const edit=()=>{edited.current=true;setReceipt('idle');setError('');};
+ async function submit(){const current=()=>active.current===context;await gate.run(async()=>{if(!current())return;setBusy(true);setError('');let sent=false;try{
+   if(!session.connected||session.verified!==true)throw Error(en?'Sign in with a verified warframe.market account':'请连接已验证的 warframe.market 账户');
+   if(!item||price==='')throw Error(en?'Choose a valid item and price':'请确认物品和价格');
+   const body=quoteOrderPayload(item,mode,quantity,price,rank,extra);sent=true;
+   const response=await inMarketContext(current,()=>invoke<{data:{id?:string}}>('market_request',{action:'create',key:'',platform:target.platform??session.platform??'pc',token:'',body}));
+   if(typeof response.data?.id!=='string'||!response.data.id)throw Error(en?'Receipt missing; check My orders before retrying':'未收到订单回执，请先核对“我的订单”');
+   setReceipt('posted');window.dispatchEvent(new Event('market-orders-updated'));onPosted();
+  }catch(e){if(current()){setError(String(e));if(sent)setReceipt('uncertain');}}finally{if(current())setBusy(false);}});}
+ const fieldsDisabled=busy||receipt!=='idle';
+ return <div className={'quoteComposer '+mode}><form onSubmit={e=>{e.preventDefault();if(!session.connected)setLogin(true);else void submit();}}>
+  {item&&<div className="quoteVariantFields">{item.maxRank!=null&&<label>{en?'Rank':'等级'}<input type="number" min="0" max={item.maxRank} disabled={fieldsDisabled} value={rank} onChange={e=>{setReceipt('idle');setError('');edited.current=false;setPrice('');const value=Number(e.target.value);setRank(value);onVariant({rank:value});}}/></label>}{!!item.subtypes?.length&&<label>{en?'Type':'类型'}<select disabled={fieldsDisabled} value={extra.subtype??''} onChange={e=>{setReceipt('idle');setError('');edited.current=false;setPrice('');setExtra(value=>({...value,subtype:e.target.value}));onVariant({subtype:e.target.value});}}>{item.subtypes.map(value=><option key={value} value={value}>{en?value:marketSubtypeLabel(value)}</option>)}</select></label>}{specialNumbers.map(([field,label,max])=>item[max]!=null&&<label key={field}>{en?({charges:'Charges',amberStars:'Amber stars',cyanStars:'Cyan stars'}[field]):label}<input disabled={fieldsDisabled} type="number" min="0" max={item[max]} value={extra[field]??0} onChange={e=>{setReceipt('idle');setError('');edited.current=false;setPrice('');const number=Number(e.target.value);setExtra(value=>({...value,[field]:number}));onVariant({[field]:number});}}/></label>)}{item.bulkTradable&&<label>{en?'Items / trade':'每组数量'}<input type="number" min="1" max="6" disabled={fieldsDisabled} value={extra.perTrade??1} onChange={e=>{edit();const number=Number(e.target.value);setExtra(value=>({...value,perTrade:number}));onVariant({perTrade:number});}}/></label>}</div>}
+  <div className="quotePostFields"><label>{en?'Quantity':'数量'}<input aria-label={en?'Order quantity':'订单数量'} type="number" min="1" max="9998" step="1" value={quantity} disabled={fieldsDisabled} onChange={e=>{edit();setQuantity(Number(e.target.value));}} required/></label><label>{(extra.perTrade??1)>1?(en?'Price / trade':'每组价格'):(en?'Price / item':'单价')}<input aria-label={en?'Order price':'订单价格'} type="number" min="1" max="800000" step="1" value={price} disabled={fieldsDisabled} onChange={e=>{edit();setPrice(e.target.value===''?'':Number(e.target.value));}} required={session.connected}/></label><button className={mode==='sell'?'sellPill':'buyPill'} disabled={!native||busy||receipt!=='idle'||session.connected&&!item} type="submit">{busy?(en?'Posting…':'发布中…'):receipt==='posted'?(en?'Posted ✓':'已发布 ✓'):receipt==='uncertain'?(en?'Check My orders':'请核对订单'):!session.connected?(en?'Sign in to post':'登录后发布'):mode==='sell'?(en?'Post sell order':'发布卖单'):(en?'Post buy order':'发布买单')}</button></div>
+ </form>{error&&<p className="sideNotice" role="alert">{error}{!item&&<button type="button" disabled={busy} onClick={()=>setAttempt(value=>value+1)}>{en?'Retry':'重试'}</button>}</p>}{receipt==='posted'&&<button onClick={()=>{setReceipt('idle');edited.current=false;}}>{en?'Create another order':'新建另一笔订单'}</button>}{login&&<MarketAccount initiallyOpen/>}</div>;
+}

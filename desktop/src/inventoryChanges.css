@@ -1,0 +1,36 @@
+.inventoryChangesNotice{position:fixed;right:22px;bottom:20px;z-index:70;background:#5126a7;border:1px solid #9273d1;border-radius:8px;padding:10px 16px;color:#fff;box-shadow:0 4px 20px #0005}.inventoryChangesNotice b{margin-left:8px}.inventoryChangesShade{position:fixed;inset:0;z-index:100;background:#060a13b8;display:flex;align-items:center;justify-content:center;padding:20px}.inventoryChangesModal{display:flex;flex-direction:column;min-height:0;max-height:90vh;width:880px;max-width:100%;background:#181f30;border:1px solid #414b62;border-radius:12px;padding:18px;color:#edf1ff}.inventoryChangesModal header,.inventoryChangesModal footer,.inventoryChangesTools{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:8px 0}.inventoryChangesModal h2{margin:0}.inventoryChangesModal button,.inventoryChangesModal input{background:#262e44;border:1px solid #414b62;border-radius:7px;color:inherit;padding:8px 12px}.inventoryChangesTools input{flex:1;min-width:0}.inventoryChangesRows{overflow:auto;min-height:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}.inventoryChangesRows article{display:flex;align-items:center;gap:12px;background:#20293d;border:1px solid #394258;border-radius:8px;padding:12px;min-width:0}.inventoryChangesRows article>img{width:50px;height:64px;object-fit:contain}.inventoryChangesRows article>div{display:flex;flex-direction:column;gap:6px;min-width:0}.inventoryChangesRows article>div:nth-child(2){flex:1}.inventoryChangesRows small{font-size:11px;color:#adb8cf}.inventoryChangesRows span{font-size:12px}.inventoryChangesRows.compact{grid-template-columns:1fr}.inventoryChangesModal footer{border-top:1px solid #394258;font-size:12px}@media(max-width:700px){.inventoryChangesRows{grid-template-columns:1fr}.inventoryChangesModal footer{flex-wrap:wrap}}
+.inventoryChangesNotice{position:fixed;left:96px;right:auto;bottom:14px;z-index:70;display:flex;align-items:center;gap:4px;padding:4px;border:1px solid var(--color-tab-lighter,#b59dff);border-radius:12px;background:var(--color-bg-2,#171e30);box-shadow:0 8px 24px #0005;max-width:calc(100vw - 120px);color:var(--color-text,#fff)}
+.inventoryChangesNotice button{display:flex;align-items:center;gap:10px;height:auto;padding:7px;border:0;background:transparent;color:inherit;text-align:left}
+.inventoryChangesNotice button:hover{background:var(--color-card-hover,#272f47)}
+.inventoryChangesNoticeIcon{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;background:var(--color-bg-3,#20283e);color:var(--color-tab-lighter,#b59dff)}
+.inventoryChangesNoticeIcon svg{width:23px;height:23px}
+.inventoryChangesOpen strong{display:block;font-size:14px;line-height:20px}
+.inventoryChangesOpen small{display:block;font-size:13px;line-height:19px;color:var(--color-tab-lighter,#b59dff)}
+.inventoryChangesNotice .inventoryChangesNoticeClose{width:28px;height:28px;align-self:flex-start;padding:5px;opacity:.65}
+.inventoryChangesShade .inventoryChangesModal{width:1000px;max-width:calc(100% - 24px);max-height:calc(100% - 24px);padding:0;border-radius:14px;background:var(--color-bg-2,#171e30);border-color:var(--ui-line,#ffffff1f);container:inventory / inline-size}
+.inventoryChangesModal>header{min-height:58px;height:auto;flex:none;gap:12px;padding:8px 12px 8px 18px;border-bottom:1px solid var(--ui-line,#ffffff1f);background:var(--color-bg-1,#101623)}
+.inventoryChangesModal h2{font-size:20px;font-weight:500;line-height:26px}
+.inventoryChangeHeaderActions,.inventoryChangeViewSwitch{display:flex;align-items:center;gap:6px}
+.inventoryChangeViewSwitch{padding:3px;border:1px solid var(--ui-line,#ffffff1f);border-radius:8px;background:var(--color-bg-2,#171e30)}
+.inventoryChangeHeaderActions button{display:flex;align-items:center;justify-content:center;width:30px;height:30px;padding:5px;border:0;background:transparent}
+.inventoryChangeHeaderActions svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.inventoryChangeViewSwitch button[aria-pressed=true]{background:var(--color-card-active,#313a58)}
+.inventoryChangesOverview{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px 20px;padding:16px 18px 0;flex:none}
+.inventoryChangesOverview>div:first-child{display:flex;flex-direction:column;gap:3px;font-size:12px;line-height:18px;color:var(--color-navigation-hover,#ccccce)}
+.inventoryChangesOverview>div:first-child>strong{font-size:16px;line-height:22px;font-weight:500;color:var(--color-text,#fff)}
+.inventoryChangesTotals{display:flex;align-items:center;gap:20px}
+.inventoryChangesTotals>div{display:flex;align-items:center;gap:8px;font-size:12px;line-height:18px;color:var(--color-navigation-hover,#ccccce)}
+.inventoryChangesTotals img{width:26px;height:26px;object-fit:contain}
+.inventoryChangesTotals strong{display:block;font-size:17px;line-height:24px;color:var(--color-text,#fff)}
+.inventoryChangesRows{grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px;margin:16px 18px;align-content:start}
+.inventoryChangesRows article{display:grid;grid-template-columns:56px minmax(0,1fr);gap:8px 10px;padding:12px;background:var(--color-card,#20283e);border-color:var(--ui-line,#ffffff1f)}
+.inventoryChangesRows article>img{width:56px;height:56px}
+.inventoryChangesRows article>div:nth-child(2){grid-column:2;min-width:0}
+.inventoryChangesRows article>div:last-child{grid-column:1/-1;display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:8px;padding-top:8px;border-top:1px solid var(--ui-line,#ffffff1f)}
+.inventoryChangesRows.compact article{grid-template-columns:40px minmax(0,1fr) minmax(180px,auto);padding:8px 10px}
+.inventoryChangesRows.compact article>img{width:40px;height:40px}
+.inventoryChangesRows.compact article>div:last-child{grid-column:3;grid-row:1;border:0;padding:0}
+.inventoryChangesModal>footer{padding:10px 16px;flex:none;gap:10px 16px;border-color:var(--ui-line,#ffffff1f);background:var(--color-bg-2,#171e30)}
+.inventoryChangesModal>footer>span{flex:1;color:var(--color-navigation-hover,#ccccce)}
+.inventoryChangesModal>footer>button:last-child{background:var(--color-tab-active,#5923cb);border-color:transparent}
+@media(min-width:1350px){.inventoryChangesNotice{left:238px}}

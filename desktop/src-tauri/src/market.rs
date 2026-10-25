@@ -426,17 +426,21 @@ fn connect_inner(g: &mut Gateway, token: String, platform: String) -> Result<Val
 }
 #[tauri::command]
 pub async fn market_session() -> Result<Value, String> {
-    let g = gate().lock().map_err(|_| "网络队列锁错误")?;
-    Ok(session_view(g.session.as_ref()))
+    tauri::async_runtime::spawn_blocking(move || {
+        let g = gate().lock().map_err(|_| "网络队列锁错误")?;
+        Ok(session_view(g.session.as_ref()))
+    }).await.map_err(|_| "账户任务失败".to_string())?
 }
 #[tauri::command]
 pub async fn market_logout() -> Result<Value, String> {
-    let mut g = gate().lock().map_err(|_| "网络队列锁错误")?;
-    invalidate_presence();
-    g.session = None;
-    g.cache.clear();
-    g.writes.clear();
-    Ok(session_view(None))
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut g = gate().lock().map_err(|_| "网络队列锁错误")?;
+        invalidate_presence();
+        g.session = None;
+        g.cache.clear();
+        g.writes.clear();
+        Ok(session_view(None))
+    }).await.map_err(|_| "账户任务失败".to_string())?
 }
 #[tauri::command]
 pub async fn market_connect(token: String, platform: String) -> Result<Value, String> {
@@ -942,5 +946,17 @@ mod permission_tests {
         };
         assert!(session_view(Some(&s))["verified"].is_null());
         assert!(session_view(Some(&s))["verificationReason"].is_string());
+    }
+}
+
+#[cfg(test)]
+mod async_session_tests {
+    #[test]
+    fn async_session_first_load_is_safe() {
+        // Run this filtered test in a fresh process to exercise OnceLock initialization.
+        tauri::async_runtime::block_on(async {
+            assert_eq!(super::market_session().await.unwrap()["connected"], false);
+            assert_eq!(super::market_logout().await.unwrap()["connected"], false);
+        });
     }
 }

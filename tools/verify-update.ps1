@@ -1,5 +1,9 @@
 param([Parameter(Mandatory=$true)][string]$Manifest)
 $ErrorActionPreference='Stop'
+if(-not $env:VSCMD_VER){
+ & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'with-msvc.ps1') pwsh -NoProfile -File $PSCommandPath -Manifest ([IO.Path]::GetFullPath($Manifest))
+ exit $LASTEXITCODE
+}
 $root=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $previous=$env:MYFRAME_UPDATE_MANIFEST
 try {

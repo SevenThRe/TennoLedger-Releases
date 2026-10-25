@@ -5,6 +5,13 @@ param(
  [switch]$Publish
 )
 $ErrorActionPreference='Stop'
+if(-not $env:VSCMD_VER){
+ $rerun=@('-NoProfile','-File',$PSCommandPath,'-Version',$Version,'-SourceCommit',$SourceCommit)
+ if($Directory){$rerun+=@('-Directory',[IO.Path]::GetFullPath($Directory))}
+ if($Publish){$rerun+='-Publish'}
+ & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'with-msvc.ps1') pwsh @rerun
+ exit $LASTEXITCODE
+}
 $root=(Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $folder=if($Directory){(Resolve-Path -LiteralPath $Directory).Path}else{Join-Path $root "builds/updates/$Version"}
 $manifest=Join-Path $folder 'latest.json';$value=Get-Content -LiteralPath $manifest -Raw|ConvertFrom-Json

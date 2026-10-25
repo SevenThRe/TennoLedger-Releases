@@ -52,6 +52,9 @@ try {
  Copy-Item -LiteralPath $installer.FullName,($installer.FullName+'.sig') -Destination $output
  New-Item -ItemType Directory -Path (Join-Path $output 'acceptance')|Out-Null
  Copy-Item -LiteralPath (Join-Path $target 'release/myframe-desktop.exe') -Destination (Join-Path $output 'acceptance/myframe-desktop.exe')
+ # Tauri restores UNK after bundling; NSIS embeds NSS. Preserve the exact installed EXE for acceptance.
+ & $Python -c 'from pathlib import Path; import sys; p=Path(sys.argv[1]); b=p.read_bytes(); old=b"__TAURI_BUNDLE_TYPE_VAR_UNK"; new=b"__TAURI_BUNDLE_TYPE_VAR_NSS"; assert b.count(old)==1, "Unexpected Tauri bundle marker"; p.write_bytes(b.replace(old,new))' (Join-Path $output 'acceptance/myframe-desktop.exe')
+ if($LASTEXITCODE -ne 0){throw 'Installed binary acceptance baseline preparation failed'}
  $url="https://github.com/SevenThRe/TennoLedger-Releases/releases/download/v$Version/$($installer.Name)"
  $arguments=@((Join-Path $PSScriptRoot 'update-manifest.mjs'),$Version,$url,($installer.FullName+'.sig'),(Join-Path $output 'latest.json'))
  if($NotesFile){$arguments+=(Resolve-Path -LiteralPath $NotesFile).Path}

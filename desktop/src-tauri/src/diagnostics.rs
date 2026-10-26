@@ -30,8 +30,8 @@ impl Event {
     fn new(component:&str,operation:&str)->Self{Self{timestamp:chrono::Utc::now().to_rfc3339(),process:std::process::id(),id:SEQUENCE.fetch_add(1,Ordering::Relaxed),component:component.into(),operation:operation.into(),phase:"start".into(),status:None,elapsed_ms:None,platform:None,authenticated:None,verified:None,html_response:None,fields:vec![],codes:vec![],source:None,column:None,fault:None,line:None}}
     fn clean(mut self)->Self{
         self.timestamp=chrono::DateTime::parse_from_rfc3339(&self.timestamp).map(|t|t.to_rfc3339()).unwrap_or_default();
-        self.component=selected(&self.component,&["app","wm","frontend"]);
-        self.operation=selected(&self.operation,&["startup","native_panic","window_error","unhandled_rejection","handled_error","session_validate","signin","items","book","mine","review","create","update","delete","close","auction","auction_create","auction_update","auction_close","auctions_mine","riven_attributes","riven_weapons","rivens","updater"]);
+        self.component=selected(&self.component,&["app","wm","frontend","collector"]);
+        self.operation=selected(&self.operation,&["startup","native_panic","window_error","unhandled_rejection","handled_error","session_validate","signin","items","book","mine","review","create","update","delete","close","auction","auction_create","auction_update","auction_close","auctions_mine","riven_attributes","riven_weapons","rivens","updater","inventory_sync"]);
         self.phase=selected(&self.phase,&["start","success","rejected","uncertain","interrupted","error"]);
         self.platform=self.platform.filter(|v|["pc","ps4","xbox","switch","mobile"].contains(&v.as_str()));
         self.fields.retain(|v|field(v));self.fields.sort();self.fields.dedup();self.fields.truncate(16);
@@ -64,6 +64,12 @@ pub fn initialize(directory:&Path){
     match LogStore::new(directory.join("logs"),LIMIT){Ok(store)=>{let _=STORE.set(Mutex::new(store));record(Event::new("app","startup"));},Err(_)=>{FAILURES.fetch_add(1,Ordering::Relaxed);}}
 }
 pub fn ready(){let mut event=Event::new("app","startup");event.phase="success".into();record(event);}
+fn inventory_event(scan_code:&str,complete:Option<bool>,elapsed_ms:u64)->Event{
+    let stage=scan_code.strip_prefix("helper-invalid-inventory:").unwrap_or(scan_code);
+    let stage=selected(stage,&["helper-current","helper-missing","helper-session-unavailable","helper-auth-failed","helper-account-mismatch","helper-network-failed","helper-start-failed","helper-timeout","helper-cancelled","identity-invalid","login-changed-during-read","storage-lock","storage-active-scope","identity-selection-blocked","storage-load","storage-save","history-save-failed","normalize-core-structure","normalize-timestamp","normalize-item-type","normalize-quantity","normalize-quantity-limit","normalize-list-type","normalize-xp","normalize-validation","acquisition-older","acquisition-live-preferred","acquisition-incomplete","acquisition-invalid-time","acquisition-unknown-identity","account-not-accepted","core-structure","invalid-json","identity-root","output-missing"]);
+    let mut event=Event::new("collector","inventory_sync");event.phase=if stage=="helper-current"{"success"}else{"rejected"}.into();event.elapsed_ms=Some(elapsed_ms);event.verified=complete;event.codes=vec![format!("app.errors.collector.{stage}")];event
+}
+pub fn inventory_result(scan_code:&str,complete:Option<bool>,elapsed_ms:u64){record(inventory_event(scan_code,complete,elapsed_ms));}
 pub fn install_panic_hook(){let previous=std::panic::take_hook();std::panic::set_hook(Box::new(move|info|{let mut event=Event::new("app","native_panic");event.phase="error".into();event.fault=Some("native_panic".into());event.line=info.location().map(|p|p.line());event.source=info.location().and_then(|p|Path::new(p.file()).file_name()).map(|s|s.to_string_lossy().to_string());if let Some(store)=STORE.get(){if let Ok(store)=store.try_lock(){let _=store.append(event);}}previous(info);}));}
 pub struct RequestTrace{event:Event,start:Instant,finished:bool}
 impl RequestTrace {
@@ -119,6 +125,12 @@ fn build_report(mut events:Vec<Event>,version:&str,hash:&str,readiness:&Value,ma
 }
 #[cfg(test)]mod tests{
     use super::*;
+    #[test]fn inventory_rejections_are_loggable_without_raw_helper_data(){
+        let event=inventory_event("helper-invalid-inventory:acquisition-incomplete",Some(false),42).clean();
+        assert_eq!(event.component,"collector");assert_eq!(event.operation,"inventory_sync");assert_eq!(event.phase,"rejected");assert_eq!(event.verified,Some(false));assert_eq!(event.codes,vec!["app.errors.collector.acquisition-incomplete"]);
+        let secret="private-token@example.com";let text=serde_json::to_string(&inventory_event(secret,None,0).clean()).unwrap();assert!(!text.contains(secret));assert!(text.contains("app.errors.collector.other"));
+        assert_eq!(inventory_event("helper-current",Some(true),10).clean().phase,"success");
+    }
     #[test]fn schema_drops_secrets_and_rotation_is_bounded(){
         let directory=std::env::temp_dir().join(format!("tennoledger-log-test-{}-{}",std::process::id(),SEQUENCE.fetch_add(1,Ordering::Relaxed)));
         let store=LogStore::new(directory.clone(),1024).unwrap();let secret="synthetic-password-token@example.com";

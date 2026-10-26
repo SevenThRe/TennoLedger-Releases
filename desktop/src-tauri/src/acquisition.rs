@@ -3,6 +3,18 @@ use crate::collection::Snapshot;
 
 #[derive(Debug, PartialEq)]
 pub enum Decision { Accept, Unchanged, Older, LivePreferred, Incomplete, InvalidTime, UnknownIdentity }
+impl Decision {
+    pub fn rejection_code(&self)->Option<&'static str>{
+        match self {
+            Self::Accept|Self::Unchanged=>None,
+            Self::Older=>Some("acquisition-older"),
+            Self::LivePreferred=>Some("acquisition-live-preferred"),
+            Self::Incomplete=>Some("acquisition-incomplete"),
+            Self::InvalidTime=>Some("acquisition-invalid-time"),
+            Self::UnknownIdentity=>Some("acquisition-unknown-identity"),
+        }
+    }
+}
 fn is_live(source:&str)->bool {matches!(source,"game-memory"|"warframe-api-helper")}
 pub fn choose(old:Option<&Snapshot>,next:&Snapshot,live_recent:bool)->Decision {
     let Ok(time)=chrono::DateTime::parse_from_rfc3339(&next.captured_at) else{return Decision::InvalidTime;};
@@ -24,6 +36,11 @@ pub fn choose(old:Option<&Snapshot>,next:&Snapshot,live_recent:bool)->Decision {
 
 #[cfg(test)] mod tests {
     use super::*;
+    #[test] fn every_rejection_has_a_distinct_diagnostic_without_changing_acceptance(){
+        let rejected=[Decision::Older,Decision::LivePreferred,Decision::Incomplete,Decision::InvalidTime,Decision::UnknownIdentity];
+        let codes:std::collections::BTreeSet<_>=rejected.iter().map(|d|d.rejection_code().unwrap()).collect();
+        assert_eq!(codes.len(),rejected.len());assert!(Decision::Accept.rejection_code().is_none());assert!(Decision::Unchanged.rejection_code().is_none());
+    }
     fn snapshot(source:&str,time:&str)->Snapshot{Snapshot{schema_version:1,captured_at:time.into(),source:source.into(),complete:true,..Default::default()}}
     #[test] fn cache_bootstrap_then_live_then_no_regression(){
         let cache=snapshot("alecaframe-cache","2026-01-01T00:00:00Z");assert_eq!(choose(None,&cache,false),Decision::Accept);

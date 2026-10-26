@@ -22,6 +22,7 @@ pub struct Status {
 struct CaptureBinding { scope:String, epoch:u64, started_at:String }
 struct Runtime { refresh_requested:bool, child: Option<Child>, helper_active:bool, generation: u64, account_generation:u64, scope_epoch:u64, live_scope:Option<String>, captures:BTreeMap<String,CaptureBinding>, last_live_read: Option<std::time::Instant>, status: Status }
 impl Runtime {
+ fn reject(&mut self,reason:&str)->bool{self.status.scan_code=format!("helper-invalid-inventory:{reason}");false}
  fn token(&self)->(u64,u64){(self.generation,self.account_generation)}
  fn request_current(&self,token:(u64,u64))->bool{self.status.enabled&&self.token()==token}
  fn invalidate_account(&mut self){self.account_generation+=1;self.scope_epoch+=1;self.live_scope=None;self.captures.clear();self.last_live_read=None;self.status.last_read_at=None;self.status.last_inventory_at=None;self.status.inventory_source=None;self.status.last_relic=None;self.status.observed_items=0;self.status.account_code="waiting-data".into();self.status.scan_code="waiting-data".into();self.refresh_requested=true;}
@@ -139,7 +140,7 @@ impl Collector {
                 }
                 if std::time::Instant::now()<due {continue;}
                 last_attempt=Some(std::time::Instant::now());
-                let generation={let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());r.helper_active=true;r.status.scan_code="helper-fetching".into();let _=app.emit("collector-updated",&r.status);r.token()};
+                let generation={let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());r.helper_active=true;r.status.scan_code="helper-fetching".into();r.status.scan=serde_json::json!({"provider":"warframe-api-helper","pid":pid,"refreshSeconds":120});let _=app.emit("collector-updated",&r.status);r.token()};
                 let cancelled=||{let r=this.0.lock().unwrap_or_else(|e|e.into_inner());!r.request_current(generation)};
                 let login_before=crate::player_identity::read(&log_path);
                 let result=crate::helper_inventory::resolve_executable().ok_or_else(||"helper-missing".to_string()).and_then(|exe|helper.refresh(&exe,pid.unwrap(),cancelled));
@@ -158,13 +159,13 @@ impl Collector {
                             let next=helper.vendor_info(manifest,cancelled).and_then(|raw|collection::vendor_data::normalize(id,&raw,&now));
                             vendors.push(match next {Ok(v)=>v,Err(error)=>{let mut v=old.cloned().unwrap_or_else(||collection::VendorSnapshot{id:id.into(),captured_at:now.clone(),..Default::default()});v.error=Some(error);v}});
                         }
-                        if cancelled()||crate::account_scope::from_value(&value).is_err(){false}else{
+                        if cancelled(){false}else if crate::account_scope::from_value(&value).is_err(){this.0.lock().unwrap_or_else(|e|e.into_inner()).reject("identity-invalid")}else{
                             let verified_account=value.get("AccountId").cloned();
                             // The helper normally returns unwrapped inventory; support both legacy envelopes too.
                             for key in ["InventoryJSON","InventoryJson"] {if value[key].is_object(){value=value[key].take();break;}if let Some(text)=value[key].as_str(){if let Ok(inner)=serde_json::from_str::<serde_json::Value>(text){value=inner;}break;}}
                             if let Some(account)=verified_account{value["AccountId"]=account;}
                             let login_after=crate::player_identity::read(&log_path);
-                            if login_before!=login_after {false}else{
+                            if login_before!=login_after {this.0.lock().unwrap_or_else(|e|e.into_inner()).reject("login-changed-during-read")}else{
                                 if let Some(identity)=login_after {if value["DisplayName"].as_str().is_none_or(|name|name.trim().is_empty()){value["DisplayName"]=serde_json::Value::String(identity.name);}}
                                 value["MyFrameVendors"]=serde_json::to_value(vendors).unwrap_or_default();
                                 this.apply_account(&app,&catalog,&value,"warframe-api-helper",&now,generation)
@@ -178,7 +179,7 @@ impl Collector {
                 if !r.request_current(generation){continue;}
                 if accepted {r.status.scan_code="helper-current".into();} else if r.status.scan_code=="helper-fetching" {r.status.scan_code="helper-invalid-inventory:account-not-accepted".into();}
                 r.status.account_code=if accepted{"synced"}else if r.status.inventory_source.as_deref()==Some("alecaframe-cache"){"cached"}else if r.status.inventory_source.is_some(){"saved"}else{&r.status.scan_code}.into();
-                r.status.scan=serde_json::json!({"provider":"warframe-api-helper","pid":pid,"refreshSeconds":120});
+                crate::diagnostics::inventory_result(&r.status.scan_code,r.status.scan["attemptInventoryComplete"].as_bool(),last_attempt.map(|t|t.elapsed().as_millis() as u64).unwrap_or(0));
                 due=std::time::Instant::now()+std::time::Duration::from_secs(if accepted{120}else{60});
                 let _=app.emit("collector-updated",&r.status);
             }
@@ -186,15 +187,15 @@ impl Collector {
     }
     fn apply_account(&self,app:&tauri::AppHandle,catalog:&collection::Catalog,value:&serde_json::Value,source:&str,fallback:&str,token:(u64,u64)) -> bool {
         let mut runtime=self.0.lock().unwrap_or_else(|e|e.into_inner());if !runtime.request_current(token){return false;}
-        let state=app.state::<AppState>();let Ok(db)=state.0.lock() else{return false;};
-        let Ok(scope)=crate::account_scope::from_value(value) else{return false;};
-        let Ok(active)=db.active_scope() else{return false;};
+        let state=app.state::<AppState>();let Ok(db)=state.0.lock() else{return runtime.reject("storage-lock");};
+        let Ok(scope)=crate::account_scope::from_value(value) else{return runtime.reject("identity-invalid");};
+        let Ok(active)=db.active_scope() else{return runtime.reject("storage-active-scope");};
         let target=scope.as_deref().unwrap_or(crate::account_scope::LEGACY);
         // A cache cannot establish a change away from an identified live/imported account.
         // Only an explicit live identity may switch; unknown input never claims that account.
-        if !crate::account_scope::source_may_select(&active,scope.as_deref(),source){return false;}
+        if !crate::account_scope::source_may_select(&active,scope.as_deref(),source){return runtime.reject("identity-selection-blocked");}
         let switched=active!=target;
-        let Ok(old)=db.load_collection_for_scope(scope.as_deref()) else{return false;};
+        let Ok(old)=db.load_collection_for_scope(scope.as_deref()) else{return runtime.reject("storage-load");};
         let mut snapshot=match crate::inventory_data::from_value(value,catalog,old.as_ref(),source,fallback) {
             Ok(snapshot)=>snapshot,
             Err(error)=>{
@@ -214,13 +215,17 @@ impl Collector {
             }
         };
         retain_known_player_name(old.as_ref(),&mut snapshot);
+        if source=="warframe-api-helper" {
+            runtime.status.scan["attemptInventoryComplete"]=snapshot.complete.into();
+            runtime.status.scan["missingInventoryGroups"]=serde_json::json!(crate::inventory_data::missing_owned_groups(value));
+        }
         let recent=!switched&&runtime.last_live_read.is_some_and(|t|t.elapsed()<std::time::Duration::from_secs(60));
         let decision=crate::acquisition::choose(old.as_ref(),&snapshot,recent);
-        if !matches!(decision,crate::acquisition::Decision::Accept|crate::acquisition::Decision::Unchanged){return false;}
+        if let Some(reason)=decision.rejection_code(){return runtime.reject(reason);}
         let live=source=="game-memory"||source=="warframe-api-helper";
         if live {
             match db.save_live_collection(&snapshot) {Ok(true)=>{let _=app.emit("ledger-updated",());},Ok(false)=>{},Err(_)=>{runtime.status.scan_code="history-save-failed".into();return false;}}
-        } else if (decision!=crate::acquisition::Decision::Unchanged||switched) && db.save_collection(&snapshot).is_err(){return false;}
+        } else if (decision!=crate::acquisition::Decision::Unchanged||switched) && db.save_collection(&snapshot).is_err(){return runtime.reject("storage-save");}
         if switched{runtime.scope_epoch+=1;runtime.captures.clear();runtime.live_scope=None;runtime.last_live_read=None;runtime.status.last_read_at=None;runtime.status.last_relic=None;let _=app.emit("ledger-updated",());}
         if live {runtime.live_scope=snapshot.account_scope.clone();runtime.last_live_read=Some(std::time::Instant::now());runtime.status.last_read_at=Some(chrono::Utc::now().to_rfc3339());}
         runtime.status.account_code=if live{"synced"}else{"cached"}.into();

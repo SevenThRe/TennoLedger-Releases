@@ -76,6 +76,10 @@ const STACKS: &[&str] = &[
     "FlavourItems",
     "WeaponSkins",
 ];
+// Export schema field names only, never account values or item contents.
+pub fn missing_owned_groups(value:&Value)->Vec<&'static str>{
+    EQUIPMENT.iter().chain(STACKS.iter()).copied().filter(|key|!value[*key].is_array()).collect()
+}
 fn add(counts: &mut BTreeMap<String, u64>, id: &str, n: u64) -> Result<(), String> {
     if !id.starts_with("/Lotus/") || id.len() > 512 {
         return Err("库存物品类型无效".into());
@@ -698,6 +702,7 @@ mod tests {
         let restored = crate::collection::parse(&serialized).unwrap();
         assert_eq!(restored.upgrade_counts_by_rank, out.upgrade_counts_by_rank);
         v.as_object_mut().unwrap().remove("MechSuits");
+        assert_eq!(missing_owned_groups(&v),vec!["MechSuits"]);
         let out = from_value(&v, &cat, None, "game-memory", "2026-10-23T00:00:00Z").unwrap();
         assert!(!out.complete);
         assert_eq!(

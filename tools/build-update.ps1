@@ -41,7 +41,7 @@ $target=if($env:CARGO_TARGET_DIR){[IO.Path]::GetFullPath($env:CARGO_TARGET_DIR)}
 try {
  $env:TAURI_SIGNING_PRIVATE_KEY=$key;$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$password;$env:CARGO_HTTP_PROXY=''
  Push-Location (Join-Path $root 'desktop')
- try{& npm run tauri build -- --bundles nsis --ci -- --locked;if($LASTEXITCODE -ne 0){throw 'Tauri signed NSIS build failed'}}finally{Pop-Location}
+ try{& npm run tauri build -- --features custom-protocol --bundles nsis --ci -- --locked;if($LASTEXITCODE -ne 0){throw 'Tauri signed NSIS build failed'}}finally{Pop-Location}
  $installer=Get-Item -LiteralPath (Join-Path $target "release/bundle/nsis/TennoLedger_${Version}_x64-setup.exe")
  $nsis=Get-Content -LiteralPath (Join-Path $target 'release/nsis/x64/installer.nsi') -Raw
  foreach($tool in Get-ChildItem -LiteralPath (Join-Path $root 'desktop/src-tauri/src/bin') -Filter '*.rs'){

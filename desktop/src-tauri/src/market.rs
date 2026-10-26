@@ -1,4 +1,6 @@
 use serde_json::{json, Value};
+use tauri::Manager;
+use std::path::PathBuf;
 use std::{
     collections::HashMap,
     sync::{Mutex, OnceLock},
@@ -11,6 +13,11 @@ struct Gateway {
     cache: HashMap<String, (Instant, Value)>,
     session: Option<Session>,
     writes: HashMap<String, Instant>,
+    credential_path: Option<PathBuf>,
+    restore_attempt: Option<Instant>,
+    restore_allowed: bool,
+    remembered: bool,
+    session_error: Option<String>,
 }
 static GATE: OnceLock<Mutex<Gateway>> = OnceLock::new();
 static SESSION_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -204,7 +211,7 @@ fn validate(action: &str, body: &Value) -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
-    fn login_failures_never_show_order_instructions_or_server_secrets() {
+    fn login_failures_preserve_status_and_parse_server_errors() {
         for status in [400,401,403,422,429,500,503] {
             let error=validate_login_response(status,None).unwrap_err();
             assert!(error.contains(&status.to_string()));
@@ -213,8 +220,18 @@ mod tests {
         }
         assert!(validate_login_response(200,None).is_err());
         assert!(validate_login_response(200,Some(&json!("bad"))).is_err());
-        let error=validate_login_response(200,Some(&json!({"error":"SECRET_RESPONSE"}))).unwrap_err();
+        let error=validate_login_response(401,Some(&json!({"error":{"email":["Invalid credentials"]},"token":"SECRET_RESPONSE"}))).unwrap_err();
+        assert!(error.contains("401"));
+        assert!(error.contains("email: Invalid credentials"));
         assert!(!error.contains("SECRET_RESPONSE"));
+        let error=validate_login_response(200,Some(&json!({"errors":[{"message":"Account suspended","code":"account_suspended","password":"SECRET_RESPONSE"}]}))).unwrap_err();
+        assert!(error.contains("Account suspended"));
+        assert!(error.contains("account_suspended"));
+        assert!(!error.contains("SECRET_RESPONSE"));
+        assert!(validate_login_response(200,Some(&json!({"errors":[]}))).is_ok());
+        assert!(validate_login_response(200,Some(&json!({"error":false}))).is_ok());
+        assert!(validate_login_response(403,Some(&json!({"message":"Verification required"}))).unwrap_err().contains("Verification required"));
+        assert!(validate_login_response(400,Some(&json!({"error":"x".repeat(1000)}))).unwrap_err().chars().count()<400);
         assert!(validate_login_response(200,Some(&json!({"payload":{},"error":null}))).is_ok());
     }
     #[test]
@@ -288,15 +305,14 @@ mod tests {
         .is_ok());
     }
 }
-// Account secrets remain exclusively in this process; never returned to the webview.
+// Plaintext account secrets stay in Rust; remembered sessions use user-bound DPAPI.
 struct Session {
     token: String,
     platform: String,
     profile: Value,
 }
-fn gate() -> &'static Mutex<Gateway> {
-    GATE.get_or_init(|| {
-        Mutex::new(Gateway {
+fn new_gateway()->Gateway {
+    Gateway {
             client: reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(25))
                 .redirect(reqwest::redirect::Policy::none())
@@ -308,9 +324,14 @@ fn gate() -> &'static Mutex<Gateway> {
             cache: HashMap::new(),
             session: None,
             writes: HashMap::new(),
-        })
-    })
+            credential_path: None,
+            restore_attempt: None,
+            restore_allowed: true,
+            remembered: false,
+            session_error: None,
+        }
 }
+fn gate() -> &'static Mutex<Gateway> {GATE.get_or_init(||Mutex::new(new_gateway()))}
 fn platform_check(p: &str) -> Result<(), String> {
     if ["pc", "ps4", "xbox", "switch"].contains(&p) {
         Ok(())
@@ -374,47 +395,83 @@ fn pace(g: &mut Gateway, riven: bool) {
     }
     g.last = Some(Instant::now());
 }
-fn response(r: reqwest::blocking::Response) -> Result<Value, String> {
-    let status = r.status();
-    if status==reqwest::StatusCode::NO_CONTENT {return Ok(Value::Null);}
-    if !status.is_success() {
-        return Err(format!(
-            "市场 HTTP {}：{}",
-            status.as_u16(),
-            match status.as_u16() {
-                400 => "字段无效或操作不允许",
-                401 => "登录失败或会话过期",
-                403 => "账号未验证或服务要求额外验证；请到官网完成验证后连接会话",
-                409 => "订单冲突，请刷新我的挂单",
-                429 => "请求过快，请稍后再试",
-                _ => "请求失败；写操作请先刷新挂单，勿直接重复提交",
-            }
-        ));
+fn definite_rejection(status:u16)->bool {matches!(status,400|401|403|404|405|409|410|413|415|422|429)}
+fn error_codes(body:&Value)->Vec<String>{
+    fn code(value:&Value)->Option<String>{let s=value.as_str()?;
+        ((s.starts_with("app.errors.")||s.starts_with("app.field."))&&s.len()<=120&&s.bytes().all(|b|b.is_ascii_alphanumeric()||matches!(b,b'.'|b'_'|b'-'))).then(||s.to_string())}
+    let error=body.get("error").or_else(||body.get("errors")).unwrap_or(&Value::Null);
+    let mut codes=Vec::new();if let Some(v)=code(error){codes.push(v);}
+    if let Some(request)=error.get("request") {if let Some(v)=code(request){codes.push(v);}if let Some(rows)=request.as_array(){codes.extend(rows.iter().filter_map(code));}}
+    if let Some(inputs)=error.get("inputs").and_then(Value::as_object){
+        for (field,value) in inputs {if ["itemId","type","platinum","quantity","visible","perTrade","rank","charges","subtype","amberStars","cyanStars"].contains(&field.as_str()) {if let Some(value)=code(value){codes.push(format!("{field}: {value}"));}}}
     }
-    let v: Value = r.json().map_err(|_| "市场响应格式异常，请先刷新挂单")?;
-    if v.get("error").is_some_and(|e| !e.is_null()) || v.get("errors").is_some_and(|e| !e.is_null())
-    {
-        return Err("市场业务拒绝：请检查账户验证、价格、词条或挂单数量上限".into());
+    codes.sort();codes.dedup();codes.truncate(8);codes
+}
+fn http_error(status:u16,body:&Value,html:bool)->String{
+    let codes=error_codes(body);let lower=codes.join(" ").to_ascii_lowercase();
+    let message=if lower.contains("notverified")||lower.contains("unverified") {"WM 账号尚未完成游戏账号验证"}
+    else if lower.contains("banned") {"WM 限制了此账号的交易权限"}
+    else if lower.contains("orderlimit") {"已达到 WM 挂单数量上限"}
+    else if lower.contains("alreadyexists") {"WM 已存在相同挂单，请刷新我的订单"}
+    else if status==403&&html {"WM 的网页访问检查拦截了请求，请检查网络或官网访问状态"}
+    else {match status {
+        400|422=>"WM 拒绝了订单字段，请检查物品、数量、价格和等级",
+        401=>"登录会话已过期，请重新登录 WM",
+        403=>"WM 拒绝了此操作，需检查账号权限或服务的访问限制",
+        409=>"订单冲突，请刷新我的订单",
+        429=>"请求过快，请稍后再试",
+        _=>"请求失败；写操作请先刷新挂单，勿直接重复提交",
+    }};
+    let detail=if codes.is_empty(){String::new()}else{format!(" [{}]",codes.join("; "))};
+    format!("市场 HTTP {status}：{message}{detail}")
+}
+fn response(r: reqwest::blocking::Response) -> Result<Value, String> {
+    let status=r.status();if status==reqwest::StatusCode::NO_CONTENT{return Ok(Value::Null);}
+    let html=r.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|s|s.contains("text/html"));
+    let body=r.json::<Value>();
+    if !status.is_success(){return Err(http_error(status.as_u16(),&body.unwrap_or(Value::Null),html));}
+    let v=body.map_err(|_|"市场响应格式异常，请先刷新挂单")?;
+    if v.get("error").is_some_and(|e|!e.is_null())||v.get("errors").is_some_and(|e|!e.is_null()){
+        let codes=error_codes(&v);return Err(format!("市场业务拒绝：请检查账户权限和订单字段{}",if codes.is_empty(){String::new()}else{format!(" [{}]",codes.join("; "))}));
     }
     Ok(v)
 }
-fn connect_inner(g: &mut Gateway, token: String, platform: String) -> Result<Value, String> {
-    platform_check(&platform)?;
-    let token = token_check(&token)?;
+fn handle_market_response(g:&mut Gateway,auth:bool,write:bool,fingerprint:&str,r:reqwest::blocking::Response)->Result<Value,String>{
+    let status=r.status().as_u16();
+    if status==401&&auth{expire_session(g);}
+    let result=response(r);
+    if write&&(definite_rejection(status)||result.as_ref().err().is_some_and(|e|e.starts_with("市场业务拒绝："))){g.writes.remove(fingerprint);}
+    result
+}
+fn expire_session(g:&mut Gateway){
+    invalidate_presence();g.session=None;g.cache.clear();g.writes.clear();g.remembered=false;g.restore_allowed=false;g.restore_attempt=Some(Instant::now());
+    g.session_error=Some("WM 登录已过期，请重新登录".into());
+    if let Some(path)=&g.credential_path{if let Err(error)=crate::market_credentials::clear(path){g.session_error=Some(error);}}
+}
+fn fetch_profile(g:&mut Gateway,token:&str,platform:&str)->Result<Value,String>{
     pace(g, false);
+    let mut trace=crate::diagnostics::RequestTrace::begin("session_validate",platform,true,None,&Value::Null);
     let r = g
         .client
         .get("https://api.warframe.market/v2/me")
-        .bearer_auth(&token)
-        .header("Platform", &platform)
+        .bearer_auth(token)
+        .header("Platform", platform)
         .header("auth_type", "header")
         .send()
-        .map_err(|_| "账户校验连接失败")?;
-    let v = response(r)?;
+        .map_err(|e|{trace.network(&e);format!("账户校验连接失败 [诊断编号 {}]",trace.id())})?;
+    let status=r.status().as_u16();let html=r.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|s|s.contains("text/html"));
+    let result=response(r);trace.response(status,html,&result);
+    let v=result.map_err(|e|format!("{e} [诊断编号 {}]",trace.id()))?;
     let profile = v.get("data").cloned().ok_or("账户响应格式变化")?;
     if profile["slug"].as_str().is_none() {
         return Err("账户缺少市场名称".into());
     }
+    Ok(profile)
+}
+fn connect_inner(g: &mut Gateway, token: String, platform: String) -> Result<Value, String> {
+    platform_check(&platform)?;
+    let token = token_check(&token)?;
+    let profile=fetch_profile(g,&token,&platform)?;
     invalidate_presence();
     g.session = Some(Session {
         token,
@@ -424,39 +481,109 @@ fn connect_inner(g: &mut Gateway, token: String, platform: String) -> Result<Val
     g.cache.clear();
     Ok(session_view(g.session.as_ref()))
 }
-#[tauri::command]
-pub async fn market_session() -> Result<Value, String> {
+pub(crate) fn diagnostic_state()->Value {
+    match gate().lock(){Ok(g)=>json!({"connected":g.session.is_some(),"verified":g.session.as_ref().and_then(|s|verification(&s.profile)),"platform":g.session.as_ref().map(|s|s.platform.as_str()),"remembered":g.remembered,"hasSessionError":g.session_error.is_some()}),Err(_)=>json!({"unavailable":true})}
+}
+fn session_status(g: &Gateway) -> Value {
+    let mut view=session_view(g.session.as_ref());
+    view["remembered"]=json!(g.remembered);view["sessionError"]=json!(g.session_error);
+    view
+}
+fn remember_session(g:&mut Gateway,path:PathBuf,remember:bool) {
+    g.credential_path=Some(path.clone());g.restore_attempt=Some(Instant::now());
+    let result=if remember {
+        let session=g.session.as_ref().expect("validated login");
+        crate::market_credentials::save(&path,&crate::market_credentials::SavedSession{token:session.token.clone(),platform:session.platform.clone()})
+    } else {crate::market_credentials::clear(&path)};
+    g.remembered=remember&&result.is_ok();g.restore_allowed=g.remembered;
+    g.session_error=match result {Ok(())=>None,Err(error)=>Some(match crate::market_credentials::clear(&path){Ok(())=>error,Err(clear_error)=>format!("{error}；{clear_error}")})};
+}
+fn restore_session_with(g:&mut Gateway,path:Option<PathBuf>,mut connect:impl FnMut(&mut Gateway,String,String)->Result<Value,String>) {
+    if let Some(path)=path {g.credential_path=Some(path);}
+    if !g.restore_allowed||g.session.is_some()||g.restore_attempt.is_some_and(|at|at.elapsed()<Duration::from_secs(30)){return;}
+    let Some(path)=g.credential_path.clone() else{return;};
+    g.restore_attempt=Some(Instant::now());
+    match crate::market_credentials::load(&path) {
+        Ok(Some(saved))=>{
+            g.remembered=true;
+            match connect(g,saved.token,saved.platform) {
+                Ok(_)=>g.session_error=None,
+                Err(error) if error.starts_with("市场 HTTP 401：")=>{
+                    g.remembered=false;g.restore_allowed=false;
+                    g.session_error=Some(match crate::market_credentials::clear(&path){Ok(())=>"保存的 WM 登录已过期，请重新登录".into(),Err(e)=>e});
+                }
+                Err(error)=>g.session_error=Some(format!("暂时无法恢复 WM 登录：{error}")),
+            }
+        }
+        Ok(None)=>{g.remembered=false;g.session_error=None;}
+        Err(error)=>{g.remembered=false;g.session_error=Some(error);}
+    }
+}
+fn restore_session(g:&mut Gateway,path:Option<PathBuf>){restore_session_with(g,path,connect_inner);}
+async fn read_session(path:Option<PathBuf>)->Result<Value,String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let g = gate().lock().map_err(|_| "网络队列锁错误")?;
-        Ok(session_view(g.session.as_ref()))
-    }).await.map_err(|_| "账户任务失败".to_string())?
+        let mut g=gate().lock().map_err(|_|"网络队列锁错误")?;
+        restore_session(&mut g,path);Ok(session_status(&g))
+    }).await.map_err(|_|"账户任务失败".to_string())?
 }
 #[tauri::command]
-pub async fn market_logout() -> Result<Value, String> {
+pub async fn market_session(app:tauri::AppHandle) -> Result<Value, String> {
+    read_session(Some(crate::market_credentials::path(&app.path().app_data_dir().map_err(|_|"登录存储位置不可用")?))).await
+}
+fn logout_inner(g:&mut Gateway,path:Option<PathBuf>)->Result<Value,String>{
+    if let Some(path)=path{g.credential_path=Some(path);}
+    invalidate_presence();g.session=None;g.cache.clear();g.writes.clear();
+    g.remembered=false;g.restore_allowed=false;g.restore_attempt=Some(Instant::now());g.session_error=None;
+    if let Some(path)=&g.credential_path{if let Err(error)=crate::market_credentials::clear(path){g.session_error=Some(error.clone());return Err(error);}}
+    Ok(session_status(g))
+}
+async fn logout(path:Option<PathBuf>)->Result<Value,String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let mut g = gate().lock().map_err(|_| "网络队列锁错误")?;
-        invalidate_presence();
-        g.session = None;
-        g.cache.clear();
-        g.writes.clear();
-        Ok(session_view(None))
-    }).await.map_err(|_| "账户任务失败".to_string())?
+        let mut g=gate().lock().map_err(|_|"网络队列锁错误")?;
+        logout_inner(&mut g,path)
+    }).await.map_err(|_|"账户任务失败".to_string())?
 }
 #[tauri::command]
-pub async fn market_connect(token: String, platform: String) -> Result<Value, String> {
+pub async fn market_logout(app:tauri::AppHandle) -> Result<Value, String> {
+    logout(Some(crate::market_credentials::path(&app.path().app_data_dir().map_err(|_|"登录存储位置不可用")?))).await
+}
+#[tauri::command]
+pub async fn market_refresh_session(app:tauri::AppHandle)->Result<Value,String>{
+    let path=crate::market_credentials::path(&app.path().app_data_dir().map_err(|_|"登录存储位置不可用")?);
+    tauri::async_runtime::spawn_blocking(move||{
+        let mut g=gate().lock().map_err(|_|"网络队列锁错误")?;
+        if let Some(session)=&g.session {
+            let token=session.token.clone();let platform=session.platform.clone();let expected=session_account_id(&session.profile).map(str::to_string);
+            let result=fetch_profile(&mut g,&token,&platform);
+            match result {
+                Ok(profile)=>{
+                    if session_account_id(&profile).map(str::to_string)!=expected{return Err("WM 账号已变化，请重新登录".into());}
+                    g.session.as_mut().unwrap().profile=profile;g.session_error=None;
+                }
+                Err(error)=>{if error.starts_with("市场 HTTP 401："){expire_session(&mut g);}else{g.session_error=Some(error.clone());}return Err(error);}
+            }
+        }else{g.restore_attempt=None;restore_session(&mut g,Some(path));}
+        Ok(session_status(&g))
+    }).await.map_err(|_|"账户任务失败".to_string())?
+}
+#[tauri::command]
+pub async fn market_connect(token: String, platform: String, remember:Option<bool>,app:tauri::AppHandle) -> Result<Value, String> {
+    let path=crate::market_credentials::path(&app.path().app_data_dir().map_err(|_|"登录存储位置不可用")?);
     tauri::async_runtime::spawn_blocking(move || {
         let mut g = gate().lock().map_err(|_| "网络队列锁错误")?;
-        connect_inner(&mut g, token, platform)
-    })
-    .await
-    .map_err(|_| "账户任务失败")?
+        connect_inner(&mut g, token, platform)?;
+        remember_session(&mut g,path,remember.unwrap_or(true));Ok(session_status(&g))
+    }).await.map_err(|_| "账户任务失败")?
 }
 #[tauri::command]
 pub async fn market_login(
     email: String,
     password: String,
     platform: String,
+    remember:Option<bool>,
+    app:tauri::AppHandle,
 ) -> Result<Value, String> {
+    let path=crate::market_credentials::path(&app.path().app_data_dir().map_err(|_|"登录存储位置不可用")?);
     tauri::async_runtime::spawn_blocking(move || {
         platform_check(&platform)?;
         if !email.contains('@') || email.len() > 254 || password.is_empty() || password.len() > 1024
@@ -465,6 +592,7 @@ pub async fn market_login(
         }
         let mut g = gate().lock().map_err(|_| "网络队列锁错误")?;
         pace(&mut g, false);
+        let mut trace=crate::diagnostics::RequestTrace::begin("signin",&platform,false,None,&Value::Null);
         let r = g
             .client
             .post("https://api.warframe.market/v1/auth/signin")
@@ -473,28 +601,37 @@ pub async fn market_login(
             .header("Platform", &platform)
             .json(&json!({"email":email,"password":password,"auth_type":"header"}))
             .send()
-            .map_err(|_| "登录连接失败；未自动重试")?;
+            .map_err(|error| {
+                trace.network(&error);
+                if error.is_timeout() { "登录请求超时，请稍后重试" }
+                else if error.is_connect() { "无法连接 Warframe Market，请检查网络或代理设置" }
+                else { "登录请求发送失败，请检查网络连接" }
+            })?;
         let token = r
             .headers()
             .get("authorization")
             .and_then(|v| v.to_str().ok())
             .map(str::to_owned);
         let status = r.status().as_u16();
-        if !(200..300).contains(&status) {
-            return validate_login_response(status, None).map(|_| Value::Null);
-        }
         let body = r.json::<Value>().ok();
-        validate_login_response(status, body.as_ref())?;
+        let validation=validate_login_response(status,body.as_ref());
+        trace.response(status,false,&validation.as_ref().map(|_|Value::Null).map_err(|_|"authentication_rejected".to_string()));
+        validation.map_err(|message| {
+            // Some upstream validation messages echo input. Never echo credentials.
+            format!("{} [诊断编号 {}]",message.replace(&password,"[已隐藏]").replace(&email,"[已隐藏]"),trace.id())
+        })?;
         connect_inner(
             &mut g,
             token.ok_or("登录未返回会话；请到 Warframe Market 官网检查账户状态后重试登录")?,
             platform,
-        )
+        )?;
+        remember_session(&mut g,path,remember.unwrap_or(true));Ok(session_status(&g))
     })
     .await
     .map_err(|_| "登录任务失败")?
 }
 fn validate_login_response(status: u16, body: Option<&Value>) -> Result<(), String> {
+    let detail = body.map(login_error_detail).unwrap_or_default();
     if !(200..300).contains(&status) {
         let reason = match status {
             400 | 422 => "登录信息未被接受，请检查邮箱和密码",
@@ -504,13 +641,47 @@ fn validate_login_response(status: u16, body: Option<&Value>) -> Result<(), Stri
             500..=599 => "市场登录服务暂时不可用，请稍后重试",
             _ => "市场未接受登录请求，请稍后重试",
         };
-        return Err(format!("登录 HTTP {status}：{reason}"));
+        return Err(format!("登录 HTTP {status}：{}", if detail.is_empty() { reason } else { &detail }));
     }
     let body = body.filter(|value| value.is_object()).ok_or("登录响应格式异常，请稍后重试")?;
-    if ["error", "errors"].iter().any(|key| body.get(key).is_some_and(|value| !value.is_null())) {
-        return Err("登录未成功，请检查登录信息或到 Warframe Market 官网确认账户状态".into());
+    if ["error", "errors"].iter().any(|key| body.get(key).is_some_and(login_has_error)) {
+        return Err(format!("登录失败：{}", if detail.is_empty() { "请检查登录信息或到 Warframe Market 官网确认账户状态" } else { &detail }));
     }
     Ok(())
+}
+fn login_has_error(value: &Value) -> bool {
+    match value {
+        Value::Null | Value::Bool(false) => false,
+        Value::String(text) => !text.trim().is_empty(),
+        Value::Array(items) => items.iter().any(login_has_error),
+        Value::Object(fields) => fields.values().any(login_has_error),
+        _ => true,
+    }
+}
+fn login_error_detail(body: &Value) -> String {
+    fn collect(value: &Value, label: &str, depth: usize, output: &mut Vec<String>) {
+        if depth > 4 || output.len() >= 4 { return; }
+        match value {
+            Value::String(text) if !text.trim().is_empty() => {
+                let text: String = text.chars().filter(|ch| !ch.is_control()).take(240).collect();
+                let message = if label.is_empty() { text } else { format!("{label}: {text}") };
+                if !output.contains(&message) { output.push(message); }
+            }
+            Value::Array(items) => for item in items.iter().take(4) { collect(item, label, depth + 1, output); },
+            Value::Object(fields) => for (key, value) in fields {
+                let normalized = key.to_ascii_lowercase();
+                if ["password", "token", "authorization", "secret", "cookie", "jwt"].iter().any(|name| normalized.contains(name)) { continue; }
+                let label = if ["error", "errors", "message", "detail", "code"].contains(&key.as_str()) { label } else { key.as_str() };
+                collect(value, label, depth + 1, output);
+            },
+            _ => {},
+        }
+    }
+    let mut messages = Vec::new();
+    for key in ["error", "errors", "message", "detail"] {
+        if let Some(value) = body.get(key) { collect(value, "", 0, &mut messages); }
+    }
+    messages.join("；").chars().take(320).collect()
 }
 fn validate_auction(action: &str, b: &Value) -> Result<(), String> {
     if action == "auction_close" {
@@ -742,9 +913,10 @@ fn request_scoped(
             g.writes
                 .retain(|_, at| at.elapsed() < Duration::from_secs(30));
         }
-        g.writes.insert(fingerprint, Instant::now());
+        g.writes.insert(fingerprint.clone(), Instant::now());
     }
     pace(&mut g, action == "rivens");
+    let mut trace=crate::diagnostics::RequestTrace::begin(&action,&platform,g.session.is_some(),g.session.as_ref().and_then(|s|verification(&s.profile)),&body);
     let mut req = g
         .client
         .request(
@@ -776,13 +948,11 @@ fn request_scoped(
     }
     let r = req
         .send()
-        .map_err(|_| "市场连接失败或超时；写操作未自动重试，请先刷新挂单")?;
-    let unauthorized = r.status().as_u16() == 401;
-    if unauthorized && auth {
-        invalidate_presence();
-    g.session = None;
-    }
-    let result = response(r)?;
+        .map_err(|e|{trace.network(&e);format!("市场连接失败或超时；写操作未自动重试，请先刷新挂单 [诊断编号 {}]",trace.id())})?;
+    let status=r.status().as_u16();let html=r.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|s|s.contains("text/html"));
+    let result=handle_market_response(&mut g,auth,write,&fingerprint,r);
+    trace.response(status,html,&result);
+    let result=result.map_err(|e|format!("{e} [诊断编号 {}]",trace.id()))?;
     let data = if path.starts_with("/v1/") {
         match action.as_str() {
             "rivens" => result.pointer("/payload/auctions").cloned(),
@@ -955,8 +1125,83 @@ mod async_session_tests {
     fn async_session_first_load_is_safe() {
         // Run this filtered test in a fresh process to exercise OnceLock initialization.
         tauri::async_runtime::block_on(async {
-            assert_eq!(super::market_session().await.unwrap()["connected"], false);
-            assert_eq!(super::market_logout().await.unwrap()["connected"], false);
+            assert_eq!(super::read_session(None).await.unwrap()["connected"], false);
+            assert_eq!(super::logout(None).await.unwrap()["connected"], false);
         });
+    }
+}
+
+#[cfg(test)] mod rejection_tests {
+    use super::*;
+    #[test] fn forbidden_errors_keep_machine_reason_without_inventing_verification_failure(){
+        let error=http_error(403,&json!({"error":{"request":["app.errors.forbidden"]}}),false);
+        assert!(error.contains("app.errors.forbidden"));assert!(!error.contains("账号未验证"));
+        assert!(http_error(403,&json!({"error":{"request":["app.errors.notVerified"]}}),false).contains("尚未完成"));
+        assert!(http_error(403,&Value::Null,true).contains("网页访问检查"));
+        let secret="synthetic-private-jwt";let error=http_error(403,&json!({"error":{"request":[secret],"inputs":{"password":secret,"platinum":"app.field.tooSmall"}},"message":secret}),false);
+        assert!(!error.contains(secret));assert!(error.contains("platinum: app.field.tooSmall"));
+    }
+    #[test] fn only_definite_rejections_release_write_deduplication(){
+        for status in [400,401,403,404,405,409,410,413,415,422,429]{assert!(definite_rejection(status));}
+        for status in [200,408,500,502,503,504]{assert!(!definite_rejection(status));}
+    }
+}
+
+#[cfg(all(test,windows))] mod remembered_session_tests {
+    use super::*;
+    fn fixture()->(Gateway,PathBuf){
+        let directory=std::env::temp_dir().join(format!("wm-session-state-{}-{}",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap()));
+        let path=crate::market_credentials::path(&directory);let mut g=new_gateway();
+        g.session=Some(Session{token:"synthetic-native-only-token".into(),platform:"pc".into(),profile:json!({"id":"fixture-user","slug":"fixture-user","verification":true})});
+        (g,path)
+    }
+    fn connected(g:&mut Gateway,token:String,platform:String)->Result<Value,String>{
+        assert_eq!(token,"synthetic-native-only-token");assert_eq!(platform,"pc");
+        g.session=Some(Session{token,platform,profile:json!({"id":"fixture-user","slug":"fixture-user","verification":true})});Ok(session_view(g.session.as_ref()))
+    }
+    #[test] fn remember_opt_out_and_logout_clear_only_the_encrypted_session(){
+        let (mut g,path)=fixture();remember_session(&mut g,path.clone(),true);assert!(g.remembered);assert!(path.exists());
+        let view=session_status(&g).to_string();assert!(!view.contains("synthetic-native-only-token"));assert!(!view.contains("password"));
+        remember_session(&mut g,path.clone(),false);assert!(!path.exists());assert!(!g.remembered);assert!(g.session.is_some());
+        remember_session(&mut g,path.clone(),true);let view=logout_inner(&mut g,None).unwrap();assert_eq!(view["connected"],false);assert!(!path.exists());
+        std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    }
+    #[test] fn saved_login_is_validated_once_and_network_failure_preserves_it_for_retry(){
+        let (mut g,path)=fixture();remember_session(&mut g,path.clone(),true);
+        let mut restored=new_gateway();restore_session_with(&mut restored,Some(path.clone()),|_,_,_|Err("账户校验连接失败".into()));
+        assert!(restored.session.is_none());assert!(restored.remembered);assert!(path.exists());
+        restore_session_with(&mut restored,None,|_,_,_|panic!("transient failure must be throttled"));
+        restored.restore_attempt=None;restore_session_with(&mut restored,None,connected);assert!(restored.session.is_some());assert!(restored.session_error.is_none());
+        restore_session_with(&mut restored,None,|_,_,_|panic!("connected session must not reconnect"));
+        logout_inner(&mut restored,None).unwrap();std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    }
+    #[test] fn logout_never_restores_a_saved_login_when_file_removal_fails(){
+        let (mut g,path)=fixture();std::fs::create_dir_all(&path).unwrap();g.credential_path=Some(path.clone());
+        assert!(logout_inner(&mut g,None).is_err());assert!(g.session.is_none());assert!(!g.restore_allowed);assert!(g.session_error.is_some());
+        g.restore_attempt=None;restore_session_with(&mut g,Some(path.clone()),|_,_,_|panic!("logout must not auto-authenticate"));
+        std::fs::remove_dir(&path).unwrap();std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    }
+    #[test] fn expired_saved_login_is_removed_without_repeated_authentication(){
+        let (mut g,path)=fixture();remember_session(&mut g,path.clone(),true);
+        let mut restored=new_gateway();restore_session_with(&mut restored,Some(path.clone()),|_,_,_|Err("市场 HTTP 401：expired".into()));
+        assert!(restored.session.is_none());assert!(!restored.remembered);assert!(!path.exists());assert!(restored.session_error.as_deref().unwrap().contains("过期"));
+        std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    }
+}
+
+#[cfg(test)] mod http_rejection_tests {
+    use super::*;
+    fn http_response(status:u16,body:&str)->reqwest::blocking::Response{
+        use std::io::{Read,Write};
+        let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();
+        let body=body.to_string();let server=std::thread::spawn(move||{let(mut stream,_)=listener.accept().unwrap();let mut input=[0;4096];stream.read(&mut input).unwrap();write!(stream,"HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();});
+        let response=reqwest::blocking::Client::builder().no_proxy().build().unwrap().get(format!("http://{address}")).send().unwrap();server.join().unwrap();response
+    }
+    #[test] fn real_http_refusal_releases_dedup_but_server_failure_keeps_the_guard(){
+        let mut g=new_gateway();let key="synthetic-order";g.writes.insert(key.into(),Instant::now());
+        let refused=http_response(403,r#"{"data":null,"error":{"request":["app.errors.forbidden"]}}"#);
+        assert!(handle_market_response(&mut g,true,true,key,refused).unwrap_err().contains("app.errors.forbidden"));assert!(!g.writes.contains_key(key));
+        g.writes.insert(key.into(),Instant::now());let unknown=http_response(503,"{}");
+        assert!(handle_market_response(&mut g,true,true,key,unknown).is_err());assert!(g.writes.contains_key(key));
     }
 }

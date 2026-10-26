@@ -1,3 +1,4 @@
+import {reportClientFault} from './clientDiagnostics';
 import {useTranslation} from 'react-i18next';
 import {useEffect,useState,type ReactNode} from 'react';
 import {invoke} from '@tauri-apps/api/core';
@@ -10,7 +11,7 @@ import './startupUpdate.css';
 let startup:Promise<void>|undefined;
 let latest:UpdateState={phase:'checking'};
 const listeners=new Set<(s:UpdateState)=>void>();
-const report=(s:UpdateState)=>{latest=s;listeners.forEach(f=>f(s));};
+const report=(s:UpdateState)=>{if(s.phase==='error')reportClientFault('updater',s.error);latest=s;listeners.forEach(f=>f(s));};
 function start(){return startup??= (async()=>{
  try{
   const config=await invoke<{configured:boolean}>('update_configuration');

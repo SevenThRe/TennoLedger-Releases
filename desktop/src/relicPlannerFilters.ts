@@ -3,6 +3,7 @@ import {relicOwned} from './relicAliases.ts';
 import type {Inventory} from './relicModel.ts';
 export function relicFamilyCount(variants:readonly Relic[],inventory:Pick<Inventory,'counts'|'complete'>|null){let total=0;for(const variant of variants){const n=relicOwned(inventory,variant);if(n===null)return null;total+=n;}return Number.isSafeInteger(total)?total:null;}
 export function matchesRelicTenCopies(amount:number|null,filter:string){return !filter||amount!==null&&(filter==='yes'?amount>=10:amount<10);}
+export function refinementTraceCost(level:string){return ({Intact:0,Exceptional:25,Flawless:50,Radiant:100} as Record<string,number>)[level]??null;}
 /** Owned analysis enumerates only refinements actually owned, like the shipped DTO. */
 export function plannerRefinementRows(variants:readonly Relic[],inventory:Pick<Inventory,'counts'|'complete'>|null,stock:string){return stock==='owned'?variants.filter(r=>(relicOwned(inventory,r)??0)>0):[...variants];}
 export type PlannerOverlayFilters={era:string;refinement:string;vault:string;favorites:'all'|'yes'|'no'|'order';sort:string;descending:boolean;players:number;search:string;rewardFilter:string;parentFilter:string;tenCopies:string};

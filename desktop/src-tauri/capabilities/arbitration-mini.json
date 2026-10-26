@@ -1,0 +1,12 @@
+{
+  "identifier": "arbitration-mini",
+  "description": "Compact arbitration monitor window controls",
+  "windows": ["arbitration-live"],
+  "permissions": [
+    "core:window:allow-set-always-on-top",
+    "core:window:allow-set-size",
+    "core:window:allow-is-always-on-top",
+    "core:window:allow-set-position",
+    "core:window:allow-available-monitors"
+  ]
+}

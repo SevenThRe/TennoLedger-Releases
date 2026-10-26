@@ -1,6 +1,6 @@
 {
   "name": "myframe-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "tauri": "tauri",
     "desktop": "tauri dev",
-    "package": "tauri build",
+    "package": "tauri build --features custom-protocol",
     "test": "node --experimental-strip-types --test tests/*.test.ts"
   },
   "dependencies": {

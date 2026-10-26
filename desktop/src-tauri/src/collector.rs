@@ -176,7 +176,7 @@ impl Collector {
                 let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());
                 r.helper_active=false;
                 if !r.request_current(generation){continue;}
-                if accepted {r.status.scan_code="helper-current".into();} else if r.status.scan_code=="helper-fetching" {r.status.scan_code="helper-invalid-inventory".into();}
+                if accepted {r.status.scan_code="helper-current".into();} else if r.status.scan_code=="helper-fetching" {r.status.scan_code="helper-invalid-inventory:account-not-accepted".into();}
                 r.status.account_code=if accepted{"synced"}else if r.status.inventory_source.as_deref()==Some("alecaframe-cache"){"cached"}else if r.status.inventory_source.is_some(){"saved"}else{&r.status.scan_code}.into();
                 r.status.scan=serde_json::json!({"provider":"warframe-api-helper","pid":pid,"refreshSeconds":120});
                 due=std::time::Instant::now()+std::time::Duration::from_secs(if accepted{120}else{60});
@@ -195,7 +195,24 @@ impl Collector {
         if !crate::account_scope::source_may_select(&active,scope.as_deref(),source){return false;}
         let switched=active!=target;
         let Ok(old)=db.load_collection_for_scope(scope.as_deref()) else{return false;};
-        let Ok(mut snapshot)=crate::inventory_data::from_value(value,catalog,old.as_ref(),source,fallback) else{return false;};
+        let mut snapshot=match crate::inventory_data::from_value(value,catalog,old.as_ref(),source,fallback) {
+            Ok(snapshot)=>snapshot,
+            Err(error)=>{
+                // Only fixed validation categories leave the native layer; never export raw data.
+                let reason=match error.as_str(){
+                    "缺少完整账户库存结构"=>"normalize-core-structure",
+                    "库存时间无效"=>"normalize-timestamp",
+                    "库存缺少物品类型"|"装备缺少物品类型"|"模组缺少物品类型"|"精通记录缺少类型"=>"normalize-item-type",
+                    "库存缺少数量"|"模组缺少数量"=>"normalize-quantity",
+                    "库存数量超限"|"模组数量超限"=>"normalize-quantity-limit",
+                    "库存列表类型无效"|"装备列表类型无效"=>"normalize-list-type",
+                    "精通经验无效"=>"normalize-xp",
+                    _=>"normalize-validation",
+                };
+                runtime.status.scan_code=format!("helper-invalid-inventory:{reason}");
+                return false;
+            }
+        };
         retain_known_player_name(old.as_ref(),&mut snapshot);
         let recent=!switched&&runtime.last_live_read.is_some_and(|t|t.elapsed()<std::time::Duration::from_secs(60));
         let decision=crate::acquisition::choose(old.as_ref(),&snapshot,recent);

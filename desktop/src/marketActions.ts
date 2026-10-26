@@ -1,4 +1,8 @@
 /** Synchronous latch: React's busy state may not have rendered before the next click. */
+export function marketWriteDefinitelyRejected(error:unknown):boolean{
+ const message=error instanceof Error?error.message:String(error);
+ return /^市场 HTTP (400|401|403|404|405|409|410|413|415|422|429)：/.test(message)||message.startsWith('市场业务拒绝：');
+}
 export class MarketActionGate {
  private pending=false;
  async run(action:()=>Promise<void>){

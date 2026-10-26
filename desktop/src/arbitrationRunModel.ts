@@ -1,7 +1,9 @@
 export type ArbitrationView='schedule'|'preferences'|'history';
 export type RunMetadata={notes:string;role:string;favorite:boolean;manualVitus:number|null};
 export type RunInterval={index:number;kind:string;start:number;end:number|null;complete:boolean;drones:number};
-export type ArbitrationRun={id:string;nodeId:string;node:string;planet:string;missionType:string;source:string;status:string;startUtc:string|null;endUtc:string|null;startLogSeconds:number;lastLogSeconds:number;gameplayStart:number|null;gameplayEnd:number|null;isHost:boolean|null;startObserved:boolean;hasGap:boolean;droneTelemetry:boolean;wavesCompleted:number;rewardCycles:number|null;enemySpawns:number|null;droneSpawns:number;intervals:RunInterval[];timeline:{seconds:number;kind:string;label:string}[];samples:{seconds:number;enemies:number;drones:number;live:number}[];droneTimes:number[];qualityNotes:string[];metadata:RunMetadata};
+export type SpawnPosition={seconds:number;x:number;y:number;z:number;kind:'enemy'|'drone'|'objective';name:string};
+export type AgentType={name:string;kind:string;count:number};
+export type ArbitrationRun={id:string;nodeId:string;node:string;planet:string;missionType:string;source:string;status:string;startUtc:string|null;endUtc:string|null;startLogSeconds:number;lastLogSeconds:number;gameplayStart:number|null;gameplayEnd:number|null;isHost:boolean|null;startObserved:boolean;hasGap:boolean;droneTelemetry:boolean;wavesCompleted:number;rewardCycles:number|null;enemySpawns:number|null;droneSpawns:number;intervals:RunInterval[];timeline:{seconds:number;kind:string;label:string}[];samples:{seconds:number;enemies:number;drones:number;live:number}[];droneTimes:number[];qualityNotes:string[];retainedLog?:string;logTruncated?:boolean;positions?:SpawnPosition[];agentTypes?:AgentType[];metadata:RunMetadata};
 export type RunFilter={search:string;status:string;favoritesOnly:boolean;offset:number};
 export type RunPage={runs:ArbitrationRun[];total:number};
 export type CaptureStatus={code:string;error:string|null;current:ArbitrationRun|null;autoOpen:boolean};

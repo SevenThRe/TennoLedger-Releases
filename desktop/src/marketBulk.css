@@ -19,3 +19,5 @@
 .tradeAutoCountdown{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#252f46;border:1px solid #8e74bd;border-radius:6px;padding:9px;font-size:12px}.tradeAutoCountdown strong{flex:1;min-width:160px}.tradeAutoCountdown button{font-size:12px}
 
 .marketHeaderActions .marketBulkToolbar{display:block;padding:0;margin:0;border:0;background:none}.marketHeaderActions .marketBulkToolbar>.itemDetailsButton{height:32px}.marketBulkToolbar .marketBulkOption svg{width:18px;height:18px;flex:none}.marketBulkToolbar .marketBulkOption svg:last-child{width:13px;height:13px;margin-left:auto}.marketBulkToolbar .marketBulkHeading .marketIconButton{width:28px;height:28px}.marketBulkToolbar>.marketBulkMenu{right:0}.marketBulkToolbar>.marketBulkMenu .marketBulkConfirmation p{margin:8px 0 12px;line-height:19px}.marketBulkToolbar .marketBulkDialog{color:var(--color-text,#fff);background:var(--color-bg-2,#171e30);border-color:var(--ui-line-strong,#ffffff24)}
+
+.marketPresence .marketPresenceError{flex-basis:100%;max-width:520px;line-height:1.5;color:#e5ba82;overflow-wrap:anywhere}

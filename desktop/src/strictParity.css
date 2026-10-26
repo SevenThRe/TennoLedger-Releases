@@ -23,6 +23,17 @@ body,button,input,select,textarea{font-family:inherit}
 .railTabTimers{mask-image:url('/reference/ui/world.png');mask-size:87%}
 .railTabFissures{mask-image:url('/reference/ui/fissure.webp')}
 .railTabMarket{mask-image:url('/reference/ui/market.png')}
+/* Keep label/icon geometry shared across every sidebar host. Match Aleca's short color fades. */
+.collectionTradeSidebar .collectionTradeTabs>button{transition:background-color 140ms ease,border-color 140ms ease,color 140ms ease}
+.collectionTradeSidebar .collectionTradeTabs>button>.railTabContent{display:inline-flex;align-items:flex-end;justify-content:center;gap:7px;min-width:0;pointer-events:none}
+.railTabContent>.railTabIcon{display:block;width:18px;height:18px;flex:0 0 18px;margin:0;mask-position:center bottom}
+.railTabContent>.railTabLabel{display:block;line-height:18px;white-space:nowrap}
+.collectionTradeSidebar .collectionTradeTabs>button:not([aria-pressed=true]):hover{background:var(--color-card-hover);border-color:var(--ui-line);color:var(--color-text)}
+.collectionTradeSidebar .collectionTradeTabs>button:active{background:var(--color-card-active);color:var(--color-text)}
+.collectionTradeSidebar .collectionTradeTabs>button:focus-visible{outline:2px solid var(--color-tab-lighter);outline-offset:-2px}
+.collectionTradeSidebar>div:not(.collectionTradeTabs),.collectionTradeSidebar>.tradeQuotePanel{animation:railPanelReveal 140ms ease-out}
+@keyframes railPanelReveal{from{opacity:0}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.collectionTradeSidebar .collectionTradeTabs>button{transition:none}.collectionTradeSidebar>div:not(.collectionTradeTabs),.collectionTradeSidebar>.tradeQuotePanel{animation:none}}
 .collectionTradeSidebar .worldRailContent{background:var(--color-bg-2);padding:8px;color:var(--color-text)}
 .worldRailContent .railVendors{gap:8px;margin-bottom:8px}
 .railVendors .baroTrigger{min-height:76px;padding:12px;gap:10px;border-radius:10px;border-color:var(--ui-line);background:var(--color-bg-1);color:var(--color-text)}

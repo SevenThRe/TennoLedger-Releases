@@ -8,9 +8,42 @@
 .inventoryFilterV3{position:relative}.inventoryFilterV3>button{display:flex;align-items:center;gap:5px;height:38px;padding:0 8px;border:1px solid var(--ui-line);border-radius:6px;background:var(--color-bg-2)}.inventoryFilterV3>button.active{border-color:var(--color-tab-lighter);background:var(--color-card-active)}.inventoryFilterV3 img{width:18px;height:18px}.inventoryFilterV3 b{padding:1px 5px;border-radius:4px;background:#ffffff15;font-size:11px;font-weight:500}.inventoryFilterPanelV3{position:absolute;right:0;top:calc(100% + 5px);z-index:40;width:280px;max-height:min(65vh,620px);overflow:auto;padding:10px;border:1px solid var(--ui-line-strong);border-radius:8px;background:var(--color-bg-2);box-shadow:0 12px 40px #0006}.inventoryFilterPanelV3 fieldset{margin:0;padding:7px 0 10px;border:0;border-bottom:1px solid var(--ui-line)}.inventoryFilterPanelV3 legend{font-size:12px;color:var(--color-navigation-hover)}.inventoryFilterPanelV3 fieldset>div{display:flex;gap:4px;flex-wrap:wrap}.inventoryFilterPanelV3 button{padding:5px 8px;border:1px solid var(--ui-line);border-radius:5px;background:var(--color-bg-1)}.inventoryFilterPanelV3 button[aria-pressed=true]{background:var(--color-card-active);border-color:var(--color-tab-lighter)}
 .inventoryOrderingV3{display:flex;height:38px;border:1px solid var(--ui-line);border-radius:6px;background:var(--color-bg-2);overflow:hidden;min-width:115px}.inventoryOrderingV3>button{border:0;background:transparent;padding:0 7px;font-size:16px}.inventoryOrderingV3 select{width:125px;max-width:145px;min-width:0;padding:0 5px;border:0;background:transparent;font-size:12px}.inventoryViewSwitchV3{display:flex;gap:2px}.inventoryViewSwitchV3 button{display:grid;place-items:center;width:33px;height:36px;padding:7px;border:1px solid transparent;background:transparent;border-radius:5px}.inventoryViewSwitchV3 button[aria-pressed=true]{background:var(--color-card-active);border-color:var(--ui-line-strong)}.inventoryViewSwitchV3 svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.5}
 .inventoryFilterChipsV3{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:7px 0 10px}.inventoryFilterChipsV3 button{display:flex;align-items:center;gap:8px;padding:3px 8px;min-height:26px;border:1px solid var(--ui-line);border-radius:5px;background:var(--color-card-active);font-size:11px}.inventoryFilterChipsV3 .clear{background:transparent;border-color:transparent;color:var(--color-navigation-hover)}.inventoryControlsV3 .inventorySaleControls{display:flex;align-items:center;gap:10px;padding:12px 0 8px;margin:0;flex-wrap:wrap;background:none;border:0;min-height:55px}.inventoryControlsV3 .inventorySaleChoices{display:flex;gap:3px;padding:3px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-1)}.inventorySaleChoices>button{border-color:transparent;background:transparent;padding:6px 10px;border-radius:5px}.inventorySaleChoices>button[aria-pressed=true]{border-color:var(--color-tab-lighter);background:var(--color-card-active)}.inventoryCraftingReserve{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11px}.inventoryCraftingReserve select{font-size:11px;padding:6px 8px;border:1px solid var(--ui-line);border-radius:5px;background:var(--color-bg-1)}.inventoryControlError{font-size:12px;color:var(--color-error,#edbb7c)}
-@container collection-main (max-width:950px){.inventoryToolbarV3{flex-wrap:wrap;gap:7px}.inventoryToolbarActions{flex:1}.inventoryCategoriesV3 .inventoryCategory,.inventoryMore>button{padding-inline:5px;font-size:11px}.inventorySearchV3{width:115px}.inventoryOrderingV3 select{width:95px}.inventoryTotalsV3{gap:16px}}
-@media(max-width:1200px){.inventoryToolbarV3{flex-wrap:wrap;gap:7px}.inventoryToolbarActions{flex:1}.inventoryOrderingV3 select{width:105px}.inventoryCraftingReserve{margin-left:0}.inventoryHeaderV3{padding-inline:0}}
-
 .collectionWorldMain:has(.inventoryControlsV3) .inventorySetToolbar{display:none}.inventoryFilterPanelV3 fieldset:disabled{opacity:.55}.inventoryFilterPanelV3 fieldset>small{display:block;margin-bottom:5px;font-size:10px;color:var(--color-navigation-hover)}
 
-@container collection-main (max-width:800px){.inventoryToolbarActions{flex-basis:100%;justify-content:flex-start}.inventorySearchV3{flex:1;max-width:none}.inventoryOrderingV3{margin-left:auto}}
+/* Match the reference's single toolbar row whenever the content actually fits. */
+.inventoryControlsV3 .inventoryToolbarV3{flex-wrap:wrap;gap:8px}
+.inventoryControlsV3 .inventoryToolbarActions{flex:1 1 385px;gap:5px}
+.inventoryControlsV3 .inventorySearchV3{flex:1;min-width:95px;max-width:180px}
+.inventoryControlsV3 .inventoryOrderingV3{min-width:150px;overflow:visible;background:var(--color-bg-1)}
+.inventoryControlsV3 .inventoryOrderingV3>.themeSelectTrigger{flex:1;border:0;padding:0 10px 0 3px;font-size:13px}
+.inventoryOrderingV3>button>svg{width:18px;height:18px}
+.inventoryControlsV3 .inventoryViewSwitchV3{border:1px solid var(--ui-line);border-radius:6px;padding:2px;gap:1px;background:var(--color-bg-1)}
+.inventoryControlsV3 .inventoryViewSwitchV3 button{height:32px;width:30px}
+.inventoryControlsV3 .inventoryCategoriesV3 button{font-size:13px}
+.inventoryControlsV3 button{transition:background-color 120ms,border-color 120ms}
+.inventoryControlsV3 button:hover{background-color:var(--color-card-active)}
+.inventoryControlsV3 button:focus-visible{outline:2px solid var(--color-tab-lighter);outline-offset:1px}
+.inventoryControlsV3 .inventorySearchV3:focus-within{border-color:var(--color-tab-lighter)}
+.inventorySets .inventorySetGrid{grid-template-columns:repeat(auto-fill,minmax(min(290px,100%),1fr))}
+.inventorySets .inventorySetCard{padding:10px;background:var(--color-bg-3,#20273b);border-color:var(--ui-line);color:inherit}
+.inventorySetCard .inventorySetIdentity{gap:10px;align-items:center}
+.inventorySetCard .inventorySetIdentity>.inventorySetArtwork{flex:0 0 56px;width:56px;height:56px;box-sizing:border-box;background:var(--color-bg-1);border-radius:6px;padding:4px}
+.inventorySetCard .inventorySetIdentity .inventoryName{font-size:15px;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inventorySetCard .inventorySetIdentity .inventoryCardHeading{margin-bottom:5px}
+.inventorySetIdentity .inventorySetBadges{display:inline-flex;align-items:center;gap:6px;margin-left:7px;color:#a0dbd0}
+.inventorySetIdentity .inventorySetBadges small{display:inline-block;margin:0;padding:2px 6px;border:1px solid var(--ui-line);border-radius:4px;background:var(--color-bg-1);font-size:11px;color:inherit}
+.inventorySetCard .inventorySetParts{gap:5px;margin:9px 0}
+.inventorySetCard .inventorySetParts>button{max-width:none;flex:1 1 0;min-height:78px;background:var(--color-bg-2);border-color:var(--ui-line);font-size:12px}
+.inventorySetCard .inventorySetParts>button.satisfied{background:color-mix(in srgb,var(--color-bg-2) 85%,#75cbbb);border-color:color-mix(in srgb,var(--ui-line) 65%,#75cbbb)}
+.inventorySetCard .inventorySetParts>button:hover{border-color:var(--color-tab-lighter);background:var(--color-card-active)}
+.inventorySetCard .inventorySetParts>button:focus-visible{outline:2px solid var(--color-tab-lighter);outline-offset:1px}
+.inventorySetCard .inventorySetParts span{font-size:11px}.inventorySetCard .inventorySetParts b{color:#a0dbd0;font-size:12px}
+.inventorySetCard footer{border-top:0;padding:0;gap:14px;align-items:flex-end}
+.inventorySetCard footer>span{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.inventorySetCard footer small{font-size:12px;font-weight:400}
+.inventorySetCard footer b{display:flex;align-items:center;gap:5px;font-size:13px}
+.inventorySetCard footer .inventoryTradeButton{background:var(--color-card-active);border:1px solid var(--ui-line-strong);border-radius:6px;padding:7px 12px;color:inherit}
+.inventorySets .compactSets{grid-template-columns:minmax(0,1fr)}
+@container collection-main (max-width:760px){.inventoryControlsV3 .inventoryToolbarActions{flex-basis:100%}.inventoryControlsV3 .inventorySearchV3{max-width:none}.inventoryHeaderV3{padding-inline:0}}
+@container collection-main (max-width:420px){.inventoryControlsV3 .inventoryToolbarActions{flex-wrap:wrap}.inventoryControlsV3 .inventorySearchV3{flex-basis:60%}.inventoryControlsV3 .inventoryOrderingV3{margin-left:auto}.inventoryCategoriesV3{flex-wrap:wrap;max-width:100%;flex-shrink:1}}
+@media(prefers-reduced-motion:reduce){.inventoryControlsV3 button{transition:none}}

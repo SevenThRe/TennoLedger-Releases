@@ -35,7 +35,7 @@ export function inventorySetState(set:InventorySet,snapshot:InventorySetSnapshot
 export type InventorySetRow=ReturnType<typeof inventorySetState>&{set:InventorySet;name:string;price:number|null};
 export function compareInventorySets(a:InventorySetRow,b:InventorySetRow,p:InventoryViewPreferences){
  const names=()=>a.name.localeCompare(b.name,undefined,{numeric:true})||a.set.id.localeCompare(b.set.id);
- if(p.order==='name')return (p.descending?-1:1)*a.name.localeCompare(b.name,undefined,{numeric:true})||a.set.id.localeCompare(b.set.id);
+ if(p.order==='name')return (p.descending?1:-1)*a.name.localeCompare(b.name,undefined,{numeric:true})||a.set.id.localeCompare(b.set.id);
  // The original set sorter uses platinum per ducat; part inventory uses the inverse.
  const score=(r:InventorySetRow)=>p.order==='amount'?r.ready:p.order==='complete'?r.completion:p.order==='ducats'?r.ducats:p.order==='ducanator'?r.price!==null&&r.ducats!==null&&r.ducats>0?r.price/r.ducats:null:r.price;
  const av=score(a),bv=score(b);if(av===null||bv===null)return av===bv?names():av===null?1:-1;

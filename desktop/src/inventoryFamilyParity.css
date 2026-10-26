@@ -1,0 +1,131 @@
+/* Installed 3.0.4 inventory/relic/resource layout contracts. Keep local Chinese fallback fonts. */
+.windowContent .collectionWorldMain:has(>.relicPlanner)>.pageSectionHeading{display:none}
+.windowContent .relicPlanner .relicPageHeading{display:flex;align-items:center;justify-content:space-between;flex:none;height:auto;min-height:44px;margin:0 0 10px;padding:0 10px;border:0;background:transparent}
+.relicPageHeading h1{margin:0;font-size:24px;line-height:30px;font-weight:600}
+.relicPageHeading .relicTraceBalance strong{font-size:22px}
+.relicPlanner .relicToolbar{padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--ui-line);gap:8px;align-items:center;flex-wrap:wrap}
+.relicPlanner .relicEraTabs{gap:3px}
+.relicPlanner .relicEraTabs button{height:38px;padding:0 9px;border:1px solid transparent;border-radius:6px;background:transparent;font-size:13px}
+.relicPlanner .relicEraTabs button.active{border-color:var(--ui-line-strong);background:var(--color-card-active)}
+.relicPlanner .relicEraTabs img{width:20px;height:20px}
+.relicPlanner .relicToolbarActions{display:flex;align-items:center;gap:6px;min-width:0;margin-left:auto;flex-wrap:wrap}
+.relicPlanner .relicSearch{height:38px;width:140px;box-sizing:border-box}
+.relicPlanner .relicSearch input{width:0;min-width:0;flex:1}
+.relicPlanner .relicFilterToggle{display:flex;align-items:center;gap:6px;width:auto;height:38px;padding:0 10px;border:1px solid var(--ui-line);background:var(--color-bg-1);font-size:13px}
+.relicPlanner .relicFilterToggle.active{background:var(--color-card-active);border-color:var(--color-tab-lighter)}
+.relicFilterToggle>b{padding:0 4px;border-radius:3px;background:#ffffff14;font-size:11px}
+.relicPlanner .relicSortDirection{height:38px;width:30px;border:1px solid var(--ui-line);border-radius:6px 0 0 6px;background:var(--color-bg-1)}
+.relicPlanner .relicToolbarActions>select{margin-left:-7px;height:38px;border-left:0;border-radius:0 6px 6px 0;font-size:13px;max-width:190px}
+.relicPlanner .referenceFilterPanel{display:flex;flex-direction:column;gap:0;width:300px;background:var(--color-bg-2);max-height:min(65vh,600px);overflow:auto}
+.referenceFilterPanel fieldset{border:0;border-bottom:1px solid var(--ui-line);margin:0;padding:8px 0 10px}
+.referenceFilterPanel legend{font-size:12px;color:var(--color-navigation-hover)}
+.referenceFilterPanel fieldset>div{display:flex;flex-wrap:wrap;gap:4px}
+.referenceFilterPanel button{padding:5px 9px;background:var(--color-bg-1);border:1px solid var(--ui-line);border-radius:5px;font-size:12px}
+.referenceFilterPanel button[aria-pressed=true]{background:var(--color-card-active);border-color:var(--color-tab-lighter)}
+.relicPlanner .relicOwnershipQuick{display:flex;gap:3px;padding:3px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-1)}
+.relicPlanner .relicOwnershipQuick button{border-color:transparent;font-size:13px}
+.relicPlanner .relicOwnershipQuick button.selected{background:var(--color-card-active);border-color:var(--color-tab-lighter)}
+.relicPlanner .relicSquad select{width:auto;min-width:78px;font-size:12px}
+.relicApplyFilters{display:flex;align-items:center;gap:6px;margin-left:auto;padding:6px 9px;border:1px solid var(--ui-line);border-radius:6px;background:var(--color-bg-1);font-size:12px}
+.relicApplyFilters>img{width:16px;height:16px;object-fit:contain}
+.windowContent .collectionWorldMain:has(>.relicPlanner),.resourceWorkspace{position:relative}
+.windowContent .referenceRelicShade{position:absolute;inset:0;padding:16px;z-index:80;border-radius:inherit;background:#0009;overflow:hidden}
+.referenceRelicShade[data-body-host=true]{position:fixed}
+.referenceRelicShade .referenceRelicDialog{width:100%;max-width:1100px;max-height:100%;overflow:hidden;display:flex;flex-direction:column;border:1px solid var(--ui-line-strong);border-radius:12px;background:var(--color-bg-2);color:var(--color-text);box-shadow:0 12px 36px #0008;container:relic-details/inline-size}
+.referenceRelicDialog>.referenceRelicHeader{height:auto;min-height:80px;display:flex;align-items:center;gap:12px;margin:0;padding:14px 18px;border-bottom:1px solid var(--ui-line);background:var(--color-bg-2);flex:none}
+.referenceRelicHeader>.referenceRelicArt{width:56px;height:56px;object-fit:contain;flex:none;border-radius:8px;background:var(--color-bg-1)}
+.referenceRelicHeader>div{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
+.referenceRelicHeader h2{font-size:25px;line-height:30px;font-weight:500;overflow:hidden;text-overflow:ellipsis;margin:0}
+.referenceRelicHeader .relicVaultBadge{align-self:flex-start;font-size:12px}
+.referenceRelicHeader .relicVaultBadge>img{width:13px;height:13px}
+.referenceRelicHeader>button{flex:none;width:30px;height:30px;padding:3px;background:transparent;border:0}
+.referenceRelicHeader>.referenceRelicClose{font-size:25px;line-height:24px}
+.referenceRelicHeader .relicOverviewFavorite>img{width:22px;height:22px}
+.referenceRelicBody{overflow:auto;min-height:0;padding:14px 16px 16px;display:flex;flex-direction:column;gap:12px}
+.relicSimulation{border:1px solid var(--ui-line);border-radius:9px;padding:12px;background:var(--color-bg-1)}
+.relicSimulationHeading{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.relicSimulationHeading>div{display:flex;flex-direction:column;gap:4px}
+.relicSimulationHeading strong{font-size:14px;font-weight:500}
+.relicSimulationHeading span{font-size:12px;color:var(--color-navigation-hover)}
+.relicSimulationHeading label{display:flex;align-items:center;gap:7px;font-size:12px}
+.referenceRelicDialog select,.referenceRelicDialog input{background:var(--color-bg-1);border:1px solid var(--ui-line);border-radius:5px;padding:5px 7px;color:inherit;font:inherit;font-size:12px}
+.relicRefinementChoices{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+.relicRefinementChoice{display:flex;flex-direction:column;gap:7px;min-width:0;padding:9px 12px;border:1px solid var(--ui-line);border-radius:8px;background:var(--color-bg-2);color:inherit;text-align:left}
+.relicRefinementChoice.selected{background:var(--color-card-active);border-color:var(--color-tab-lighter)}
+.relicRefinementChoice:hover{border-color:var(--ui-line-strong)}
+.relicRefinementHeading{display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap;width:100%;font-size:13px}
+.relicRefinementHeading small,.relicRefinementMetrics,.relicRefinementMetrics>span,.relicRewardPrices>span{display:flex;align-items:center;gap:4px;font-size:12px}
+.relicRefinementMetrics{gap:12px;flex-wrap:wrap}
+.relicRefinementHeading img,.relicRefinementMetrics img,.relicRewardPrices img{width:16px;height:16px;object-fit:contain;flex:none}
+.relicDetailColumns{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,.48fr);gap:12px;align-items:start}
+.relicSectionHeading{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px}
+.referenceRelicDialog h3{margin:0;font-size:15px;line-height:22px;font-weight:500}
+.relicSectionHeading>span{font-size:11px;color:var(--color-navigation-hover)}
+.relicRewardSection,.relicMarketPanel,.referenceRelicDialog .relicLocations{padding:12px;border:1px solid var(--ui-line);border-radius:9px;background:var(--color-bg-1);min-width:0}
+.relicRewardTableHeader,.relicRewardRow{display:grid;grid-template-columns:minmax(0,1fr) 80px 65px;gap:8px;align-items:center}
+.relicRewardTableHeader{font-size:11px;padding:5px 8px;color:var(--color-navigation-hover)}
+.relicRewardGroup{--relic-rarity:#bfc7d5}.relicRewardGroup.common{--relic-rarity:#ceaa87}.relicRewardGroup.uncommon{--relic-rarity:#bdcdd9}.relicRewardGroup.rare{--relic-rarity:#edc867}
+.relicRewardGroupLabel{color:var(--relic-rarity);font-size:11px;line-height:16px;padding:6px 9px 4px;font-weight:500}
+.relicRewardRow{min-height:48px;padding:5px 8px;border:1px solid var(--ui-line);border-radius:8px;background:var(--color-bg-2);margin-bottom:4px}
+.relicRewardRow.owned{border-color:#78c9ad40}
+.relicDetailRewardIdentity{display:flex;gap:6px;align-items:center;min-width:0}
+.relicDetailRewardIdentity>img{width:34px;height:34px;object-fit:contain;flex:none}
+.relicDetailRewardIdentity>span{display:flex;flex-direction:column;gap:3px;min-width:0}
+.relicDetailRewardIdentity strong{font-size:12px;line-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.relicDetailRewardIdentity small{display:flex;align-items:center;gap:4px;font-size:11px;color:#a7dfcc}
+.relicDetailRewardIdentity small>img{width:13px;height:13px;object-fit:contain}
+.relicRewardPrices{display:flex;flex-direction:column;gap:4px;font-variant-numeric:tabular-nums}
+.relicRewardChance{display:flex;flex-direction:column;align-items:flex-end;gap:5px;font-size:12px;font-variant-numeric:tabular-nums}
+.relicRewardChance>span{height:4px;width:100%;border-radius:3px;background:var(--color-bg-3);overflow:hidden}
+.relicRewardChance i{height:100%;display:block;background:var(--relic-rarity)}
+.relicRewardExplanation{font-size:11px;line-height:17px;color:var(--color-navigation-hover);margin:10px 0 0}
+.relicInfoPanel{display:flex;flex-direction:column;gap:12px;min-width:0}
+.relicMarketPanel>.inventoryTradeButton{width:100%;margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--color-card-active);border:1px solid var(--ui-line-strong);border-radius:6px;font-size:12px;padding:7px 8px}
+.relicMarketPanel .inventoryTradeButton>strong{display:flex;align-items:center;gap:4px}
+.relicMarketPanel .inventoryTradeButton img{width:16px;height:16px;object-fit:contain}
+.referenceRelicDialog .relicLocationsList{margin-top:7px;padding:0;background:transparent;max-height:400px}
+.referenceRelicDialog .relicLocationsList>div{font-size:12px;padding:7px;border:1px solid var(--ui-line);background:var(--color-bg-2);margin-bottom:5px}
+.referenceRelicDialog .relicLocationsList>p{font-size:12px;line-height:19px;padding:8px 0;text-align:left}
+.referenceRelicDialog .relicLocations>input{width:100%}
+.inventoryCard .inventoryVaultBadge{display:inline-flex;gap:3px;align-items:center;font-size:11px;color:var(--color-navigation-hover)}
+.inventoryVaultBadge img{width:13px;height:13px;object-fit:contain}
+.inventoryCard .inventoryModRarity{font-size:11px;color:var(--color-navigation-hover)}
+.inventoryCard .inventoryFavoriteMark img,.inventoryNumbers button>img{width:18px;height:18px;object-fit:contain}
+.inventoryCard:not(.hasDetails):not(:has(.inventoryName[tabindex="0"])):hover{background:var(--color-card)}
+.inventoryCard .inventoryName[tabindex="-1"]{cursor:default}
+.windowContent .resourceInventory.resourceWorkspace{box-sizing:border-box;position:relative;padding:14px;border:1px solid var(--ui-line);border-radius:14px;background:var(--color-bg-2);gap:12px}
+/* appearance.js migrates these three tabs to the existing sidebar flyout. */
+.windowContent .resourceInventory.resourceWorkspace>nav.resourceViews{display:none}
+.windowContent .resourceInventory.resourceWorkspace>h2{font-size:24px;line-height:30px;font-weight:600;padding:0 10px;min-height:36px;margin:0 0 4px}
+.resourceWorkspace .resourceInventoryIdentity>strong{font-size:14px;font-weight:500}
+.resourceWorkspace .resourceNeeds{padding-top:10px;gap:7px}
+.resourceWorkspace .resourceNeeds>span{font-size:12px;line-height:18px}
+.resourceWorkspace .resourceNeeds strong{display:inline-flex;align-items:center;gap:4px;font-weight:500}
+.resourceWorkspace .resourceNeeds strong.covered{color:#a7dfcc}
+.resourceWorkspace .resourceNeeds strong>img{width:13px;height:13px;object-fit:contain}
+.resourceWorkspace .resourceScroll{padding-right:10px;scrollbar-gutter:stable}
+.resourceWorkspace .resourceSourceShade{position:absolute;inset:0;padding:16px;z-index:70;border-radius:inherit;background:#0009;overflow:hidden}
+.resourceWorkspace .resourceSourceDialog{width:100%;max-width:830px;max-height:100%;border-radius:12px;border-color:var(--ui-line-strong);background:var(--color-bg-2)}
+.resourceWorkspace .resourceSourceDialog>header{height:auto;min-height:70px;margin:0;padding:14px 18px;border-bottom:1px solid var(--ui-line);flex-direction:row}
+.resourceWorkspace .resourceSourceDialog>header h3{font-size:23px;line-height:28px}
+.resourceWorkspace .resourceSourceDialog>header>img{width:48px;height:48px}
+.resourceWorkspace .resourceSourceBody{padding:14px 18px 18px;gap:14px}
+.resourceRecipe{padding:12px;border:1px solid var(--ui-line);border-radius:8px;background:var(--color-bg-1)}
+.resourceRecipe>small{display:block;font-size:12px;color:var(--color-navigation-hover);margin:5px 0 9px}
+.resourceRecipe>div{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px}
+.resourceRecipe button{display:flex;align-items:center;gap:7px;padding:7px;border:1px solid var(--ui-line);border-radius:6px;background:var(--color-bg-2);text-align:left;min-width:0}
+.resourceRecipe button>img{width:30px;height:30px;object-fit:contain;flex:none}
+.resourceRecipe button>span{flex:1;min-width:0;font-size:12px}
+.resourceRecipe button small{display:block;margin-top:3px;font-size:11px;color:var(--color-navigation-hover)}
+.resourceRecipe button strong{font-size:12px;font-variant-numeric:tabular-nums}
+.resourceSourceBody>.resourceBack{align-self:flex-start;padding:6px 10px;border:1px solid var(--ui-line);border-radius:6px;background:var(--color-bg-1);font-size:12px}
+.resourceWorkspace .shardDetailsShade{position:absolute;inset:0;padding:16px;border-radius:inherit;overflow:hidden}
+.resourceWorkspace .shardDetails{max-height:100%;width:100%;max-width:830px}
+@container relic-details (max-width:650px){.relicDetailColumns{grid-template-columns:1fr}.relicRefinementChoices{grid-template-columns:repeat(2,minmax(0,1fr))}.relicInfoPanel{display:grid;grid-template-columns:1fr 1fr}.referenceRelicBody{padding:10px}.referenceRelicHeader h2{font-size:22px}}
+@media(prefers-reduced-motion:reduce){.referenceRelicDialog *{transition:none!important}}
+
+.referenceRelicDialog>.referenceRelicHeader h2{font-size:25px;line-height:30px;font-weight:500}
+.relicPlannerFilterChips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 0 10px}
+.relicPlannerFilterChips button{padding:5px 9px;border:1px solid var(--ui-line-strong);border-radius:5px;background:var(--color-card-active);font-size:12px}
+.relicPlannerFilterChips button.clear{border:0;background:transparent;color:var(--color-navigation-hover)}
+.relicPlannerFilterChips button span{margin-left:8px}

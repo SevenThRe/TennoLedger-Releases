@@ -13,6 +13,9 @@ pub fn choose(owner:usize,name:&str)->Result<Option<std::path::PathBuf>,String>{
 
 #[cfg(any(windows,test))]
 fn file_format(name:&str)->(&'static str,&'static str){
+    if name.ends_with(".png"){return ("PNG (*.png)\0*.png\0\0","png\0");}
+    if name.ends_with(".log"){return ("Log (*.log)\0*.log\0\0","log\0");}
+    if name.ends_with(".txt"){return ("Text (*.txt)\0*.txt\0\0","txt\0");}
     if std::path::Path::new(name).extension().is_some_and(|ext|ext.eq_ignore_ascii_case("csv")) {
         ("CSV (*.csv)\0*.csv\0\0","csv\0")
     } else { ("JSON (*.json)\0*.json\0\0","json\0") }

@@ -1,3 +1,7 @@
+*.jsonl
+TennoLedger-debug-*.json
+*.dpapi
+*.dpapi.new
 .planning/
 research/
 docs/

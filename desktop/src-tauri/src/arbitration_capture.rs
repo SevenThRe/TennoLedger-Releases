@@ -269,11 +269,12 @@ fn open_live(app: &tauri::AppHandle) -> Result<(), String> {
     tauri::WebviewWindowBuilder::new(
         app,
         "arbitration-live",
-        tauri::WebviewUrl::App("index.html?arbitrationLive=1".into()),
+        tauri::WebviewUrl::App("index.html?arbitrationLive=1&mini=1".into()),
     )
     .title("TennoLedger · 实时仲裁")
-    .inner_size(1024., 720.)
-    .min_inner_size(700., 500.)
+    .inner_size(380., 280.)
+    .min_inner_size(320., 48.)
+    .always_on_top(true)
     .decorations(false)
     .focused(false)
     .build()
@@ -335,7 +336,7 @@ pub fn arbitration_capture_status(
     Ok(Status {
         code: rt.code.clone(),
         error: rt.error.clone(),
-        current,
+        current: current.map(|mut r|{r.retained_log.clear();r.positions.clear();r}),
         auto_open: auto_open(&db)?,
     })
 }
@@ -357,6 +358,24 @@ pub fn arbitration_history(
     let db = state.0.lock().map_err(|_| "数据库锁错误")?;
     db.require_expected_scope(Some(&expected_scope))?;
     history::list(&db, &expected_scope, &filter)
+}
+#[tauri::command]
+pub async fn arbitration_export_run(expected_scope:String,id:String,format:String,png:Option<Vec<u8>>,window:tauri::WebviewWindow,state:tauri::State<'_,AppState>)->Result<Option<String>,String>{
+    let analyzer=format=="analyzer";
+    let (content,extension)={let db=state.0.lock().map_err(|_|"数据库锁错误")?;db.require_expected_scope(Some(&expected_scope))?;let mut r=history::get(&db,&expected_scope,&id)?.ok_or("仲裁记录不存在")?;
+        match format.as_str(){
+            "log"|"analyzer"=>{if r.retained_log.is_empty(){return Err("本局没有保留原始日志".into());}(r.retained_log,"log")},
+            "png"=>(String::new(),"png"),
+            "json"=>{r.retained_log.clear();(serde_json::to_string_pretty(&r).map_err(|e|e.to_string())?,"json")},
+            "text"=>(format!("TennoLedger — Arbitration\n{} ({})\n{}\nStatus: {}\nDuration: {:?} s\nDrones: {}\nWaves: {}\nRole: {}\nNotes: {}\n",r.node,r.planet,r.mission_type,r.status,r.duration(),r.drone_spawns,r.waves_completed,r.metadata.role,r.metadata.notes),"txt"),
+            _=>return Err("未知导出格式".into())
+        }
+    };
+    let image=if format=="png"{let bytes=png.ok_or("缺少报告图像")?;if bytes.len()>8*1024*1024||!bytes.starts_with(b"\x89PNG\r\n\x1a\n"){return Err("报告图像无效".into());}Some(bytes)}else{None};
+    if analyzer {crate::arbitration_analyzer::open(content)?;return Ok(Some("arbi.guide".into()));}
+    #[cfg(windows)]let owner=window.hwnd().map_err(|_|"无法获取窗口")?.0 as usize;
+    #[cfg(not(windows))]let owner=0usize;
+    tauri::async_runtime::spawn_blocking(move||{let name=format!("TennoLedger-{id}.{extension}");let Some(path)=crate::save_dialog::choose(owner,&name)?else{return Ok(None)};if let Some(bytes)=image{crate::backup::write_bytes(&path,&bytes)?;}else{crate::backup::write(&path,&content)?;}Ok(Some(path.to_string_lossy().into_owned()))}).await.map_err(|e|e.to_string())?
 }
 #[tauri::command]
 pub fn arbitration_run(

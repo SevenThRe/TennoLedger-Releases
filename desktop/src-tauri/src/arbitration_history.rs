@@ -20,6 +20,11 @@ pub fn validate(r: &Run) -> Result<(), String> {
         || r.timeline.len() > 4096
         || r.samples.len() > 12000
         || r.drone_times.len() > 200000
+        || r.positions.len() > 50000
+        || r.agent_types.len() > 2048
+        || r.retained_log.len() > 8*1024*1024
+        || r.positions.iter().any(|p| ![p.seconds,p.x,p.y,p.z].iter().all(|n|n.is_finite()) || p.name.len()>256 || !["enemy","drone","objective"].contains(&p.kind.as_str()))
+        || r.agent_types.iter().any(|a|a.name.len()>256 || !["enemy","drone","agent"].contains(&a.kind.as_str()))
         || r.quality_notes.len() > 64
         || !r.start_log_seconds.is_finite()
         || !r.last_log_seconds.is_finite()
@@ -74,6 +79,10 @@ pub fn save(db: &Store, scope: &str, input: &Run) -> Result<bool, String> {
         if old.last_log_seconds > r.last_log_seconds {
             return Ok(false);
         }
+        // Importing an older-schema backup must not erase retained evidence.
+        if r.retained_log.is_empty() {r.retained_log=old.retained_log.clone();r.log_truncated=old.log_truncated;}
+        if r.positions.is_empty() {r.positions=old.positions.clone();}
+        if r.agent_types.is_empty() {r.agent_types=old.agent_types.clone();}
     }
     let started = r.start_utc.as_deref().unwrap_or("");
     let payload = serde_json::to_string(&r).map_err(|e| e.to_string())?;
@@ -132,7 +141,7 @@ pub fn list(db: &Store, scope: &str, f: &Filter) -> Result<Page, String> {
         .query_map([scope], |row| row.get::<_, String>(0))
         .map_err(|e| e.to_string())?
     {
-        let r: Run =
+        let mut r: Run =
             serde_json::from_str(&value.map_err(|e| e.to_string())?).map_err(|_| "仲裁记录损坏")?;
         if (!f.status.is_empty() && f.status != r.status)
             || (f.favorites_only && !r.metadata.favorite)
@@ -147,6 +156,8 @@ pub fn list(db: &Store, scope: &str, f: &Filter) -> Result<Page, String> {
             continue;
         }
         if total >= f.offset && runs.len() < 50 {
+            r.retained_log.clear();
+            r.positions.clear();
             runs.push(r);
         }
         total += 1;
@@ -214,6 +225,17 @@ mod tests {
             "标记"
         );
         assert_eq!(list(&db, "scope-a", &Filter::default()).unwrap().total, 1);
+    }
+    #[test]
+    fn reimport_upgrades_legacy_evidence_without_duplicate_or_later_erasure() {
+        let db=Store::open(std::path::Path::new(":memory:")).unwrap();
+        let mut legacy=run();legacy.retained_log.clear();save(&db,"scope-a",&legacy).unwrap();
+        let mut enriched=legacy.clone();enriched.retained_log="retained source line\n".into();
+        enriched.positions.push(crate::arbitration_run::Position{seconds:12.,x:1.,y:2.,z:3.,kind:"enemy".into(),name:"test".into()});
+        assert!(!save(&db,"scope-a",&enriched).unwrap());
+        save(&db,"scope-a",&legacy).unwrap();let restored=get(&db,"scope-a",&legacy.id).unwrap().unwrap();
+        assert_eq!(restored.retained_log,enriched.retained_log);assert_eq!(restored.positions.len(),1);
+        let page=list(&db,"scope-a",&Filter::default()).unwrap();assert_eq!(page.total,1);assert!(page.runs[0].retained_log.is_empty());assert!(page.runs[0].positions.is_empty());
     }
     #[test]
     fn crash_checkpoint_is_interrupted() {

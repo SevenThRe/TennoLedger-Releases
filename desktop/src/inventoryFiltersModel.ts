@@ -23,3 +23,12 @@ export const inventoryFilterGroups:InventoryFilterGroup[]=[
  {key:'leveledUp',zh:'等级',en:'Rank',types:['mod','arcane'],options:[['yes','已升级','Ranked up'],['no','未升级','Unranked']]},
 ];
 export const availableInventoryGroups=(category:string,arcaneProgress=false)=>category==='resource'?[]:inventoryFilterGroups.filter(group=>(!arcaneProgress||group.key==='favorite')&&(!group.types||group.types.includes(category)));
+
+/** Keep only filters that the newly selected category can actually apply. */
+export function inventoryCategoryFilters(filters:InventoryFilters,category:string,arcaneProgress=false):InventoryFilters{
+ const groups=availableInventoryGroups(category,arcaneProgress);
+ return Object.fromEntries(Object.entries(filters).filter(([key,value])=>groups.some(group=>group.key===key&&group.options.some(option=>option[0]===value))));
+}
+export function inventoryCategoryOrder(order:string,category:string){
+ return (['name','platPrice','amount',...(category==='component'?['ducats','ducanator']:[]),...(category==='sets'?['complete']:[])]).includes(order)?order:'amount';
+}

@@ -2,8 +2,8 @@
 //! Official: 42bytes-team/wfm-docs/docs/websockets/{authentication,status-and-activity,overview}.mdx
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::{net::{Shutdown, TcpStream, ToSocketAddrs}, sync::{mpsc, Arc, Mutex, OnceLock}, time::{Duration, Instant}};
-use tungstenite::{client::IntoClientRequest, protocol::{Message, WebSocketConfig}, stream::MaybeTlsStream, WebSocket};
+use std::{net::{Shutdown, TcpStream}, sync::{mpsc, Arc, Mutex, OnceLock}, time::{Duration, Instant}};
+use tungstenite::{protocol::{Message, WebSocketConfig}, stream::MaybeTlsStream, WebSocket};
 use crate::market::PresenceCredential;
 
 #[derive(Clone, Default, Serialize)]
@@ -45,17 +45,11 @@ pub fn shutdown(){invalidate();if let Some(actor)=ACTOR.get(){let _=actor.tx.try
 fn publish(state:&Arc<Mutex<PresenceView>>,view:PresenceView){if let Ok(mut target)=state.lock(){*target=view;}}
 fn connect(credential:PresenceCredential)->Result<Active,String>{
     if !crate::market::presence_epoch_current(credential.epoch){return Err("市场会话已变化".into());}
-    let addresses=("ws.warframe.market",443).to_socket_addrs().map_err(|_|"状态服务域名解析失败")?;
-    let mut stream=None;
-    for address in addresses.take(4){if let Ok(tcp)=TcpStream::connect_timeout(&address,Duration::from_secs(8)){stream=Some(tcp);break;}}
-    let stream=stream.ok_or("状态服务连接超时")?;
-    stream.set_read_timeout(Some(Duration::from_secs(10))).map_err(|_|"状态连接初始化失败")?;
-    stream.set_write_timeout(Some(Duration::from_secs(8))).map_err(|_|"状态连接初始化失败")?;
+    let stream=crate::presence_transport::open()?;
     if let Ok(mut control)=TCP.get_or_init(||Mutex::new(None)).lock(){*control=Some(stream.try_clone().map_err(|_|"状态连接初始化失败")?);}
-    let mut request="wss://ws.warframe.market/socket".into_client_request().map_err(|_|"状态协议初始化失败")?;
-    request.headers_mut().insert("Sec-WebSocket-Protocol", "wfm".parse().unwrap());
+    let request=crate::presence_transport::request()?;
     let config=WebSocketConfig::default().max_message_size(Some(65536)).max_frame_size(Some(65536));
-    let (mut socket,response)=tungstenite::client_tls_with_config(request,stream,Some(config),None).map_err(|_|"状态 TLS / WebSocket 握手失败")?;
+    let (mut socket,response)=tungstenite::client_tls_with_config(request,stream,Some(config),None).map_err(|e|crate::presence_transport::handshake_error(&e))?;
     if response.headers().get("Sec-WebSocket-Protocol").and_then(|h|h.to_str().ok())!=Some("wfm"){return Err("状态服务未确认 wfm 子协议".into());}
     match socket.get_mut(){MaybeTlsStream::Plain(t)=>{let _=t.set_read_timeout(Some(Duration::from_millis(150)));},MaybeTlsStream::Rustls(t)=>{let _=t.sock.set_read_timeout(Some(Duration::from_millis(150)));},_=>{}}
     if !crate::market::presence_epoch_current(credential.epoch){return Err("市场会话已变化".into());}

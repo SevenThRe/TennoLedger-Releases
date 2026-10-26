@@ -21,6 +21,13 @@ static WAVE: LazyLock<Regex> = LazyLock::new(|| {
     )
 });
 static AGENT: LazyLock<Regex> = LazyLock::new(|| re(r"OnAgentCreated\s+(/Npc/[A-Za-z0-9_]+)"));
+static POSITION: LazyLock<Regex> = LazyLock::new(|| re(r"Spawned a (/Npc/[A-Za-z0-9_]+) @ Vector\(([-+\d.eE]+),\s*([-+\d.eE]+),\s*([-+\d.eE]+)\)"));
+static OBJECTIVE: LazyLock<Regex> = LazyLock::new(|| re(r"Defense avatar was spawned at position \(([-+\d.eE]+),\s*([-+\d.eE]+),\s*([-+\d.eE]+)\)"));
+
+#[derive(Clone, Default, Serialize, Deserialize, Debug)]
+pub struct Position { pub seconds:f64, pub x:f64, pub y:f64, pub z:f64, pub kind:String, pub name:String }
+#[derive(Clone, Default, Serialize, Deserialize, Debug)]
+pub struct AgentType { pub name:String, pub kind:String, pub count:u32 }
 static COUNTER: LazyLock<Regex> = LazyLock::new(|| re(r"\bLive (\d+) Spawned (\d+)"));
 static MIGRATION: LazyLock<Regex> = LazyLock::new(|| {
     re(r"(?i)(?:\bhost migration\b|\bHostMigration\b|\b(?:Start|Begin|Finalize)HostMigration\b)")
@@ -89,6 +96,14 @@ pub struct Run {
     pub drone_times: Vec<f64>,
     pub quality_notes: Vec<String>,
     #[serde(default)]
+    pub positions: Vec<Position>,
+    #[serde(default)]
+    pub agent_types: Vec<AgentType>,
+    #[serde(default)]
+    pub retained_log: String,
+    #[serde(default)]
+    pub log_truncated: bool,
+    #[serde(default)]
     pub metadata: Metadata,
 }
 impl Run {
@@ -125,11 +140,17 @@ impl Run {
     }
 }
 
+fn retain_line(run:&mut Run,line:&str){
+    if run.log_truncated{return;}
+    if run.retained_log.len()+line.len()+1<=8*1024*1024{run.retained_log.push_str(line);run.retained_log.push('\n');}else{run.log_truncated=true;}
+}
+
 pub struct Parser {
     pub active: Option<Run>,
     pub finished: Vec<Run>,
     source: String,
     session_key: String,
+    session_header: String,
     pub account_boundary: bool,
     origin: Option<DateTime<Utc>>,
     previous: Option<f64>,
@@ -137,6 +158,8 @@ pub struct Parser {
     mission_type: String,
     host: Option<bool>,
     drones: BTreeSet<String>,
+    agents: BTreeSet<String>,
+    positioned: BTreeSet<String>,
     spawn_counter: Option<u32>,
     candidate: Option<(String, f64)>,
     last_activity: f64,
@@ -152,12 +175,15 @@ impl Parser {
             account_boundary: false,
             source: source.into(),
             session_key: key.into(),
+            session_header: String::new(),
             origin: None,
             previous: None,
             node: String::new(),
             mission_type: String::new(),
             host: None,
             drones: BTreeSet::new(),
+            agents: BTreeSet::new(),
+            positioned: BTreeSet::new(),
             spawn_counter: None,
             candidate: None,
             last_activity: 0.,
@@ -205,6 +231,8 @@ impl Parser {
             self.finished.push(r);
         }
         self.drones.clear();
+        self.agents.clear();
+        self.positioned.clear();
         self.spawn_counter = None;
         self.candidate = None;
         self.last_reward = None;
@@ -212,6 +240,7 @@ impl Parser {
     pub fn reset(&mut self, reason: &str) {
         self.interrupt(reason);
         self.origin = None;
+        self.session_header.clear();
         self.previous = None;
         self.node.clear();
         self.mission_type.clear();
@@ -225,6 +254,8 @@ impl Parser {
     }
     fn start(&mut self, t: f64) {
         self.drones.clear();
+        self.agents.clear();
+        self.positioned.clear();
         self.spawn_counter = None;
         self.last_reward = None;
         self.candidate = None;
@@ -246,6 +277,7 @@ impl Parser {
             source: self.source.clone(),
             status: "recording".into(),
             start_utc: self.utc(t),
+            retained_log: self.session_header.clone(),
             start_log_seconds: t,
             last_log_seconds: t,
             is_host: self.host,
@@ -276,6 +308,7 @@ impl Parser {
             }
             (t, c.get(2).unwrap().as_str())
         } else {
+            if let Some(r)=self.active.as_mut().filter(|r|r.status=="recording"){retain_line(r,line);}
             if let Some(c) = TYPE.captures(line) {
                 self.mission_type = mode(&c[1]).into();
                 if let Some(r) = &mut self.active {
@@ -303,6 +336,7 @@ impl Parser {
             if let Some((date, _)) = tail.split_once(']') {
                 let date = date.split_whitespace().collect::<Vec<_>>().join(" ");
                 if let Ok(time) = NaiveDateTime::parse_from_str(&date, "%a %b %e %H:%M:%S %Y") {
+                    self.session_header=format!("{line}\n");
                     self.origin =
                         Some(time.and_utc() - chrono::Duration::milliseconds((t * 1000.) as i64));
                 }
@@ -414,6 +448,27 @@ impl Parser {
             r.gap("日志超过五分钟没有事件");
         }
         r.last_log_seconds = r.last_log_seconds.max(t);
+        retain_line(r,line);
+        if let Some(c)=POSITION.captures(msg) {
+            let name=c[1].to_string();
+            if r.positions.len()<50000 && !self.positioned.contains(&name) {
+                if let (Ok(x),Ok(y),Ok(z))=(c[2].parse::<f64>(),c[3].parse::<f64>(),c[4].parse::<f64>()) {
+                    if [x,y,z].iter().all(|v|v.is_finite()&&v.abs()<1e8) {
+                        self.positioned.insert(name.clone());
+                        r.positions.push(Position{seconds:t,x,y,z,kind:if name.starts_with("/Npc/CorpusEliteShieldDroneAgent"){"drone"}else{"enemy"}.into(),name});
+                    }
+                }
+            }
+        }
+        if let Some(c)=OBJECTIVE.captures(msg) {
+            if r.positions.len()<50000 {
+                if let (Ok(x),Ok(y),Ok(z))=(c[1].parse::<f64>(),c[2].parse::<f64>(),c[3].parse::<f64>()) {
+                    if [x,y,z].iter().all(|v|v.is_finite()&&v.abs()<1e8) && !r.positions.iter().any(|p|p.kind=="objective"&&p.x==x&&p.y==y&&p.z==z) {
+                        r.positions.push(Position{seconds:t,x,y,z,kind:"objective".into(),name:"Defense objective".into()});
+                    }
+                }
+            }
+        }
         r.is_host = self.host;
         if msg.contains("OnStateStarted, mission type=") {
             r.start_observed = true;
@@ -504,6 +559,12 @@ impl Parser {
             });
         }
         if let Some(agent) = agent {
+            if self.agents.len()<200000 && self.agents.insert(agent.clone()) {
+                let name=agent.trim_start_matches("/Npc/").trim_end_matches(|c:char|c.is_ascii_digit()).to_string();
+                let kind=if drone{"drone"}else{"agent"};
+                if let Some(a)=r.agent_types.iter_mut().find(|a|a.name==name&&a.kind==kind){a.count=a.count.saturating_add(1);}
+                else if r.agent_types.len()<2048{r.agent_types.push(AgentType{name,kind:kind.into(),count:1});}
+            }
             if drone && self.drones.len() < 200000 && self.drones.insert(agent) {
                 r.drone_spawns += 1;
                 r.drone_times.push(t);
@@ -583,9 +644,31 @@ fn mode(s: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[ignore = "requires explicit local EE.log path"]
+    fn local_log_spatial_replay() {
+        let path=std::env::var("MYFRAME_ARBI_REPLAY_PATH").expect("set explicit input log");let bytes=std::fs::read(path).unwrap();let mut p=parser();p.feed(&bytes);p.eof();
+        let positions:usize=p.finished.iter().map(|r|r.positions.len()).sum();let agents:usize=p.finished.iter().map(|r|r.agent_types.len()).sum();
+        assert!(positions>0,"supplied log must contain observed positions");assert!(agents>0);
+        for r in &p.finished {let encoded=serde_json::to_string(r).unwrap();let decoded:Run=serde_json::from_str(&encoded).unwrap();assert_eq!(decoded.positions.len(),r.positions.len());assert_eq!(decoded.retained_log,r.retained_log);}
+        println!("runs={} positions={} named_types={}",p.finished.len(),positions,agents);
+    }
+    #[test]
+    fn retains_real_spawn_grammar_and_deduplicates_named_creations() {
+        let mut p=parser();p.feed(START.as_bytes());
+        p.line("232 AI [Info]: OnAgentCreated /Npc/MacheteWomanNoCover6 Live 6 Spawned 0");
+        p.line("232 AI [Info]: OnAgentCreated /Npc/MacheteWomanNoCover6 Live 6 Spawned 0");
+        p.line("233 Script [Info]: WaveDefend.lua: Spawned a /Npc/MacheteWomanNoCover6 @ Vector(-19.9109, 55.1499, 78.4219), spawn point: /Layer1/NpcSpawnPoint110 @ Vector(10, 20, 30)");
+        p.line("233 Script [Info]: WaveDefend.lua: Spawned a /Npc/MacheteWomanNoCover6 @ Vector(-19.9109, 55.1499, 78.4219)");
+        p.line("234 Script [Info]: WaveDefend.lua: Defense avatar was spawned at position (58.300052, 55.424167, 47.160022)");
+        let r=p.active.as_ref().unwrap();assert_eq!(r.positions.len(),2);assert_eq!(r.positions[0].x,-19.9109);assert_eq!(r.positions[0].kind,"enemy");assert_eq!(r.positions[1].kind,"objective");assert_eq!(r.agent_types[0].count,1);assert_eq!(r.agent_types[0].name,"MacheteWomanNoCover");
+        let saved=serde_json::to_string(r).unwrap();let restored:Run=serde_json::from_str(&saved).unwrap();assert_eq!(restored.positions.len(),2);
+        p.interrupt("end");p.feed(START.as_bytes());p.line("232 AI [Info]: OnAgentCreated /Npc/MacheteWomanNoCover6");assert_eq!(p.active.as_ref().unwrap().agent_types[0].count,1);
+    }
     fn parser() -> Parser {
         Parser::new("import", "fixture")
     }
+    #[test]fn exported_log_keeps_clock_origin_and_multiline_mission_data(){let mut p=Parser::new("import","raw");p.feed(START.as_bytes());p.line("    location=SolNode707_EliteAlert");let r=p.active.as_ref().unwrap();assert!(r.retained_log.starts_with("0.021 Sys [Diag]: Current time:"));assert!(r.retained_log.contains("Mission name:"));assert!(r.retained_log.ends_with("    location=SolNode707_EliteAlert\n"));}
     const START:&str="0.021 Sys [Diag]: Current time: [UTC: Sat Oct 24 15:09:14 2026]\n218.317 Script [Info]: ThemedSquadOverlay.lua: Mission name: Hyf (火卫二) - 仲裁\n218.317 Script [Info]: Host loading {\"name\":\"SolNode707_EliteAlert\"}\n221.862 Net [Info]: Starting session on HOST\n223.455 Game [Info]: OnStateStarted, mission type=MT_DEFENSE\n231.292 Script [Info]: WaveDefend.lua: Defense wave: 1\n";
     #[test]
     fn hyf_abort_and_fragmented_drone_dedup() {

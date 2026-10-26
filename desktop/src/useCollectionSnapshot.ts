@@ -14,7 +14,7 @@ export function useCollectionSnapshot(){
   let alive=true;
   const reader=latestRefresh(()=>invoke<LiveCollection|null>('load_collection'),setSnapshot,()=>{},()=>{});
   const refresh=()=>{if(native)void reader.refresh();};
-  if(!native&&import.meta.env.DEV&&['modules','shards'].includes(new URLSearchParams(location.search).get('qa')??''))void fetch(new URLSearchParams(location.search).get('qa')==='shards'?'/qa/shards-snapshot.json':'/qa/modules-snapshot.json').then(r=>{if(!r.ok)throw Error('QA snapshot unavailable');return r.json();}).then(value=>{if(alive)setSnapshot(value);}).catch(()=>{});
+  if(!native&&import.meta.env.DEV&&['modules','shards','delta'].includes(new URLSearchParams(location.search).get('qa')??''))void fetch(new URLSearchParams(location.search).get('qa')==='shards'?'/qa/shards-snapshot.json':new URLSearchParams(location.search).get('qa')==='delta'?'/qa/workshop-snapshot.json':'/qa/modules-snapshot.json').then(r=>{if(!r.ok)throw Error('QA snapshot unavailable');return r.json();}).then(value=>{if(alive)setSnapshot(value);}).catch(()=>{});
   refresh();
   const off=native?listen('collection-updated',refresh):null;
   window.addEventListener('myframe-collection-updated',refresh);

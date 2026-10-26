@@ -1,4 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#[cfg(all(not(debug_assertions), not(feature = "custom-protocol"), not(test)))]
+compile_error!("Standalone release requires --features custom-protocol (or npm run package); otherwise the UI depends on the Vite dev server.");
 mod world;
 mod world_notify;
 #[cfg(all(windows, test))] mod win_toast;
@@ -26,7 +28,10 @@ mod updates;
 #[cfg(feature="diagnostics")] mod update_fixture;
 mod workshop;
 mod market;
+mod market_credentials;
+mod diagnostics;
 mod market_presence;
+mod presence_transport;
 mod market_aleca;
 mod theme_presets;
 mod market_analytics;
@@ -39,6 +44,7 @@ mod account_scope;
 mod arbitration_run;
 mod arbitration_history;
 mod arbitration_capture;
+mod arbitration_analyzer;
 #[cfg(test)] mod memory_inventory;
 mod inventory_data;
 mod riven_inventory;
@@ -253,6 +259,7 @@ fn open_browser_url(parsed:&reqwest::Url)->Result<(),String>{
     Ok(())
 }
 fn main() {
+    diagnostics::install_panic_hook();
     let _instance=match single_instance::acquire(){Ok(Some(guard))=>guard,Ok(None)=>return,Err(error)=>{eprintln!("{error}");std::process::exit(1);}};
     let args:Vec<String>=std::env::args().collect();
     let acceptance=match acceptance_profile::parse(&args){Ok(value)=>value,Err(error)=>{eprintln!("{error}");std::process::exit(2);}};
@@ -276,6 +283,7 @@ fn main() {
         .setup(move |app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
+            diagnostics::initialize(&dir);
             let db =
                 store::Store::open(&dir.join("myframe.sqlite3")).map_err(std::io::Error::other)?;
             if isolated {db.set_auto_collect(false).map_err(std::io::Error::other)?;}
@@ -321,6 +329,7 @@ fn main() {
             }
 
             if enabled {let _=collector.start(app.handle());}
+            diagnostics::ready();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -334,6 +343,7 @@ fn main() {
             arbitration_capture::arbitration_set_auto_live,
             arbitration_capture::arbitration_history,
             arbitration_capture::arbitration_run,
+            arbitration_capture::arbitration_export_run,
             arbitration_capture::arbitration_metadata,
             arbitration_capture::arbitration_delete,
             arbitration_capture::arbitration_node_notes,
@@ -383,6 +393,10 @@ fn main() {
             app_preferences::app_preferences,
             app_preferences::app_set_preferences,
             app_preferences::app_diagnostics,
+            diagnostics::diagnostics_log_status,
+            diagnostics::diagnostics_client_event,
+            diagnostics::diagnostics_export_report,
+            diagnostics::diagnostics_open_logs,
             stats_share::stats_share,
             game_events::game_recent_trade_finishes,
             overlays::overlay_preferences,
@@ -402,6 +416,7 @@ fn main() {
             market::market_login,
             market::market_connect,
             market::market_session,
+            market::market_refresh_session,
             market::market_logout,
             collector::collector_status,
             collector::collector_request_refresh,

@@ -310,17 +310,17 @@ pub fn game_pid() -> Option<u32> {
 fn read_json(path: &Path) -> Result<Value, String> {
     let mut bytes = Vec::new();
     fs::File::open(path)
-        .map_err(|_| "helper-invalid-inventory")?
+        .map_err(|_| "helper-invalid-inventory:file-open")?
         .take(LIMIT + 1)
         .read_to_end(&mut bytes)
-        .map_err(|_| "helper-invalid-inventory")?;
+        .map_err(|_| "helper-invalid-inventory:file-read")?;
     if bytes.len() as u64 > LIMIT {
-        return Err("helper-invalid-inventory".into());
+        return Err("helper-invalid-inventory:file-too-large".into());
     }
     let bytes = bytes.strip_prefix(&[239, 187, 191]).unwrap_or(&bytes);
-    let value: Value = serde_json::from_slice(bytes).map_err(|_| "helper-invalid-inventory")?;
+    let value: Value = serde_json::from_slice(bytes).map_err(|_| "helper-invalid-inventory:invalid-json")?;
     if !value.is_object() {
-        return Err("helper-invalid-inventory".into());
+        return Err("helper-invalid-inventory:root-not-object".into());
     }
     Ok(value)
 }
@@ -432,7 +432,7 @@ fn execute_session(
                             Some(2) => "access-denied",
                             Some(3) => "helper-session-unavailable",
                             Some(5) => "helper-network-failed",
-                            Some(6) => "helper-invalid-inventory",
+                            Some(6) => "helper-invalid-inventory:helper-exit-6",
                             _ => "helper-failed",
                         }
                         .into());
@@ -458,7 +458,7 @@ fn execute_session(
         if fallback.is_file() {
             return read_json(&fallback).map(|v| (v, session));
         }
-        Err("helper-invalid-inventory".into())
+        Err("helper-invalid-inventory:output-missing".into())
     })();
     work.cleanup()?;
     result
@@ -603,7 +603,7 @@ impl Client {
             let (verified, context) = compatibility_session(pid, &cancelled)?;
             value = verified; session = Some(context); transport = "compatibility-bootstrap";
         }
-        if !valid_core(&value) { return Err("helper-invalid-inventory".into()); }
+        if !valid_core(&value) { return Err("helper-invalid-inventory:core-structure".into()); }
         if let Some(context) = &session { bind_session_identity(&mut value, context)?; }
         self.session = session;
         self.transport = transport;
@@ -647,7 +647,7 @@ fn bind_session_identity(value: &mut Value, session: &Session) -> Result<(), Str
             if !id.is_some_and(|id|id.eq_ignore_ascii_case(account)){return Err("helper-account-mismatch".into());}
         }
     }
-    if !value.is_object(){return Err("helper-invalid-inventory".into());}
+    if !value.is_object(){return Err("helper-invalid-inventory:identity-root".into());}
     value["AccountId"]=Value::String(account.to_ascii_lowercase());
     Ok(())
 }
@@ -713,7 +713,7 @@ fn fetch_endpoint(session: &Session, vendor: Option<&str>, cancelled: impl Fn() 
     }
     if bytes.len() as u64 > LIMIT {
         bytes.fill(0);
-        return Err("helper-invalid-inventory".into());
+        return Err("helper-invalid-inventory:http-body-too-large".into());
     }
     let result = serde_json::from_slice::<Value>(&bytes).map_err(|_| "helper-auth-failed");
     bytes.fill(0);
@@ -777,7 +777,8 @@ mod tests {
     }
     #[test]
     fn rejects_bad_output() {
-        assert!(execute(command("bad"), Duration::from_secs(5), || false).is_err());
+        assert_eq!(execute(command("bad"), Duration::from_secs(5), || false).unwrap_err(), "helper-invalid-inventory:invalid-json");
+        assert_eq!(execute(command("missing"), Duration::from_secs(5), || false).unwrap_err(), "helper-invalid-inventory:output-missing");
     }
     #[test]
     fn timeout_kills_child() {

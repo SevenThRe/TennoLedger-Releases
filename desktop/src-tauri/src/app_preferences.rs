@@ -99,7 +99,7 @@ pub fn app_diagnostics(
                 .is_file()
     };
     Ok(
-        serde_json::json!({"appVersion":app.package_info().version.to_string(),"collectorEnabled":status.enabled,"collectorRunning":status.running,"collectorCode":status.code,"accountCode":status.account_code,"scanCode":status.scan_code,"lastReadAt":status.last_read_at,"inventoryPresent":snapshot.is_some(),"inventoryComplete":snapshot.as_ref().map(|s|s.complete),"inventoryCapturedAt":snapshot.as_ref().map(|s|&s.captured_at),"recordedPoints":dataset.general_data_points.len(),"recordedTrades":dataset.trades.len(),"helperAvailable":available("helper/warframe-api-helper.exe"),"ocrAvailable":available("collector/myframe-collector.exe")}),
+        serde_json::json!({"appVersion":app.package_info().version.to_string(),"collectorEnabled":status.enabled,"collectorRunning":status.running,"collectorCode":status.code,"accountCode":status.account_code,"gameDetected":crate::helper_inventory::game_pid().is_some(),"inventoryFailureStage":status.scan_code.strip_prefix("helper-invalid-inventory:"),"scanCode":status.scan_code,"lastReadAt":status.last_read_at,"inventoryPresent":snapshot.is_some(),"inventoryComplete":snapshot.as_ref().map(|s|s.complete),"inventoryCapturedAt":snapshot.as_ref().map(|s|&s.captured_at),"recordedPoints":dataset.general_data_points.len(),"recordedTrades":dataset.trades.len(),"helperAvailable":available("helper/warframe-api-helper.exe"),"ocrAvailable":available("collector/myframe-collector.exe")}),
     )
 }
 #[cfg(test)]

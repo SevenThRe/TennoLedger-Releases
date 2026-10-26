@@ -49,10 +49,13 @@ pub fn decode(input:&str)->Result<Backup,String>{
     Ok(b)
 }
 pub fn write(path:&std::path::Path,input:&str)->Result<(),String>{
+    write_bytes(path,input.as_bytes())
+}
+pub fn write_bytes(path:&std::path::Path,input:&[u8])->Result<(),String>{
     use std::io::Write;
     let parent=path.parent().ok_or("保存路径无效")?;
     let temp=parent.join(format!(".myframe-export-{}-{}.tmp",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()));
-    let result=(||{let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(&temp).map_err(|_|"无法创建导出文件")?;f.write_all(input.as_bytes()).map_err(|_|"写入导出文件失败")?;f.sync_all().map_err(|_|"保存导出文件失败")?;drop(f);std::fs::rename(&temp,path).map_err(|_|"无法保存到选定位置")?;Ok(())})();
+    let result=(||{let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(&temp).map_err(|_|"无法创建导出文件")?;f.write_all(input).map_err(|_|"写入导出文件失败")?;f.sync_all().map_err(|_|"保存导出文件失败")?;drop(f);std::fs::rename(&temp,path).map_err(|_|"无法保存到选定位置")?;Ok(())})();
     if result.is_err(){let _=std::fs::remove_file(&temp);}result
 }
 #[cfg(test)] mod tests {

@@ -15,7 +15,11 @@ FILES=['README.md','LICENSE','desktop/package.json','desktop/package-lock.json',
        'tools/update-manifest.mjs','tools/with-msvc.ps1','tools/fetch_helper.ps1','tools/prepare-build.ps1',
        'tools/export_source.py','tools/build_resources.py','tools/prepare_resources.py','tools/build-resources.json',
        'tools/set-version.mjs','tools/test_updater_e2e.py']
-IGNORE='''.planning/
+IGNORE='''*.jsonl
+TennoLedger-debug-*.json
+*.dpapi
+*.dpapi.new
+.planning/
 research/
 docs/
 screenshots/

@@ -1,3 +1,4 @@
+import {loadMarketPrices,useMarketPrices} from './useMarketPrices';
 import MarketIcon from './MarketIcon';
 import AnalyticsPagination from './AnalyticsPagination';
 import AnalyticsUnit from './AnalyticsUnit';
@@ -18,8 +19,10 @@ const types:Record<string,[string,string,string]>={riven:['未揭示紫卡','Riv
 export default function MarketRankings({modNames,catalog,onRows,onItem,onTrade}:{onTrade?:(row:MarketRankingRow)=>void;onItem?:(id:string)=>void;onRows?:(rows:MarketRankingRow[])=>void;modNames:ReadonlySet<string>|null;catalog:AnalyticsCatalogItem[]|null}){
  const {i18n}=useTranslation(),zh=i18n.language.startsWith('zh');
  const [data,setData]=useState<Result|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState(''),[order,setOrder]=useState<MarketRankingOrder>('totalValue'),[query,setQuery]=useState(''),[page,setPage]=useState(1);
+ const sharedPrices=useMarketPrices();
+ useEffect(()=>{if(native&&sharedPrices.snapshot)setData(sharedPrices.snapshot);},[sharedPrices.snapshot]);
  const refresh=useRef<ReturnType<typeof rivenInventoryRefresh<Result>>|null>(null);
- useEffect(()=>{if(!native)return;const reader=rivenInventoryRefresh(()=>invoke<Result>('market_analytics'),setData,setLoading,setError,65000);refresh.current=reader;void reader.refresh();return()=>{reader.dispose();refresh.current=null;};},[]);
+ useEffect(()=>{if(!native)return;const reader=rivenInventoryRefresh(()=>loadMarketPrices(),setData,setLoading,setError,65000);refresh.current=reader;void reader.refresh();return()=>{reader.dispose();refresh.current=null;};},[]);
  useEffect(()=>{if(data)onRows?.(data.rows);},[data,onRows]);
  const resolveItem=useMemo(()=>marketCatalogResolver(catalog??[]),[catalog]);
  const rows=useMemo(()=>marketRankings(data?.rows??[],order).filter(row=>{const local=resolveItem(row);return searchText(query,row.i18n.en?.name??row.slug,marketDisplayName(row,local,i18n.language));}),[data,order,query,resolveItem,i18n.language]);

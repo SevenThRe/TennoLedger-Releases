@@ -1,3 +1,4 @@
+import {loadMarketPrices,useMarketPrices} from './useMarketPrices';
 import {saleValuation} from './saleValuation';
 import {useAppPreferences} from './useAppPreferences';
 import {useEffect,useMemo,useRef,useState} from 'react';
@@ -12,11 +13,12 @@ import type {InventoryViewPreferences} from './inventoryViewModel';
 type Item={id:string;name:string;zh:string;image:string;imageUrl?:string;category:string;prime:boolean;vaulted:boolean|null};
 export default function InventorySets({items,snapshot,en,search,preferences,onFavorite,onOpen,busy,rowFilter,onTotals}:{rowFilter?:(row:InventorySetRow)=>boolean;onTotals?:(platinum:number|null)=>void;items:ReadonlyMap<string,Item>;snapshot:(InventorySetSnapshot&{favorites:string[]})|null;en:boolean;search:string;preferences:InventoryViewPreferences;onFavorite:(id:string)=>void;onOpen:(id:string)=>void;busy:boolean}){
  const L=(zh:string,english:string)=>en?english:zh;
+ const sharedPrices=useMarketPrices();
  const [sets,setSets]=useState<InventorySet[]>([]),[loadError,setLoadError]=useState(''),[quotes,setQuotes]=useState<Record<string,number>>({}),[quoteError,setQuoteError]=useState(''),[loading,setLoading]=useState(false),[retry,setRetry]=useState(0),[quoteRetry,setQuoteRetry]=useState(0),[filter,setFilter]=useState('all'),[favoritesOnly,setFavoritesOnly]=useState(false),[limit,setLimit]=useState(60);
  const [appPreferences]=useAppPreferences(),[showAllMatches,setShowAllMatches]=useState(false);
  const end=useRef<HTMLDivElement|null>(null);
  useEffect(()=>{let live=true;setLoadError('');void fetch('/inventory-sets.json').then(r=>{if(!r.ok)throw Error('Set catalog: '+r.status);return r.json();}).then(data=>{if(!Array.isArray(data.sets))throw Error('Invalid set catalog');if(live)setSets(data.sets);}).catch(e=>{if(live)setLoadError(String(e));});return()=>{live=false;};},[retry]);
- useEffect(()=>{if(!native||!sets.length)return;let live=true;setLoading(true);setQuoteError('');void invoke<{rows:{slug:string;unitPrice:number|null}[]}>('market_analytics').then(result=>{if(live)setQuotes(inventorySetQuotes(sets,result.rows));}).catch(e=>{if(live)setQuoteError(String(e));}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;};},[sets,quoteRetry]);
+ useEffect(()=>{if(!native||!sets.length)return;let live=true;setLoading(true);setQuoteError('');void loadMarketPrices().then(result=>{if(live)setQuotes(inventorySetQuotes(sets,result.rows));}).catch(e=>{if(live)setQuoteError(String(e));}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;};},[sets,quoteRetry,sharedPrices.snapshot]);
  const rows=useMemo(()=>sets.map(set=>{const parent=set.parentId?items.get(set.parentId):undefined;const name=parent?itemName(parent,en)+' '+L('套装','Set'):set.name;return {set,name,price:quotes[set.slug]??null,...inventorySetState(set,snapshot)};}).filter(r=>searchText(search,r.name,r.set.name,r.set.slug,...(r.set.parts??[]).map(p=>{const i=items.get(p.itemId);return i?itemName(i,en):p.name??p.slug;}))&&(!rowFilter||rowFilter(r))&&(!favoritesOnly||!!r.set.parentId&&!!snapshot?.favorites.includes(r.set.parentId))&&(filter==='all'||filter==='ready'&&r.ready!==null&&r.ready>0||filter==='partial'&&r.completion!==null&&r.completion>0&&r.completion<1||filter==='unknown'&&r.ready===null)).sort((a,b)=>compareInventorySets(a,b,preferences)),[sets,items,snapshot,en,search,quotes,preferences,filter,favoritesOnly,rowFilter]);
  const totals=saleValuation(rows.map(row=>({quantity:row.ready,price:row.price})));
  useEffect(()=>onTotals?.(totals.total),[totals.total,onTotals]);

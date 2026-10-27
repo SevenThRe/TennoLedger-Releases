@@ -1,9 +1,24 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {buildModPlan,type PlannerMod} from '../src/modPlannerModel.ts';
+import {buildModPlan,visiblePlannerMods,type PlannerMod} from '../src/modPlannerModel.ts';
 const catalog:PlannerMod[]=JSON.parse(readFileSync(new URL('../public/mod-planner-index.json',import.meta.url),'utf8')).items;
 const supported=catalog.filter(row=>row.upgradeSupported),mod=supported.find(row=>row.maximumRank===10&&row.rarity==='Legendary')!;
+
+test('Warm Coat internal variants do not inflate missing collection; real owned copies remain distinct',()=>{
+ const normal='/Lotus/Upgrades/Mods/Warframe/AvatarMissionSpecificResistanceIce';
+ const expert='/Lotus/Upgrades/Mods/Warframe/Expert/AvatarMissionSpecificResistanceIceExpert';
+ const intermediate='/Lotus/Upgrades/Mods/Warframe/Intermediate/AvatarMissionSpecificResistanceIceIntermediate';
+ const subset=catalog.filter(m=>[normal,expert,intermediate].includes(m.id));
+ assert.equal(subset.length,3);
+ const build=(ranks:Record<string,Record<string,number>>,favorites:string[]=[])=>buildModPlan(subset,{upgradeCountsByRank:ranks,favorites},{useFavorites:true,goals:[]});
+ assert.deepEqual(visiblePlannerMods(build({}).items).map(m=>m.id),[normal]);
+ assert.equal(visiblePlannerMods(build({}).items,true).length,3);
+ const owned=visiblePlannerMods(build({[expert]:{'5':1}}).items);
+ assert.equal(owned.find(m=>m.id===expert)?.highestRank,5);
+ assert.equal(owned.find(m=>m.id===normal)?.owned,0);
+ assert.equal(visiblePlannerMods(build({},[intermediate]).items).length,2);
+});
 test('patched production catalog has bounded supported costs and distinct IDs',()=>{
  assert.equal(new Set(catalog.map(m=>m.id)).size,catalog.length);
  assert.ok(supported.length>1000);

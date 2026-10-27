@@ -21,25 +21,30 @@ fn merge(items:&[Value],prices:&[Value])->Result<Value,String>{
  Ok(json!({"rows":rows,"fetchedAt":chrono::Utc::now().to_rfc3339(),"source":"AlecaFrame public priceData","platform":"pc"}))
 }
 
-fn fetch(items:Vec<Value>)->Result<Value,String>{
+fn fetch()->Result<Value,String>{
  let mut cached=CACHE.get_or_init(||Mutex::new(None)).lock().map_err(|_|"市场排行缓存锁错误")?;
  if let Some((time,data))=&*cached{if time.elapsed()<Duration::from_secs(900){return Ok(data.clone());}}
+ // Dedicated public client: account restoration and order requests cannot block the snapshot.
+ let client=reqwest::blocking::Client::builder().timeout(Duration::from_secs(45)).user_agent("TennoLedger/0.1.2 (desktop companion)").build().map_err(|e|e.to_string())?;
+ let remote_catalog=client.get("https://api.warframe.market/v2/items").header("Language","zh-hans").header("Platform","pc").send().and_then(|r|r.error_for_status()).and_then(|r|r.json::<Value>());
+ let (catalog,catalog_source)=match remote_catalog {
+  Ok(value) if value["data"].as_array().is_some_and(|rows|!rows.is_empty())=>(value,"live"),
+  _=>{let seed:Value=serde_json::from_str(include_str!("../../public/market-prices.json")).map_err(|_|"随包价格目录无效")?;(json!({"data":seed["rows"]}),"bundled")}
+ };
+ let items=catalog["data"].as_array().ok_or("市场目录格式错误")?;
  let all:Vec<&str>=items.iter().map(|item|item["slug"].as_str().ok_or("市场目录缺少 slug")).collect::<Result<_,_>>()?;
  let slugs:Vec<&str>=all.into_iter().filter(|slug|!excluded(slug)).collect();
  if slugs.is_empty()||slugs.len()>20000{return Err("市场目录数量异常".into());}
- let client=reqwest::blocking::Client::builder().timeout(Duration::from_secs(20)).build().map_err(|e|e.to_string())?;
  let response=client.post("https://api.alecaframe.com/prices/priceData").json(&slugs).send().map_err(|e|format!("批量市场价格读取失败：{e}"))?;
  if !response.status().is_success(){return Err(format!("批量市场价格返回 HTTP {}",response.status()));}
  let prices:Vec<Value>=response.json().map_err(|e|format!("批量市场价格格式错误：{e}"))?;
- let data=merge(&items,&expand_prices(&items,prices)?)?;
+ let mut data=merge(&items,&expand_prices(&items,prices)?)?;data["catalogSource"]=json!(catalog_source);
  *cached=Some((Instant::now(),data.clone()));Ok(data)
 }
 
 #[tauri::command]
 pub async fn market_analytics()->Result<Value,String>{
- let catalog=crate::market::market_request("items".into(),String::new(),"pc".into(),String::new(),json!({})).await?;
- let items=catalog["data"].as_array().ok_or("市场目录格式错误")?.clone();
- tauri::async_runtime::spawn_blocking(move||fetch(items)).await.map_err(|_|"市场排行任务失败".to_string())?
+ tauri::async_runtime::spawn_blocking(fetch).await.map_err(|_|"市场排行任务失败".to_string())?
 }
 
 #[cfg(test)]

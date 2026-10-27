@@ -2,6 +2,9 @@ import {modRankOwnership,modUpgradePlan} from './modUpgradePlan.ts';
 export type PlannerMod={id:string;category:string;rarity:string;maximumRank:number;rarityMultiplier:number;upgradeSupported:boolean;hidden:boolean;description:string;descriptionZh?:string;levels:{rank:number;text:string;textZh?:string}[];sources:{location:string;chance:number|null;reward?:string|null;rotation?:string|null}[]};
 export type ModGoal={id:string;targetRank:number;paused?:boolean};
 export type ModPlannerSnapshot={upgradeCountsByRank?:Record<string,Record<string,number>|null>|null;looseUnrankedMods?:Record<string,number|null>|null;favorites?:string[];credits?:number|null;playerProfile?:{endo?:number|null}|null};
+export function visiblePlannerMods<T extends {hidden:boolean;owned:number|null;favorite:boolean}>(items:readonly T[],includeHidden=false){
+ return items.filter(m=>!m.hidden||(m.owned??0)>0||includeHidden||m.favorite);
+}
 export function buildModPlan(catalog:readonly PlannerMod[],snapshot:ModPlannerSnapshot|null,request:{useFavorites:boolean;goals:readonly ModGoal[];reservedEndo?:number;reservedCredits?:number},names:ReadonlyMap<string,string>=new Map()){
  if(!request.useFavorites&&request.goals.length>100)throw Error('MOD plan exceeds 100 goals');
  const inventoryKnown=snapshot?.upgradeCountsByRank!=null;

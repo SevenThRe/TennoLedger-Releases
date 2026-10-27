@@ -9,7 +9,7 @@ import {useTranslation} from 'react-i18next';
 import {invoke} from '@tauri-apps/api/core';
 import {native} from './api';
 import {useCollectionSnapshot} from './useCollectionSnapshot';
-import {buildModPlan,type PlannerMod,type ModPlannerSnapshot} from './modPlannerModel';
+import {buildModPlan,visiblePlannerMods,type PlannerMod,type ModPlannerSnapshot} from './modPlannerModel';
 import {modUpgradeCost} from './modUpgradePlan';
 import {itemName} from './itemNames';
 import {searchText} from './searchText';
@@ -30,7 +30,7 @@ export function ModPlannerView({catalog,items,snapshot,en,onFavorite,busy=false,
  const names=useMemo(()=>new Map([...items].map(([id,item])=>[id,item.name])),[items]);
  const data=useMemo(()=>buildModPlan(catalog,snapshot,{useFavorites:true,goals:[]},names),[catalog,snapshot,names]);
  const name=(id:string)=>itemName(items.get(id),en)||id.split('/').at(-1)||id;
- const collection=data.items.filter(m=>!m.hidden||!!m.owned||hidden||m.favorite);
+ const collection=visiblePlannerMods(data.items,hidden);
  const rows=collection.filter(m=>searchText(search,name(m.id),items.get(m.id)?.name??'',m.category)&&(!category||m.category===category)&&(!rarity||m.rarity===rarity)&&(!favoriteOnly||m.favorite)&&(!excludeFavorites||!m.favorite)&&(!progress||m.known&&(progress==='missing'?m.owned===0:progress==='owned'?!!m.owned&&!m.maxed:!m.maxed))).sort((a,b)=>Number(b.favorite)-Number(a.favorite)||name(a.id).localeCompare(name(b.id)));
  const groups:PlannerFilterGroup[]=[
  {id:'progress',label:L('升级进度','Progress'),value:progress,change:setProgress,options:[{value:'needed',label:L('尚未满级','Not maxed')},{value:'owned',label:L('拥有且未满级','Owned, not maxed')},{value:'missing',label:L('未拥有','Not owned')}]},

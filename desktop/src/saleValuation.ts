@@ -7,3 +7,10 @@ export function saleValuation(rows:readonly {quantity:number|null;price:number|n
  }
  return {total:unknown||total>BigInt(Number.MAX_SAFE_INTEGER)?null:Number(total),unknown};
 }
+
+// Partial estimates are explicit; strict totals used by sale planning stay unchanged.
+export function inventoryEstimate(rows:readonly {quantity:number|null;price:number|null|undefined}[]){
+ const strict=saleValuation(rows);
+ const known=rows.filter(row=>row.quantity!==null&&Number.isSafeInteger(row.quantity)&&row.quantity>=0&&row.price!=null&&Number.isSafeInteger(row.price)&&row.price>0);
+ return {total:strict.unknown?(known.some(row=>row.quantity!>0)?saleValuation(known).total:null):strict.total,unknown:strict.unknown};
+}

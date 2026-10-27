@@ -14,7 +14,7 @@ const disconnected:MarketSession={connected:false};
 export function useMarketSession(){
  const [session,setSession]=useState<MarketSession>({...disconnected,restoring:native});
  useEffect(()=>{
-  const reader=latestRefresh(()=>invoke<MarketSession>('market_session'),setSession,()=>{},error=>{if(error)setSession(disconnected);});
+  const reader=latestRefresh(()=>invoke<MarketSession>('market_session'),setSession,()=>{},error=>{if(error)setSession(previous=>({...previous,restoring:false,sessionError:error}));});
   const refresh=()=>{if(native)void reader.refresh();};
   refresh();const retry=window.setInterval(refresh,30000);window.addEventListener('market-session-changed',refresh);
   return()=>{window.clearInterval(retry);reader.dispose();window.removeEventListener('market-session-changed',refresh);};

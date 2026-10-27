@@ -1,3 +1,4 @@
+import {loadMarketPrices,useMarketPrices} from './useMarketPrices';
 import {parseMasterySources} from './masterySources';
 import {masteryRows} from './masteryRows';
 import Artwork from './Artwork';
@@ -22,6 +23,7 @@ export default function Mastery({items,snapshot,en,onOpen,onFavorite,busy}:{item
  },[sourceAttempt]);
  useEffect(()=>{let live=true;if(masteryQA&&!native)void fetch('/qa/mastery-quotes.json').then(r=>r.json()).then(value=>{if(live)setQuotes(value);}).catch(()=>{});return()=>{live=false;};},[]);
 
+ const sharedPrices=useMarketPrices();
  const [preferences]=useMasteryPreferences(),forma=preferences.includeForma;
  const s=summary(items,snapshot,preferences.hideFounders),p=progress(snapshot),all=useMemo(()=>candidates(items,snapshot,sources,quotes),[items,snapshot,sources,quotes]),list=recommend(all.filter(r=>!preferences.hideFounders||!founderIds.has(r.item.id)||r.owned),mode,forma);
  const favXP=list.filter(r=>snapshot?.favorites.includes(r.item.id)).reduce((n,r)=>n+r.xp,0),hoverXP=list.find(r=>r.item.id===hover&&!snapshot?.favorites.includes(r.item.id))?.xp??(mode==='normal'&&hover?.startsWith('intrinsic:')?1500:0);
@@ -36,7 +38,7 @@ export default function Mastery({items,snapshot,en,onOpen,onFavorite,busy}:{item
    if(!native)throw Error(L('请在桌面版刷新市场价格','Refresh prices in the desktop app'));
    const ids=masteryQuoteIds(candidates(items,snapshot,sources,{}).filter(r=>!preferences.hideFounders||!founderIds.has(r.item.id)));
    if(!ids.length){if(current())setQuotes({});return;}
-   const result=await invoke<{rows:MarketRankingRow[];fetchedAt:string}>('market_analytics');
+   const result=await loadMarketPrices();
    if(!current())return;
    const next=batchMasteryQuotes(ids,sources.marketSlugs,result.rows);
    setQuotes(next);setQuoteProgress(`${Object.keys(next).length} / ${ids.length}`);
@@ -47,7 +49,7 @@ export default function Mastery({items,snapshot,en,onOpen,onFavorite,busy}:{item
   quoteRun.current++;setLoading(false);setQuoteProgress('');setError('');
   if(native&&!sourceLoading&&!sourceError&&snapshot)void prices();
   return()=>{quoteRun.current++;};
- },[items,snapshot,sources,sourceLoading,sourceError,preferences.hideFounders,mode]);
+ },[items,snapshot,sources,sourceLoading,sourceError,preferences.hideFounders,mode,sharedPrices.snapshot]);
 
  const a=snapshot?.masteryAccount,rows=masteryRows(list,mode,snapshot?.masteryAccount);
 

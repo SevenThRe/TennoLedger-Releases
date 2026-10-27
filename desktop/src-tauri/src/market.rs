@@ -520,6 +520,22 @@ fn restore_session_with(g:&mut Gateway,path:Option<PathBuf>,mut connect:impl FnM
     }
 }
 fn restore_session(g:&mut Gateway,path:Option<PathBuf>){restore_session_with(g,path,connect_inner);}
+// Do not rely on the installer or a UI unmount to flush a remembered login.
+// Opted-out sessions remain memory-only; never create a second credential copy.
+fn prepare_session_update(g:&Gateway,path:&std::path::Path)->Result<(),String>{
+    if !g.remembered { return Ok(()); }
+    if let Some(session)=&g.session {
+        crate::market_credentials::save(path,&crate::market_credentials::SavedSession{
+            token:session.token.clone(),platform:session.platform.clone(),
+        })?;
+    }
+    crate::market_credentials::load(path)?.ok_or("WM 登录记录未保存，暂不安装更新，请重新登录后重试")?;
+    Ok(())
+}
+pub(crate) fn prepare_update(path:&std::path::Path)->Result<(),String>{
+    let g=gate().lock().map_err(|_|"网络队列锁错误")?;
+    prepare_session_update(&g,path)
+}
 async fn read_session(path:Option<PathBuf>)->Result<Value,String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut g=gate().lock().map_err(|_|"网络队列锁错误")?;
@@ -854,8 +870,24 @@ fn search_path(key: &str, b: &Value) -> Result<String, String> {
     }
     Ok(format!("{}?{}", url.path(), url.query().unwrap_or("")))
 }
+
+// Compare only order identity, tradable variant, price, quantity and visibility.
+fn listing_order_state(value:&Value)->Result<Value,String>{
+    let rows:Vec<&Value>=if let Some(rows)=value.as_array(){rows.iter().collect()}else{
+        let sell=value["sell"].as_array().ok_or("卖单格式无效")?;let buy=value["buy"].as_array().ok_or("买单格式无效")?;sell.iter().chain(buy.iter()).collect()
+    };
+    let mut state=std::collections::BTreeMap::new();
+    for row in rows{
+        let id=row["id"].as_str().filter(|s|!s.is_empty()).ok_or("订单 ID 缺失")?;
+        if row["itemId"].as_str().filter(|s|!s.is_empty()).is_none()||!matches!(row["type"].as_str(),Some("sell"|"buy"))||row["quantity"].as_u64().filter(|n|*n>0).is_none()||row["platinum"].as_u64().filter(|n|*n>0).is_none(){return Err("订单字段无效".into());}
+        let fields=json!([row["itemId"],row["type"],row["quantity"],row["platinum"],row["visible"].as_bool().unwrap_or(true),row["rank"],row["subtype"],row["perTrade"].as_u64().unwrap_or(1),row["charges"],row["amberStars"],row["cyanStars"]]);
+        if state.insert(id.to_owned(),fields).is_some(){return Err("重复订单 ID".into());}
+    }
+    serde_json::to_value(state).map_err(|_|"订单校验失败".into())
+}
+
 fn request(action: String, key: String, platform: String, token: String, body: Value) -> Result<Value, String> {
-    request_scoped(action, key, platform, token, body, None)
+    request_scoped(action, key, platform, token, body, None, None, false)
 }
 fn request_scoped(
     action: String,
@@ -863,7 +895,9 @@ fn request_scoped(
     platform: String,
     _token: String,
     body: Value,
-    expected: Option<(String, String)>,
+    expected: Option<(String, String, Option<u64>)>,
+    guards: Option<(tauri::AppHandle, Value, Value)>,
+    force_refresh:bool,
 ) -> Result<Value, String> {
     let (method, mut path, auth) = route(&action, &key)?;
     platform_check(&platform)?;
@@ -874,7 +908,8 @@ fn request_scoped(
     let mut g = gate().lock().map_err(|_| "网络队列锁错误")?;
     // Compare while holding the same lock as login/logout and the actual request.
     // A UI context check alone cannot protect a queued request during an account switch.
-    if let Some((account, expected_platform)) = expected.as_ref() {
+    if let Some((account, expected_platform, generation)) = expected.as_ref() {
+        if generation.is_some_and(|epoch|epoch != SESSION_EPOCH.load(std::sync::atomic::Ordering::SeqCst)) { return Err("市场会话已变化，请重新生成预览".into()); }
         let session = g.session.as_ref().ok_or("请先登录Warframe Market")?;
         authorize_context(&session.profile, &session.platform, account, expected_platform)?;
         if &platform != expected_platform { return Err("任务平台与请求平台不匹配".into()); }
@@ -893,12 +928,22 @@ fn request_scoped(
         }
     }
     let ck = format!("{platform}{path}");
-    if !auth {
+    if !auth && !force_refresh {
         if let Some((at, v)) = g.cache.get(&ck) {
             if at.elapsed() < Duration::from_secs(if action == "items" { 3600 } else { 60 }) {
                 return Ok(v.clone());
             }
         }
+    }
+    if let Some((_, _, expected_orders)) = guards.as_ref() {
+        if !matches!(action.as_str(), "create"|"update") || expected.as_ref().and_then(|v|v.2).is_none() { return Err("批量任务验证参数无效".into()); }
+        let wanted=listing_order_state(expected_orders)?;
+        pace(&mut g, false);
+        let response=g.client.get("https://api.warframe.market/v2/orders/my").header("Platform",&platform)
+            .bearer_auth(&g.session.as_ref().ok_or("请先登录")?.token).send().map_err(|_|"上架前订单核对失败；未发送变更")?;
+        if !response.status().is_success(){return Err("上架前订单核对被拒绝；未发送变更".into());}
+        let value:Value=response.json().map_err(|_|"上架前订单数据无效；未发送变更")?;
+        if listing_order_state(value.get("data").ok_or("订单数据缺失")?)?!=wanted{return Err("订单已变化，请重新生成预览；未发送变更".into());}
     }
     let write = method != "GET";
     let fingerprint = format!("{action}:{key}:{platform}:{body}");
@@ -916,6 +961,11 @@ fn request_scoped(
         g.writes.insert(fingerprint.clone(), Instant::now());
     }
     pace(&mut g, action == "rivens");
+    if let Some((app, expected_inventory, _))=guards.as_ref(){
+        let current=app.state::<crate::AppState>().0.lock().map_err(|_|"库存繁忙")?.load_collection()?.ok_or("库存不可用")?;
+        let current=serde_json::to_value(current).map_err(|_|"库存校验失败")?;
+        if &current!=expected_inventory{return Err("库存已变化，请重新生成预览；未发送变更".into());}
+    }
     let mut trace=crate::diagnostics::RequestTrace::begin(&action,&platform,g.session.is_some(),g.session.as_ref().and_then(|s|verification(&s.profile)),&body);
     let mut req = g
         .client
@@ -994,14 +1044,26 @@ pub async fn market_request(
 #[tauri::command]
 pub async fn market_request_scoped(
     action: String, key: String, platform: String, body: Value,
-    expected_account: String, expected_platform: String,
+    expected_account: String, expected_platform: String, expected_generation: Option<u64>,
+    expected_inventory:Option<Value>, expected_orders:Option<Value>, force_refresh:Option<bool>, app:tauri::AppHandle,
 ) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move || request_scoped(action, key, platform, String::new(), body, Some((expected_account, expected_platform))))
+    let guards=match(expected_inventory,expected_orders){(Some(inventory),Some(orders))=>Some((app,inventory,orders)),(None,None)=>None,_=>return Err("批量校验数据不完整".into())};
+    tauri::async_runtime::spawn_blocking(move || request_scoped(action, key, platform, String::new(), body, Some((expected_account, expected_platform, expected_generation)),guards,force_refresh.unwrap_or(false)))
         .await.map_err(|_| "市场任务失败".to_string())?
 }
 #[cfg(test)]
 mod bulk_context_tests {
     use super::*;
+    #[test] fn listing_guard_compares_quantities_prices_variants_and_rejects_malformed_orders(){
+        let row=json!({"id":"1","itemId":"item","type":"sell","quantity":2,"platinum":7});
+        let a=listing_order_state(&json!([row.clone()])).unwrap();
+        assert_eq!(a,listing_order_state(&json!({"sell":[row.clone()],"buy":[]})).unwrap());
+        for (key,value) in [("quantity",json!(3)),("platinum",json!(8)),("rank",json!(0)),("visible",json!(false))]{let mut changed=row.clone();changed[key]=value;assert_ne!(a,listing_order_state(&json!([changed])).unwrap());}
+        assert!(listing_order_state(&json!([row.clone(),row])).is_err());
+        assert!(listing_order_state(&json!({"sell":[]})).is_err());
+        assert!(listing_order_state(&json!([{"id":"1","quantity":0}])).is_err());
+    }
+
     #[test]
     fn reputation_is_explicit_positive_only_and_cannot_escape_partner_path() {
         assert_eq!(route("review","Tenno.Name").unwrap().1,"/v1/profile/tenno.name/review");
@@ -1148,6 +1210,23 @@ mod async_session_tests {
 }
 
 #[cfg(all(test,windows))] mod remembered_session_tests {
+    #[test] fn update_flush_restores_missing_record_and_new_gateway_recovers_it(){
+        let (mut g,path)=fixture();remember_session(&mut g,path.clone(),true);
+        crate::market_credentials::clear(&path).unwrap();
+        prepare_session_update(&g,&path).unwrap();
+        let mut restarted=new_gateway();restore_session_with(&mut restarted,Some(path.clone()),connected);
+        assert!(restarted.session.is_some());assert!(restarted.remembered);
+        logout_inner(&mut restarted,None).unwrap();std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    }
+    #[test] fn update_does_not_persist_opted_out_sessions(){
+        let (g,path)=fixture();prepare_session_update(&g,&path).unwrap();assert!(!path.exists());
+    }
+    #[test] fn update_blocks_if_remembered_record_cannot_be_read_or_written(){
+        let (mut g,path)=fixture();remember_session(&mut g,path.clone(),true);
+        g.session=None;crate::market_credentials::clear(&path).unwrap();
+        assert!(prepare_session_update(&g,&path).is_err());
+        std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    }
     use super::*;
     fn fixture()->(Gateway,PathBuf){
         let directory=std::env::temp_dir().join(format!("wm-session-state-{}-{}",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap()));

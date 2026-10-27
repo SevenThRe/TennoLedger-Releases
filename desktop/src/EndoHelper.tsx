@@ -1,3 +1,4 @@
+import {loadMarketPrices,useMarketPrices} from './useMarketPrices';
 import {PlannerFilterPanel,PlannerFilterSummary,type PlannerFilterGroup} from './PlannerFilters';
 import ModDetails from './ModDetails';
 import {invoke} from '@tauri-apps/api/core';
@@ -14,6 +15,7 @@ import type {DetailItem} from './ItemDetails';
 import './endoHelper.css';
 export default function EndoHelper({catalog,items,snapshot,en,onFavorite,busy=false,preferencesKey='tennoledger.endo-helper.v1'}:{catalog:PlannerMod[];items:Map<string,DetailItem>;snapshot:ModPlannerSnapshot|null;en:boolean;onFavorite?:(id:string,enabled:boolean)=>void;busy?:boolean;preferencesKey?:string}){
  const L=(zh:string,english:string)=>en?english:zh;
+ const sharedPrices=useMarketPrices();
  const [filtersOpen,setFiltersOpen]=useState(false),[tradeSlugs,setTradeSlugs]=useState<Record<string,string>>({});
  const filterCloseTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
  const openFilters=()=>{clearTimeout(filterCloseTimer.current);setFiltersOpen(true);};
@@ -23,7 +25,7 @@ export default function EndoHelper({catalog,items,snapshot,en,onFavorite,busy=fa
  const [saved]=useState(()=>{try{const p=JSON.parse(localStorage.getItem(preferencesKey)??'{}');return {keep:Number.isInteger(p?.keep)&&p.keep>=1&&p.keep<=100?p.keep:1,protect:p?.protect!==false,rarity:['Common','Uncommon','Rare','Legendary'].includes(p?.rarity)?p.rarity:''};}catch{return {keep:1,protect:true,rarity:''};}});
  const [keep,setKeep]=useState(String(saved.keep)),[protect,setProtect]=useState(saved.protect),[rarity,setRarity]=useState<string>(saved.rarity),[search,setSearch]=useState(''),[order,setOrder]=useState('endo'),[limit,setLimit]=useState(100),[selected,setSelected]=useState(''),[storageError,setStorageError]=useState(false);
  const [quotes,setQuotes]=useState<Record<string,number>>({}),[quoteError,setQuoteError]=useState(''),[quoteLoading,setQuoteLoading]=useState(false),[quoteRetry,setQuoteRetry]=useState(0),[quotedAt,setQuotedAt]=useState('');
- useEffect(()=>{if(!native)return;let live=true;setQuoteLoading(true);setQuoteError('');setQuotes({});setQuotedAt('');invoke<{rows:MarketRankingRow[];fetchedAt:string}>('market_analytics').then(result=>{if(live){setQuotes(endoPrices(catalog.map(m=>m.id),{},result.rows));setQuotedAt(result.fetchedAt);}}).catch(e=>{if(live)setQuoteError(String(e));}).finally(()=>{if(live)setQuoteLoading(false);});return()=>{live=false;};},[catalog,quoteRetry]);
+ useEffect(()=>{if(!native)return;let live=true;setQuoteLoading(true);setQuoteError('');loadMarketPrices().then(result=>{if(live){setQuotes(endoPrices(catalog.map(m=>m.id),{},result.rows));setQuotedAt(result.fetchedAt);}}).catch(e=>{if(live)setQuoteError(String(e));}).finally(()=>{if(live)setQuoteLoading(false);});return()=>{live=false;};},[catalog,quoteRetry,sharedPrices.snapshot]);
  const valid=keep.trim()!==''&&Number.isSafeInteger(Number(keep))&&Number(keep)>=1&&Number(keep)<=100;
  const data=useMemo(()=>buildEndoRows(catalog,snapshot,valid?Number(keep):1,protect),[catalog,snapshot,keep,protect,valid]);
  useEffect(()=>{if(!valid)return;try{localStorage.setItem(preferencesKey,JSON.stringify({keep:Number(keep),protect,rarity}));setStorageError(false);}catch{setStorageError(true);}},[keep,protect,rarity,valid,preferencesKey]);

@@ -1,3 +1,4 @@
+import {loadMarketPrices,useMarketPrices} from './useMarketPrices';
 import RelicPlannerFilterPanel from './RelicPlannerFilterPanel';
 import {relicFamilyCount,matchesRelicTenCopies,plannerRefinementRows,plannerOverlayKey,plannerOverlayEvent,type PlannerOverlayFilters} from './relicPlannerFilters';
 import {useAccounts} from './AccountProvider';
@@ -32,6 +33,7 @@ const relicQA=import.meta.env.DEV&&new URLSearchParams(location.search).get('qa'
 export default function RelicPlanner(){
  const {i18n}=useTranslation(),en=i18n.language.startsWith('en');
  const gridRef=useRef<HTMLDivElement|null>(null);
+ const sharedPrices=useMarketPrices();
  const [preferences]=useAppPreferences();
  const [showAllResults,setShowAllResults]=useState(false);
  const [filtersOpen,setFiltersOpen]=useState(false);
@@ -71,7 +73,7 @@ export default function RelicPlanner(){
  useEffect(()=>{if(gridRef.current)gridRef.current.scrollTop=0;setShowAllResults(false);},[q,era,level,stock,vault,minimum,sort,descending,rewardFilter,parentFilter,onlyFavorites,players,favoriteMode,tenCopies]);
  const relicById=useMemo(()=>new Map(items.map(r=>[r.id,r])),[items]);
  const count=(id:string)=>{const relic=relicById.get(id);return relic?relicOwned(snapshot,relic):owned(snapshot,id);};
- useEffect(()=>{if(!native||!items.length)return;let live=true;void invoke<{rows:{slug:string;unitPrice:number|null}[]}>('market_analytics').then(result=>{const prices=new Map(result.rows.map(row=>[row.slug,row.unitPrice]));if(live)setQuotes(old=>{const next={...old};for(const relic of items)for(const reward of relic.rewards){const price=reward.marketSlug?prices.get(reward.marketSlug):null;if(typeof price==='number'&&Number.isFinite(price)&&price>0)next[reward.id]=price;}return next;});}).catch(e=>{if(live)setPriceNotice(String(e));});return()=>{live=false;};},[items,scope]);
+ useEffect(()=>{if(!native||!items.length)return;let live=true;void loadMarketPrices().then(result=>{const prices=new Map(result.rows.map(row=>[row.slug,row.unitPrice]));if(live)setQuotes(old=>{const next={...old};for(const relic of items)for(const reward of relic.rewards){const price=reward.marketSlug?prices.get(reward.marketSlug):null;if(typeof price==='number'&&Number.isFinite(price)&&price>0)next[reward.id]=price;}return next;});}).catch(e=>{if(live)setPriceNotice(String(e));});return()=>{live=false;};},[items,scope,sharedPrices.snapshot]);
  const allVariants=useMemo(()=>new Map(groupRelics(items).map(g=>[g.base,g.variants])),[items]);
  const rows=items.filter(r=>(rewardFilter==='all'||accepts(allRewardState(r.rewards,id=>{const n=owned(snapshot,id);return n===null?null:n>0;}),rewardFilter))&&(parentFilter==='all'||accepts(allRewardState(r.rewards,parentOwned),parentFilter))&&((favoriteMode!=='yes'&&favoriteMode!=='no')||(isRelicFavorite(favorites,r,items)||r.rewards.some(reward=>rewardFavorite(reward.id)))===(favoriteMode==='yes'))&&matchesRelicTenCopies(relicFamilyCount((level?[r]:(allVariants.get(r.base)??[])),snapshot),tenCopies)&&(!era||r.era===era)&&(!level||r.refinement===level)&&matchesRelic(r,q,rewardNames)&&(vault==='all'||r.vaulted===(vault==='yes'))&&(stock!=='owned'||(count(r.id)??0)>0)&&relicOwnershipMatches((level?[r]:(allVariants.get(r.base)??[])).map(v=>count(v.id)),stock,minimum)).sort((a,b)=>sort==='stock'?(count(b.id)??-1)-(count(a.id)??-1)||a.name.localeCompare(b.name):a.name.localeCompare(b.name));
  const value=(r:Relic)=>expectedBest(r,sort==='ducats'||sort==='efficiency'?relicDucatValues(r):quotes,players);

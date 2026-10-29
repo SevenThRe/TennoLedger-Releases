@@ -1,3 +1,4 @@
+import {marketLoginEvent} from './marketLoginNavigation';
 import {startMarketPrices} from './useMarketPrices';
 import {installClientDiagnostics} from './clientDiagnostics';
 import {RelicCapture} from './Collector';
@@ -58,6 +59,7 @@ const setPage=(target:string)=>{if(target==='settings'){setSettingsOpen(true);re
 useEffect(()=>{if(!appPreferences.statsTabEnabled&&page==='overview')setCurrentPage('foundry');},[appPreferences.statsTabEnabled,page]);
 useEffect(()=>{if(!native)return;const off=listen('open-trade-finish',()=>setPage('market'));return()=>{void off.then(f=>f());};},[]);
 useEffect(()=>{if(page!=='resources')setShardFocus(undefined);},[page]);
+useEffect(()=>{const login=()=>{setMarketView('orders');setNavigationRequest({page:'market',view:'orders'});setPage('market');};window.addEventListener(marketLoginEvent,login);return()=>window.removeEventListener(marketLoginEvent,login);},[]);
 useEffect(()=>{const market=(e:Event)=>{const target=inventoryTradeTarget((e as CustomEvent).detail);if(target){setMarketRequest(target);setPage('inventory');}};window.addEventListener('myframe-open-market',market);return()=>window.removeEventListener('myframe-open-market',market);},[]);
 useEffect(()=>{if(page==='inventory'&&marketRequest){openInventoryTrade(marketRequest);setMarketRequest(null);}},[page,marketRequest]);
 useEffect(()=>{setMessage('');setShardFocus(undefined);setMarketRequest(null);},[accountScope]);

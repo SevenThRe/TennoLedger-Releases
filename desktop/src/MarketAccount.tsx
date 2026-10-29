@@ -1,3 +1,4 @@
+import {marketLoginEvent} from './marketLoginNavigation';
 import {createPortal} from 'react-dom';
 import {visibleBounds} from './viewportBounds';
 import MarketPresence from './MarketPresence';
@@ -26,6 +27,7 @@ export default function MarketAccount({platform:marketPlatform,initiallyOpen=tru
  const {i18n}=useTranslation(),en=i18n.language.startsWith('en'),L=(zh:string,eng:string)=>en?eng:zh;
  const dialogRef=useRef<HTMLElement>(null),session=useMarketSession(),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[platform,setPlatform]=useState('pc'),[open,setOpen]=useState(initiallyOpen),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const authGate=useRef(new MarketActionGate()),[remember,setRemember]=useState(true);
+ useEffect(()=>{const show=()=>setOpen(true);window.addEventListener(marketLoginEvent,show);return()=>window.removeEventListener(marketLoginEvent,show);},[]);
  useEffect(()=>{if(session.connected){setPassword('');setOpen(false);}},[session.connected]);
  async function auth(mode:'login'|'logout'|'refresh'){
   await authGate.current.run(async()=>{

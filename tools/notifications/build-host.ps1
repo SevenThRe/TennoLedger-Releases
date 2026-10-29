@@ -16,5 +16,11 @@ foreach ($contract in @('Windows.Foundation.FoundationContract','Windows.Foundat
     $refs += '/reference:' + $file.FullName
 }
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-& $compiler /nologo /target:exe /platform:x64 /nowarn:1701 ('/out:' + (Join-Path $OutputDirectory 'MyFrame.Notifications.exe')) @refs (Join-Path $source 'Program.cs')
+$config = Get-Content -LiteralPath (Join-Path $source '../tauri.conf.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$brand = $config.app.windows[0].title
+if (-not $brand) { $brand = $config.productName }
+$brandLiteral = ConvertTo-Json -InputObject ([string]$brand) -Compress
+$brandingFile = Join-Path $OutputDirectory 'NotificationBranding.cs'
+[IO.File]::WriteAllText($brandingFile, "using System.Reflection;`n[assembly: AssemblyTitle($brandLiteral)]`n[assembly: AssemblyProduct($brandLiteral)]`n", (New-Object Text.UTF8Encoding($false)))
+& $compiler /nologo /target:exe /platform:x64 /nowarn:1701 ('/win32icon:' + (Join-Path $source '../icons/tenno-ledger.ico')) ('/out:' + (Join-Path $OutputDirectory 'TennoLedger.Notifications.exe')) @refs $brandingFile (Join-Path $source 'Program.cs')
 if ($LASTEXITCODE -ne 0) { throw "Notification host compiler failed: $LASTEXITCODE" }

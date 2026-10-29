@@ -998,7 +998,7 @@ fn request_scoped(
     }
     let r = req
         .send()
-        .map_err(|e|{trace.network(&e);format!("市场连接失败或超时；写操作未自动重试，请先刷新挂单 [诊断编号 {}]",trace.id())})?;
+        .map_err(|e|{trace.network(&e);format!("{} [诊断编号 {}]",if write{"市场连接失败或超时；写操作未自动重试，请先刷新挂单"}else{"无法读取 WM 数据，请检查网络或代理"},trace.id())})?;
     let status=r.status().as_u16();let html=r.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|s|s.contains("text/html"));
     let result=handle_market_response(&mut g,auth,write,&fingerprint,r);
     trace.response(status,html,&result);

@@ -13,9 +13,16 @@ fn install() -> Result<std::path::PathBuf, String> {
         .join(".myframe/notifications");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let files: &[(&str, &[u8])] = &[
-        ("MyFrame.Notifications.exe", include_bytes!(concat!(env!("OUT_DIR"), "/MyFrame.Notifications.exe"))),
+        ("TennoLedger.Notifications.exe", include_bytes!(concat!(env!("OUT_DIR"), "/TennoLedger.Notifications.exe"))),
         ("Microsoft.Toolkit.Uwp.Notifications.dll", include_bytes!("../notification-host/Microsoft.Toolkit.Uwp.Notifications.dll")),
-        ("notification.png", include_bytes!("../icons/notification.png")),
+        ("notification-app.png", include_bytes!("../icons/tenno-ledger.png")),
+        ("notification-vitus.png", include_bytes!("../../public/reference/ui/Elitium.png")),
+        ("notification-lith.png", include_bytes!("../../public/reference/ui/fissure-tier-lith.png")),
+        ("notification-meso.png", include_bytes!("../../public/reference/ui/fissure-tier-meso.png")),
+        ("notification-neo.png", include_bytes!("../../public/reference/ui/fissure-tier-neo.png")),
+        ("notification-axi.png", include_bytes!("../../public/reference/ui/fissure-tier-axi.png")),
+        ("notification-requiem.png", include_bytes!("../../public/reference/ui/fissure-tier-requiem.png")),
+        ("notification-omnia.png", include_bytes!("../../public/reference/ui/multiRelic2.png")),
         ("TOOLKIT-LICENSE.md", include_bytes!("../notification-host/TOOLKIT-LICENSE.md")),
     ];
     for (name, bytes) in files {
@@ -24,7 +31,7 @@ fn install() -> Result<std::path::PathBuf, String> {
             std::fs::write(&path, bytes).map_err(|e| format!("无法更新通知组件 {}：{e}", path.display()))?;
         }
     }
-    Ok(dir.join("MyFrame.Notifications.exe"))
+    Ok(dir.join("TennoLedger.Notifications.exe"))
 }
 pub fn register(app: &tauri::AppHandle) -> Result<(), String> {
     if app.try_state::<Host>().is_some() { return Ok(()); }
@@ -79,12 +86,12 @@ pub fn register(app: &tauri::AppHandle) -> Result<(), String> {
     app.manage(Host { child: Mutex::new(child), input: Mutex::new(input), pending });
     Ok(())
 }
-pub fn send(app: &tauri::AppHandle, notice: &Notice) -> Result<(), String> {send_with_sound(app,notice,true)}
-pub fn send_with_sound(app: &tauri::AppHandle, notice: &Notice,sound:bool) -> Result<(), String> {
+pub fn send(app: &tauri::AppHandle, notice: &Notice) -> Result<(), String> {send_with_sound(app,notice,true,crate::world_notify::notice_icon(notice))}
+pub fn send_with_sound(app: &tauri::AppHandle, notice: &Notice,sound:bool,icon:&str) -> Result<(), String> {
     let host = app.try_state::<Host>().ok_or("Windows 通知组件未就绪")?;
     let (tx, rx) = mpsc::sync_channel(1);
     host.pending.lock().unwrap().insert(notice.id.clone(), tx);
-    let payload = serde_json::json!({"id":notice.id,"title":notice.title,"body":notice.body,"silent":!sound});
+    let payload = serde_json::json!({"id":notice.id,"title":notice.title,"body":notice.body,"icon":icon,"silent":!sound});
     let write = writeln!(host.input.lock().unwrap(), "{payload}").map_err(|e| format!("通知组件通信失败：{e}"));
     let result = write.and_then(|_| rx.recv_timeout(Duration::from_secs(5))
         .map_err(|e| format!("通知组件未确认接收：{e}"))).and_then(|r| r);

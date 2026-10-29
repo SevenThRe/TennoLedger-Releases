@@ -153,6 +153,18 @@ pub fn validate_delivery(settings:&DeliverySettings)->Result<(),String>{
  for template in [&settings.message_template,&settings.conversation_template,&settings.wfm_message_template]{if template.len()>6000||template.chars().count()>1500||template.chars().any(|c|c.is_control()&&c!='\n'&&c!='\t'){return Err("消息模板无效或超过1500字符".into());}}if settings.message_template.is_empty(){return Err("世界消息模板不能为空".into());}
  if !settings.webhook_url.is_empty()&&!valid_webhook(&settings.webhook_url){return Err("请输入有效的 Discord Webhook HTTPS 地址".into());}Ok(())
 }
+// Resolve before applying a custom message template, which may omit the tier.
+pub fn notice_icon(notice: &Notice) -> &'static str {
+    match notice.kind.as_str() {
+        "arbitration" => "vitus",
+        "fissure" => notice.body.split('·').find_map(|part| match part.trim().to_ascii_lowercase().as_str() {
+            "lith" => Some("lith"), "meso" => Some("meso"), "neo" => Some("neo"),
+            "axi" => Some("axi"), "requiem" => Some("requiem"), "omnia" => Some("omnia"),
+            _ => None,
+        }).unwrap_or("app"),
+        _ => "app",
+    }
+}
 pub fn render_message(settings:&DeliverySettings,notice:&Notice)->String{if notice.kind=="conversation"{notice.body.chars().take(1900).collect()}else{settings.message_template.replace("{title}",&notice.title).replace("{body}",&notice.body).replace("{kind}",&notice.kind).chars().take(1900).collect()}}
 fn configured_mentions(settings:&DeliverySettings,notice:&Notice)->serde_json::Value{
  let template=if notice.kind=="conversation"{&settings.conversation_template}else{&settings.message_template};
@@ -195,7 +207,7 @@ pub fn deliver_configured(app:&tauri::AppHandle,notice:&Notice,settings:&Deliver
  let scope=app.try_state::<crate::AppState>().and_then(|state|state.0.lock().ok().and_then(|db|db.active_scope().ok())).filter(|scope|notice_scope(notice,scope).is_some());
  if matches!(notice.kind.as_str(),"conversation"|"riven-monitor")&&scope.is_none(){return Err("账户已切换，已取消旧账户提醒".into());}
  configured_channels(notice,settings,game_foreground(),endpoint,test,
-  |notice,sound|native_with_sound(app,notice,sound),
+  |outgoing,sound|native_with_sound(app,outgoing,sound,notice_icon(notice)),
   |endpoint,body|reqwest::blocking::Client::builder().no_proxy().timeout(std::time::Duration::from_secs(8)).redirect(reqwest::redirect::Policy::none()).build().map_err(|_|String::new()).and_then(|client|client.post(endpoint).json(&serde_json::json!({"content":body,"allowed_mentions":configured_mentions(settings,notice)})).send().map_err(|_|String::new()).and_then(|response|if response.status().is_success(){Ok(())}else{Err(String::new())})),
   |outgoing|{let mut errors=vec![];if app.emit("world-notification",outgoing).is_err(){errors.push("应用内通知发送失败");}
    if !test{if let (Some(scope),Some(overlays))=(scope.as_deref(),app.try_state::<std::sync::Arc<crate::overlays::Service>>()){
@@ -205,8 +217,8 @@ pub fn deliver_configured(app:&tauri::AppHandle,notice:&Notice,settings:&Deliver
    if errors.is_empty(){Ok(())}else{Err(errors.join("；"))}
   })
 }
-#[cfg(windows)]fn native_with_sound(app:&tauri::AppHandle,notice:&Notice,sound:bool)->Result<(),String>{crate::toolkit_toast::send_with_sound(app,notice,sound)}
-#[cfg(not(windows))]fn native_with_sound(app:&tauri::AppHandle,notice:&Notice,_:bool)->Result<(),String>{native(app,notice)}
+#[cfg(windows)]fn native_with_sound(app:&tauri::AppHandle,notice:&Notice,sound:bool,icon:&str)->Result<(),String>{crate::toolkit_toast::send_with_sound(app,notice,sound,icon)}
+#[cfg(not(windows))]fn native_with_sound(app:&tauri::AppHandle,notice:&Notice,_:bool,_:&str)->Result<(),String>{native(app,notice)}
 
 // The URL contains a credential. Persist only user-bound DPAPI ciphertext, never
 // the full URL in settings/cache/UI diagnostics or public snapshots.
@@ -225,6 +237,16 @@ pub fn reveal_webhook(cipher:&str)->Result<String,String>{if cipher.len()>16000|
 
 #[cfg(test)]mod preferences_tests{
  use super::*;
+ #[test]fn notification_art_uses_vitus_and_the_exact_relic_tier_before_template_rendering(){
+  let mut notice=sample_notice();notice.kind="arbitration".into();assert_eq!(notice_icon(&notice),"vitus");
+  notice.kind="fissure".into();
+  for tier in ["lith","meso","neo","axi","requiem","omnia"]{
+   notice.body=format!("节点 · Survival · {}",tier.to_uppercase());assert_eq!(notice_icon(&notice),tier);
+   let mut settings=DeliverySettings::default();settings.message_template="{title}".into();
+   configured_channels(&notice,&settings,None,None,false,|outgoing,_|{assert_eq!(outgoing.body,"Title");assert_eq!(notice_icon(&notice),tier);Ok(())},|_,_|panic!("no webhook"),|_|Ok(())).unwrap();
+  }
+  notice.body="Unknown · Survival · ?".into();assert_eq!(notice_icon(&notice),"app");notice.kind="conversation".into();assert_eq!(notice_icon(&notice),"app");
+ }
  #[test]fn notification_defaults_templates_and_background_policy_preserve_channel_choices(){let mut s=DeliverySettings::default();assert!(s.windows_enabled);assert!(s.sound_enabled);assert!(s.only_background_game);assert!(s.conversation_enabled);assert!(!s.webhook_enabled);let notice=Notice{id:"n".into(),title:"Title".into(),body:"Body".into(),kind:"reward".into(),created_at:"2026-10-25T00:00:00Z".into(),delivery_error:None,system_state:None};assert_eq!(render_message(&s,&notice),"Body");s.message_template="{title}: {body} [{kind}]".into();assert_eq!(render_message(&s,&notice),"Title: Body [reward]");s.only_background_game=true;assert!(!external_allowed(&s,Some(true)));assert!(external_allowed(&s,None));assert!(external_allowed(&s,Some(false)));s.only_background_game=false;assert!(external_allowed(&s,None));}
  #[test]fn webhook_validation_rejects_redirect_hosts_and_never_serializes_or_debugs_credentials(){let endpoint="https://discord.com/api/webhooks/0000000000/synthetic_private_token";assert!(valid_webhook(endpoint));for url in ["http://discord.com/api/webhooks/1/token","https://discord.com.evil.example/api/webhooks/1/token","https://discord.com@evil.example/api/webhooks/1/token","https://discord.com/api/webhooks/1/token?forward=1","https://localhost/api/webhooks/1/token"]{assert!(!valid_webhook(url));}let mut s=DeliverySettings::default();s.webhook_url=endpoint.into();assert!(!serde_json::to_string(&s).unwrap().contains("synthetic_private_token"));assert!(!format!("{s:?}").contains("synthetic_private_token"));assert!(reveal_webhook("你好").is_err());}
  #[cfg(windows)]#[test]fn user_bound_credential_roundtrip_keeps_url_out_of_persisted_text(){let endpoint="https://discord.com/api/webhooks/0000000000/synthetic_private_token";let protected=protect_webhook(endpoint).unwrap();assert!(!protected.contains("synthetic_private_token"));assert_eq!(reveal_webhook(&protected).unwrap(),endpoint);assert!(reveal_webhook("0000").is_err());}

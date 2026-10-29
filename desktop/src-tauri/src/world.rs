@@ -346,7 +346,7 @@ impl WorldService {
                 std::process::id(),
                 now.timestamp_nanos_opt().unwrap_or(now.timestamp_micros())
             ),
-            title: "MyFrame 测试提醒".into(),
+            title: "TennoLedger · 天诺手账 测试提醒".into(),
             body: "这是一条测试消息，可在“计时与警报 → 提醒记录”查看。".into(),
             created_at: now.to_rfc3339(),
             kind: "test".into(),

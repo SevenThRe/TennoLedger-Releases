@@ -9,13 +9,23 @@ using Microsoft.Toolkit.Uwp.Notifications;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-[assembly: AssemblyTitle("MyFrame")]
-[assembly: AssemblyProduct("MyFrame")]
+// Assembly branding is generated from tauri.conf.json by build-host.ps1.
 class NotificationHost
 {
     [DllImport("user32.dll", SetLastError = true)]
     static extern bool AllowSetForegroundWindow(uint processId);
-    public class Request { public string id { get; set; } public string title { get; set; } public string body { get; set; } public bool silent { get; set; } }
+    public class Request { public string id { get; set; } public string title { get; set; } public string body { get; set; } public string icon { get; set; } public bool silent { get; set; } }
+    static Uri NotificationImage(string icon)
+    {
+        // Only embedded assets are selectable; stdin cannot reference arbitrary files/URLs.
+        switch (icon) {
+            case "vitus": case "lith": case "meso": case "neo": case "axi": case "requiem": case "omnia": break;
+            default: icon = "app"; break;
+        }
+        var file = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "notification-" + icon + ".png");
+        if (!File.Exists(file)) file = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "notification-app.png");
+        return new Uri(file);
+    }
     static readonly object OutputLock = new object();
     static void Emit(object value)
     {
@@ -61,7 +71,7 @@ class NotificationHost
                         new ToastContentBuilder().AddText(request.title).AddText(request.body ?? "")
                             .AddAudio(new ToastAudio { Silent = request.silent })
                             .AddArgument("action", "open-myframe")
-                            .AddAppLogoOverride(new Uri(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "notification.png")))
+                            .AddAppLogoOverride(NotificationImage(request.icon))
                             .Show(toast => {
                                 toast.Failed += (sender, e) => Emit(new { kind = "failed", id = id, error = e.ErrorCode.ToString() });
                             });

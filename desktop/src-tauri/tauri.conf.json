@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "TennoLedger",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "identifier": "org.myframe.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -44,7 +44,8 @@
         "languages": [
           "SimpChinese",
           "English"
-        ]
+        ],
+        "installerHooks": "update-host/installer-hooks.nsh"
       }
     }
   },

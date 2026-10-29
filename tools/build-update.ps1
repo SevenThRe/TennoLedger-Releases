@@ -67,6 +67,15 @@ try {
   if((Get-FileHash -LiteralPath $resource -Algorithm SHA256).Hash.ToLowerInvariant() -ne $resources.sha256){throw 'Build resource archive mismatch'}
   $resourceName="TennoLedger_${Version}_build-resources.zip";Copy-Item -LiteralPath $resource -Destination (Join-Path $output $resourceName);$assets+=$resourceName
  }
+ & $Python (Join-Path $PSScriptRoot 'build_incremental.py') --exe (Join-Path $output 'acceptance/myframe-desktop.exe') --output $output --version $Version
+ if($LASTEXITCODE -ne 0){throw 'Incremental range archive generation failed'}
+ $signingPath=$env:TAURI_SIGNING_PRIVATE_KEY
+ try {
+  $env:TAURI_SIGNING_PRIVATE_KEY=$null
+  & (Join-Path $root 'desktop/node_modules/.bin/tauri.cmd') signer sign -f $key (Join-Path $output 'incremental.json') | Out-Null
+  if($LASTEXITCODE -ne 0){throw 'Incremental manifest signing failed'}
+ } finally {$env:TAURI_SIGNING_PRIVATE_KEY=$signingPath}
+ $assets+=@('incremental.json','incremental.json.sig','incremental.bin')
  $lines=@($assets|ForEach-Object {"$((Get-FileHash -LiteralPath (Join-Path $output $_) -Algorithm SHA256).Hash.ToLowerInvariant())  $_"})
  [IO.File]::WriteAllText((Join-Path $output 'SHA256SUMS.txt'),($lines -join "`n")+"`n")
  & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'verify-update.ps1') -Manifest (Join-Path $output 'latest.json')

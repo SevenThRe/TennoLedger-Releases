@@ -25,6 +25,7 @@ mod domain;
 mod store;
 mod inventory_changes;
 mod updates;
+mod incremental_update;
 #[cfg(feature="diagnostics")] mod update_fixture;
 mod workshop;
 mod market;
@@ -260,6 +261,7 @@ fn open_browser_url(parsed:&reqwest::Url)->Result<(),String>{
 }
 fn main() {
     diagnostics::install_panic_hook();
+    match incremental_update::recover_if_needed(){Ok(true)=>return,Ok(false)=>{},Err(error)=>{eprintln!("更新恢复失败：{error}");return;}}
     let _instance=match single_instance::acquire(){Ok(Some(guard))=>guard,Ok(None)=>return,Err(error)=>{eprintln!("{error}");std::process::exit(1);}};
     let args:Vec<String>=std::env::args().collect();
     let acceptance=match acceptance_profile::parse(&args){Ok(value)=>value,Err(error)=>{eprintln!("{error}");std::process::exit(2);}};
@@ -272,6 +274,7 @@ fn main() {
     }
     #[cfg(feature="diagnostics")] update_fixture::apply(&mut context).expect("invalid updater acceptance fixture");
     tauri::Builder::default()
+        .manage(incremental_update::Service::default())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(|window, event| {
             // A confirmed main-window close ends synchronization and auxiliary
@@ -302,7 +305,7 @@ fn main() {
             app.manage(Arc::clone(&arbitration_capture));
             arbitration_capture.start(app.handle().clone());
             // Isolated profiles start disabled, but the user can still enable live capture.
-            collector.watch_account(app.handle());
+            if std::env::var_os("TENNOLEDGER_UPDATE_ACK").is_none(){collector.watch_account(app.handle());}
             let game_events=game_events::Watcher::new();game_events.start(app.handle().clone());app.manage(game_events);
             let world=Arc::new(world::WorldService::new(dir.join("myframe.sqlite3")).map_err(std::io::Error::other)?);
             app.manage(Arc::clone(&world));
@@ -328,7 +331,7 @@ fn main() {
                 });
             }
 
-            if enabled {let _=collector.start(app.handle());}
+            if enabled&&std::env::var_os("TENNOLEDGER_UPDATE_ACK").is_none(){let _=collector.start(app.handle());}
             diagnostics::ready();
             Ok(())
         })
@@ -352,6 +355,10 @@ fn main() {
             arbitration_capture::arbitration_import_chunk,
             arbitration_capture::arbitration_import_finish,
             arbitration_capture::arbitration_import_cancel,
+            incremental_update::incremental_check,
+            incremental_update::incremental_download,
+            incremental_update::incremental_install,
+            incremental_update::incremental_ready,
             updates::update_configuration,
             updates::update_prepare,
             updates::update_resume,

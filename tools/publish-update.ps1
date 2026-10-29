@@ -20,14 +20,14 @@ $expected="https://github.com/$repo/releases/download/v$Version/$name"
 if($value.version -ne $Version -or $value.platforms.'windows-x86_64'.url -ne $expected){throw 'Manifest version/destination mismatch'}
 $sig=(Get-Content -LiteralPath (Join-Path $folder "$name.sig") -Raw).Trim()
 if($sig -ne $value.platforms.'windows-x86_64'.signature){throw 'Manifest and signature sidecar differ'}
-$allowed=@($name,"$name.sig",'latest.json',"TennoLedger_${Version}_build-resources.zip")
+$allowed=@($name,"$name.sig",'latest.json','incremental.json','incremental.json.sig','incremental.bin',"TennoLedger_${Version}_build-resources.zip")
 $files=@();foreach($line in Get-Content -LiteralPath (Join-Path $folder 'SHA256SUMS.txt')){
  if($line -notmatch '^([a-f0-9]{64})  ([A-Za-z0-9_.-]+)$'){throw 'Invalid checksum entry'}
  $hash=$matches[1];$file=$matches[2]
  if($file -notin $allowed -or $file -in $files){throw 'Unexpected or duplicate release asset'}
  if((Get-FileHash -LiteralPath (Join-Path $folder $file) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $hash){throw "Candidate changed: $file"};$files+=$file
 }
-foreach($required in @($name,"$name.sig",'latest.json')){if($required -notin $files){throw "Missing release asset: $required"}}
+foreach($required in @($name,"$name.sig",'latest.json','incremental.json','incremental.json.sig','incremental.bin')){if($required -notin $files){throw "Missing release asset: $required"}}
 & pwsh -NoProfile -File (Join-Path $PSScriptRoot 'verify-update.ps1') -Manifest $manifest
 if($LASTEXITCODE -ne 0){throw 'Candidate signature verification failed'}
 $remoteCommit=& gh api "repos/$repo/commits/$SourceCommit" --jq '.sha'

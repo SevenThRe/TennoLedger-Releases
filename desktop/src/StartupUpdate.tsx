@@ -2,21 +2,23 @@ import {reportClientFault} from './clientDiagnostics';
 import {useTranslation} from 'react-i18next';
 import {useEffect,useState,type ReactNode} from 'react';
 import {invoke} from '@tauri-apps/api/core';
-import {check} from '@tauri-apps/plugin-updater';
+import {checkApplicationUpdate} from './applicationUpdate';
 import {native} from './api';
 import {runUpdate,type UpdateState} from './updateFlow';
 import './startupUpdate.css';
 
 // One startup task even under React StrictMode's development effect replay.
 let startup:Promise<void>|undefined;
+let readyAcknowledged=false;
 let latest:UpdateState={phase:'checking'};
 const listeners=new Set<(s:UpdateState)=>void>();
 const report=(s:UpdateState)=>{if(s.phase==='error')reportClientFault('updater',s.error);latest=s;listeners.forEach(f=>f(s));};
 function start(){return startup??= (async()=>{
  try{
+  if(!readyAcknowledged){readyAcknowledged=true;await invoke('incremental_ready');}
   const config=await invoke<{configured:boolean}>('update_configuration');
   if(!config.configured){report({phase:'ready'});return;}
-  await runUpdate({check:()=>check({timeout:15000}),prepare:()=>invoke('update_prepare'),resume:()=>invoke('update_resume')},report);
+  await runUpdate({check:()=>checkApplicationUpdate(),prepare:()=>invoke('update_prepare'),resume:()=>invoke('update_resume')},report);
  }catch(error){report({phase:'error',error:String(error)});}
 })();}
 export default function StartupUpdate({children}:{children:ReactNode}){

@@ -1,12 +1,13 @@
 [package]
 name = "myframe-desktop"
-version = "0.1.5"
+version = "0.1.6"
 license = "MIT"
 edition = "2021"
 default-run = "myframe-desktop"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+serde_json = "1"
 
 [dependencies]
 tauri-plugin-updater = "2"
@@ -20,6 +21,9 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 
 memchr = "=2.8.3"
 sha2 = "=0.10.9"
+base64 = "0.22"
+minisign-verify = "0.3"
+flate2 = "1.1.10"
 regex = "1"
 tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
 hyper-util = { version = "0.1.21", features = ["client-proxy", "client-proxy-system"] }
@@ -37,8 +41,6 @@ opt-level = 2
 opt-level = 3
 
 [dev-dependencies]
-base64 = "0.22"
-minisign-verify = "0.3"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

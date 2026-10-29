@@ -2063,10 +2063,11 @@ dependencies = [
 
 [[package]]
 name = "myframe-desktop"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "base64 0.22.1",
  "chrono",
+ "flate2",
  "hyper-util",
  "memchr",
  "minisign-verify",

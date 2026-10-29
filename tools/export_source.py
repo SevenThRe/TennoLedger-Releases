@@ -13,7 +13,7 @@ FILES=['README.md','LICENSE','desktop/package.json','desktop/package-lock.json',
        'collector/fixtures/riven-capture-synthetic-event.json','collector/fixtures/riven-capture-synthetic.json',
        'collector/requirements.txt','collector/requirements-build.txt','tools/build-update.ps1','tools/publish-update.ps1','tools/verify-update.ps1',
        'tools/update-manifest.mjs','tools/with-msvc.ps1','tools/fetch_helper.ps1','tools/prepare-build.ps1',
-       'tools/export_source.py','tools/build_resources.py','tools/prepare_resources.py','tools/build-resources.json',
+       'tools/export_source.py','tools/build_incremental.py','tools/test_incremental_update.py','desktop/src-tauri/update-host/Program.cs','desktop/src-tauri/update-host/installer-hooks.nsh','tools/build_resources.py','tools/prepare_resources.py','tools/build-resources.json',
        'tools/set-version.mjs','tools/test_updater_e2e.py']
 IGNORE='''*.jsonl
 TennoLedger-debug-*.json

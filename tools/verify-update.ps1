@@ -13,5 +13,10 @@ try {
   $cargoArguments=@('test','--bin','myframe-desktop','--offline','actual_signed_installer_accepts_original_and_rejects_tampering','--','--ignored')
   & cargo @cargoArguments
   if($LASTEXITCODE -ne 0){throw 'Signed update verification failed'}
+  if(Test-Path -LiteralPath (Join-Path (Split-Path $Manifest) 'incremental.json')){
+   & cargo test --bin myframe-desktop --offline actual_signed_incremental_manifest_and_archive -- --ignored
+   if($LASTEXITCODE -ne 0){throw 'Signed incremental update verification failed'}
+  }
+
  } finally {Pop-Location}
 } finally {$env:MYFRAME_UPDATE_MANIFEST=$previous}

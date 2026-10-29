@@ -2,7 +2,7 @@ export function connectionChecks(scanCode:string,diagnostics:Record<string,unkno
  const bool=(key:string)=>typeof diagnostics?.[key]==='boolean'?diagnostics[key] as boolean:null;
  return {
   game:scanCode==='game-not-running'?false:bool('gameDetected'),
-  inventory:scanCode.startsWith('helper-invalid-inventory:')?false:bool('inventoryComplete'),
+  inventory:scanCode.startsWith('helper-invalid-inventory:')?false:bool('inventoryAvailable')??bool('inventoryComplete'),
  };
 }
 export function inventoryFailureText(scanCode:string,en:boolean):string|null{

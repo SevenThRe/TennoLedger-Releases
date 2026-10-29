@@ -129,6 +129,9 @@ pub struct Snapshot {
     pub captured_at: String,
     pub source: String,
     pub complete: bool,
+    /// Missing owned categories, retained so optional gaps are never treated as zero.
+    #[serde(default)]
+    pub missing_owned_groups: Vec<String>,
     pub mastery_rank: Option<u32>,
     pub credits: Option<u64>,
     #[serde(default)]
@@ -149,6 +152,11 @@ pub struct Snapshot {
     pub archon_shard_frames: Option<Vec<archon_inventory::ShardFrame>>,
     #[serde(default)]
     pub incarnon: Option<BTreeSet<String>>,
+}
+impl Snapshot {
+    pub fn inventory_available(&self) -> bool {
+        self.complete || self.missing_owned_groups == ["Hoverboards"]
+    }
 }
 pub fn catalog() -> Result<Catalog, String> {
     serde_json::from_str(include_str!("../../public/catalog.json")).map_err(|e| e.to_string())

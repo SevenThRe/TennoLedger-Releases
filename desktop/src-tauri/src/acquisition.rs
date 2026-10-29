@@ -19,7 +19,7 @@ fn is_live(source:&str)->bool {matches!(source,"game-memory"|"warframe-api-helpe
 pub fn choose(old:Option<&Snapshot>,next:&Snapshot,live_recent:bool)->Decision {
     let Ok(time)=chrono::DateTime::parse_from_rfc3339(&next.captured_at) else{return Decision::InvalidTime;};
     if time.signed_duration_since(chrono::Utc::now()).num_seconds()>120 {return Decision::InvalidTime;}
-    if is_live(&next.source)&&!next.complete {return Decision::Incomplete;}
+    if is_live(&next.source)&&!next.inventory_available() {return Decision::Incomplete;}
     if old.is_some_and(|old|old.account_scope.is_some()&&next.account_scope.is_none()){return Decision::UnknownIdentity;}
     let switched=old.is_some_and(|old|old.account_scope!=next.account_scope);
     if switched&&next.source=="alecaframe-cache"&&old.is_some_and(|old|old.account_scope.is_some()){return Decision::LivePreferred;}

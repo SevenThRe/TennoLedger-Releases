@@ -15,3 +15,8 @@ test('incomplete inventory remains a failure rather than login advice or success
  assert.match(inventoryFailureText('helper-invalid-inventory:acquisition-incomplete',false)!,/未保存/);
  assert.equal(inventoryFailureText('helper-current',false),null);
 });
+
+test('optional inventory gaps do not report a successful saved sync as unavailable',()=>{
+ assert.equal(connectionChecks('helper-current',{inventoryAvailable:true,inventoryComplete:false}).inventory,true);
+ assert.equal(connectionChecks('helper-invalid-inventory:acquisition-incomplete',{inventoryAvailable:true}).inventory,false);
+});

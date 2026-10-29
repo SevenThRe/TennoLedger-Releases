@@ -201,6 +201,7 @@ pub fn from_value(
     }
     let mut out = Snapshot {
         account_scope,
+        missing_owned_groups: missing_owned_groups(value).into_iter().map(str::to_owned).collect(),
         pending_recipes: pending_recipe_counts(value),
         schema_version: 1,
         rivens: Some(crate::riven_inventory::normalize(value)),
@@ -709,6 +710,33 @@ mod tests {
             crate::collection::count(&out, "/Lotus/Powersuits/EntratiMech"),
             None
         );
+    }
+    #[test]
+    fn hoverboards_missing_empty_and_owned_do_not_block_live_inventory() {
+        let cat=crate::collection::catalog().unwrap();
+        let mut v=raw();
+        for key in EQUIPMENT.iter().chain(STACKS.iter()) {v[*key]=json!([]);}
+        let stamp=chrono::Utc::now().to_rfc3339();
+        let board="/Lotus/Types/Vehicles/Hoverboard/TestBoard";
+        // Invalid sync uses the supplied current timestamp in this synthetic fixture.
+        v["LastInventorySync"]=json!("invalid");
+        v.as_object_mut().unwrap().remove("Hoverboards");
+        let missing=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
+        assert!(!missing.complete);assert!(missing.inventory_available());
+        assert_eq!(crate::collection::count(&missing,board),None);
+        assert_eq!(crate::acquisition::choose(None,&missing,false),crate::acquisition::Decision::Accept);
+        let saved=crate::collection::parse(&serde_json::to_string(&missing).unwrap()).unwrap();
+        assert!(saved.inventory_available());assert!(!saved.complete);
+        v["Hoverboards"]=json!([]);
+        let empty=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
+        assert!(empty.complete);assert_eq!(crate::collection::count(&empty,board),Some(0));
+        v["Hoverboards"]=json!([{"ItemType":board}]);
+        let owned=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
+        assert!(owned.complete);assert_eq!(crate::collection::count(&owned,board),Some(1));
+        v["Hoverboards"]=json!({});assert!(from_value(&v,&cat,None,"warframe-api-helper",&stamp).is_err());
+        v.as_object_mut().unwrap().remove("Hoverboards");v.as_object_mut().unwrap().remove("MechSuits");
+        let broken=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
+        assert!(!broken.inventory_available());assert_eq!(crate::acquisition::choose(None,&broken,false),crate::acquisition::Decision::Incomplete);
     }
     #[test]
     fn invalid_sync_uses_fallback() {

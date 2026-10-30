@@ -375,6 +375,7 @@ def main():
     tail, signals, confirm = Tail(args.log,args.replay_log), Signals(), Confirmation()
     last_status, due, next_scan, last_reward = None, None, 0, -100
     reward_until, reward_misses = 0, 0
+    reward_session = None
     def status(code):
         nonlocal last_status
         if code != last_status:
@@ -396,6 +397,7 @@ def main():
             if signals.accept(line) and time.monotonic()-last_reward > 2:
                 last_reward = time.monotonic()
                 due = last_reward+.65
+                reward_session=f'{os.getpid()}-{time.monotonic_ns()}'
                 reward_until = last_reward+18
                 reward_misses = 0
         if not args.inventory_ocr and due is None:
@@ -448,7 +450,7 @@ def main():
                         if cards and relic_selection_era(lines,*image.size) is None:
                             reward_misses=0
                             reward_until=time.monotonic()+3
-                            capture.emit('relic', capturedAt=timestamp(),status='matched' if all(c.get('itemId') for c in cards) else 'partial',cards=cards)
+                            capture.emit('relic', rewardSession=reward_session,capturedAt=timestamp(),status='matched' if all(c.get('itemId') for c in cards) else 'partial',cards=cards)
                         else:
                             reward_misses+=1
                             if reward_misses>=2:

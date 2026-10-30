@@ -12,6 +12,12 @@ use std::{
 };
 use tauri::{Emitter, Manager};
 fn content_lifetime(kind:&str)->Duration{Duration::from_millis(match kind{"game-notification"=>6500,"trade-finished"=>90000,_=>35000})}
+fn lifetime(kind:&str,p:&Preferences)->Duration{if matches!(kind,"relic-rewards"|"relic-recommendations"){Duration::from_secs(p.relic_timeout_seconds as u64)}else{content_lifetime(kind)}}
+fn session_start(entries:&mut BTreeMap<String,(String,String,Instant)>,kind:&str,scope:&str,session:&str,now:Instant)->Instant{
+    let entry=entries.entry(kind.into()).or_insert_with(||(scope.into(),session.into(),now));
+    if entry.0!=scope||entry.1!=session{*entry=(scope.into(),session.into(),now);}
+    entry.2
+}
 const KINDS: &[&str] = &[
     "relic-rewards",
     "relic-recommendations",
@@ -34,6 +40,7 @@ pub struct Preferences {
     pub copy_rewards: bool,
     pub click_through: bool,
     pub scale: u32,
+    pub relic_timeout_seconds: u32,
 }
 impl Default for Preferences {
     fn default() -> Self {
@@ -49,6 +56,7 @@ impl Default for Preferences {
             copy_rewards: false,
             click_through: false,
             scale: 100,
+            relic_timeout_seconds: 8,
         }
     }
 }
@@ -66,6 +74,7 @@ impl Preferences {
             }
     }
     fn validate(&self) -> Result<(), String> {
+        if !(1..=60).contains(&self.relic_timeout_seconds){return Err("自动隐藏应为1至60秒".into());}
         if !(70..=150).contains(&self.scale) {
             Err("覆盖层缩放应为70至150".into())
         } else {
@@ -96,6 +105,7 @@ pub struct Service {
     stopped: AtomicBool,
     errors: Mutex<BTreeMap<String, String>>,
     relic_selection: Mutex<RelicSelection>,
+    relic_deadlines: Mutex<BTreeMap<String,(String,String,Instant)>>,
 }
 fn read(db: &rusqlite::Connection) -> Result<Preferences, String> {
     let s: Option<String> = db
@@ -120,6 +130,7 @@ impl Service {
             stopped: AtomicBool::new(false),
             errors: Mutex::new(BTreeMap::new()),
             relic_selection: Mutex::new(Default::default()),
+            relic_deadlines: Mutex::new(Default::default()),
         })
     }
     pub fn stop(&self) {
@@ -155,6 +166,14 @@ impl Service {
             let era=payload["era"].as_str().ok_or("遗物推荐缺少纪元")?;
             if !self.relic_selection.lock().map_err(|_|"覆盖层会话锁错误")?.accept(&scope,session,era){return Ok(());}
         }
+        let mut created=Instant::now();
+        if !preview && matches!(kind,"relic-rewards"|"relic-recommendations"){
+            let field=if kind=="relic-rewards"{"rewardSession"}else{"selectionSession"};
+            let session=payload[field].as_str().unwrap_or("legacy-session");
+            let mut deadlines=self.relic_deadlines.lock().map_err(|_|"覆盖层时限锁错误")?;
+            created=session_start(&mut deadlines,kind,&scope,session,created);
+            if created.elapsed()>=lifetime(kind,&preferences){return Ok(());}
+        }
         let mut contents = self.content.lock().map_err(|_| "覆盖层数据锁错误")?;
         if kind == "relic-recommendations" {
             contents.remove("relic-rewards");
@@ -165,7 +184,7 @@ impl Service {
             Content {
                 payload,
                 scope,
-                created: Instant::now(),
+                created,
                 preview,
             },
         );
@@ -225,7 +244,7 @@ impl Service {
                     contents.retain(|kind, c| {
                         active.as_deref() == Some(c.scope.as_str())
                             && c.created.elapsed()
-                                < content_lifetime(kind)
+                                < lifetime(kind,&preferences)
                             && (c.preview || preferences.allows(kind))
                             && (kind!="game-notification" || c.preview || notice_settings.as_ref().is_none_or(|status|crate::world::overlay_notice_allowed(c.payload["noticeKind"].as_str().unwrap_or(""),c.payload["id"].as_str().unwrap_or(""),status)))
                     });
@@ -243,7 +262,7 @@ impl Service {
                             .cloned();
                         let show = content
                             .as_ref()
-                            .is_some_and(|c| c.created.elapsed()<content_lifetime(kind) && (c.preview || foreground && preferences.allows(kind)));
+                            .is_some_and(|c| c.created.elapsed()<lifetime(kind,&preferences) && (c.preview || foreground && preferences.allows(kind)));
                         if !show {
                             if let Some(w) = app_handle.get_webview_window(&label) {
                                 if w.label() == "overlay-trade-finished"
@@ -457,10 +476,10 @@ pub fn overlay_content(
         && c.as_ref().is_some_and(|c| {
             !c.preview
                 && c.created.elapsed()
-                    < content_lifetime(kind)
+                    < lifetime(kind,&preferences)
         });
     Ok(
-        json!({"expiresInMs":c.as_ref().map(|c|content_lifetime(kind).saturating_sub(c.created.elapsed()).as_millis() as u64),"kind":kind,"active":active,"visible":window.is_visible().unwrap_or(false),"preferences":preferences,"payload":c.as_ref().map(|c|&c.payload),"preview":c.as_ref().is_some_and(|c|c.preview)}),
+        json!({"expiresInMs":c.as_ref().map(|c|lifetime(kind,&preferences).saturating_sub(c.created.elapsed()).as_millis() as u64),"kind":kind,"active":active,"visible":window.is_visible().unwrap_or(false),"preferences":preferences,"payload":c.as_ref().map(|c|&c.payload),"preview":c.as_ref().is_some_and(|c|c.preview)}),
     )
 }
 #[tauri::command]
@@ -482,7 +501,7 @@ pub fn overlay_touch(
         .get_mut(kind)
         .filter(|c| c.scope == scope)
     {
-        if kind!="game-notification"{content.created = Instant::now();}
+        if !matches!(kind,"game-notification"|"relic-rewards"|"relic-recommendations"){content.created = Instant::now();}
     }
     Ok(())
 }
@@ -552,6 +571,18 @@ mod tests {
         assert!(s.accept("a","visit1","Axi"));s.dismissed=true;
         assert!(s.accept("a","visit2","Meso"));s.dismissed=true;
         assert!(s.accept("b","visit2","Meso"));
+    }
+    #[test]
+    fn relic_deadline_does_not_extend_on_ocr_refresh_and_old_settings_default_to_eight(){
+        let p:Preferences=serde_json::from_str("{}").unwrap();
+        assert_eq!(lifetime("relic-rewards",&p),Duration::from_secs(8));
+        assert_eq!(lifetime("relic-recommendations",&p),Duration::from_secs(8));
+        let start=Instant::now();let mut entries=BTreeMap::new();
+        assert_eq!(session_start(&mut entries,"relic-rewards","account","round1",start),start);
+        assert_eq!(session_start(&mut entries,"relic-rewards","account","round1",start+Duration::from_secs(9)),start);
+        assert_eq!(session_start(&mut entries,"relic-rewards","account","round2",start+Duration::from_secs(10)),start+Duration::from_secs(10));
+        let mut custom=p;custom.relic_timeout_seconds=12;assert!(custom.validate().is_ok());
+        assert_eq!(lifetime("relic-rewards",&custom),Duration::from_secs(12));custom.relic_timeout_seconds=0;assert!(custom.validate().is_err());
     }
     #[test]
     fn notices_have_a_fixed_short_deadline() {

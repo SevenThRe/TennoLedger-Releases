@@ -336,7 +336,7 @@ impl Collector {
                                 let text:String=c["text"].as_str().unwrap_or("").chars().take(160).collect();
                                 serde_json::json!({"itemId":id,"text":text,"matchStatus":if id.is_some(){"matched"}else{"unresolved"}})
                             }).collect();
-                            r.status.last_relic=Some(serde_json::json!({"capturedAt":v["capturedAt"].as_str(),"captureId":v["captureId"].as_str(),"captureStartedAt":binding.started_at,"accountScope":binding.scope,"cards":clean}));r.status.code="relic-detected".into();
+                            r.status.last_relic=Some(serde_json::json!({"capturedAt":v["capturedAt"].as_str(),"captureId":v["captureId"].as_str(),"captureStartedAt":binding.started_at,"accountScope":binding.scope,"cards":clean,"rewardSession":v["rewardSession"].as_str()}));r.status.code="relic-detected".into();
                             if let (Some(overlays),Some(payload))=(handle.try_state::<Arc<crate::overlays::Service>>(),r.status.last_relic.clone()){let _=overlays.show(&handle,"relic-rewards",payload,false);}
                         }
                     }

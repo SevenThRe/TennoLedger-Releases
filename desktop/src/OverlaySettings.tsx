@@ -4,11 +4,12 @@ export default function OverlaySettings(){const {i18n}=useTranslation(),en=i18n.
  useEffect(()=>{let live=true;if(native)void invoke<OverlayPreferences>('overlay_preferences').then(v=>{if(live){setPreferences(parseOverlayPreferences(v));setLoaded(true);}}).catch(e=>{if(live)setError(String(e));});return()=>{live=false;};},[]);
  async function save(next:OverlayPreferences){setBusy(true);setError('');try{setPreferences(await invoke<OverlayPreferences>('overlay_set_preferences',{preferences:next}));}catch(e){setError(String(e));}finally{setBusy(false);}}
  useEffect(()=>{if(!native)return;let live=true;const poll=()=>void invoke<Record<string,string>>('overlay_status').then(errors=>{if(live&&Object.keys(errors).length)setError(Object.entries(errors).map(([kind,message])=>kind+': '+message).join(' · '));}).catch(()=>{});const timer=setInterval(poll,1500);return()=>{live=false;clearInterval(timer);};},[]);
- const row=(key:keyof Omit<OverlayPreferences,'scale'>,zh:string,eng:string)=><label className="settingRow"><span>{L(zh,eng)}</span><input type="checkbox" role="switch" checked={preferences[key]} disabled={!native||!loaded||busy} onChange={e=>void save({...preferences,[key]:e.target.checked})}/></label>;
+ const row=(key:keyof Omit<OverlayPreferences,'scale'|'relicTimeoutSeconds'>,zh:string,eng:string)=><label className="settingRow"><span>{L(zh,eng)}</span><input type="checkbox" role="switch" checked={preferences[key]} disabled={!native||!loaded||busy} onChange={e=>void save({...preferences,[key]:e.target.checked})}/></label>;
  return <>
   <section className="settingGroup"><h2>{L('遗物','Relics')}</h2>
    {row('relicRewards','启用遗物奖励覆盖层','Enable relic rewards overlay')}
    {row('relicRecommendations','启用遗物推荐覆盖层','Enable relic recommendations overlay')}
+   <label className="settingRow"><span>{L('遗物覆盖层自动隐藏','Relic overlay auto-hide')}</span><select value={preferences.relicTimeoutSeconds} disabled={!native||!loaded||busy} onChange={e=>void save({...preferences,relicTimeoutSeconds:Number(e.target.value)})}>{Array.from({length:60},(_,i)=>i+1).map(n=><option key={n} value={n}>{n} {L('秒','s')}</option>)}</select></label>
    {row('showBalances','在遗物覆盖层中显示账户杜卡德与白金','Show account ducats and platinum on relic overlay')}
    {row('copyRewards','打开遗物后复制奖励数据到剪贴板','Copy relic reward data to clipboard when a relic is opened')}
   </section>

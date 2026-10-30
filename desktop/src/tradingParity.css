@@ -117,3 +117,9 @@
 .windowContent .tradingPage .marketSortTools .marketOrderSearch{display:flex;align-items:center;gap:6px;width:140px;max-width:140px;min-width:100px;height:38px;margin:0;padding:0 10px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-1)}
 .windowContent .tradingPage .marketOrderSearch input{width:0;flex:1;min-width:0;background:none;border:0;outline:0;font-size:14px}
 .windowContent .tradingPage .marketSortTools .marketFilterToggle{width:auto;min-width:0;height:38px;display:flex;gap:6px;align-items:center;padding:0 10px;border:1px solid var(--ui-line);border-radius:7px;font-size:14px}
+
+/* Keep receipt actions clear of the quantity/price inputs. */
+.quoteComposer{display:flex;flex-direction:column;gap:12px;padding:12px}
+.quoteComposer .quotePostFields{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.quoteComposer .quotePostFields>button{grid-column:1/-1;height:34px}
+.quoteComposer>button.quoteCreateAnother{align-self:flex-end;min-height:32px;margin:0;padding:6px 12px;border:1px solid var(--ui-line-strong);border-radius:6px;background:var(--color-bg-2);color:var(--color-text);font:inherit}

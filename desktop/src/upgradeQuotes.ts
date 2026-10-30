@@ -22,7 +22,7 @@ export function rankQuotes(orders:UpgradeOrder[],rank:unknown){
 }
 export function createUpgradeBookCache(load:(slug:string,platform:string)=>Promise<UpgradeBookResponse>,options:{now?:()=>number;wait?:(ms:number)=>Promise<void>;ttl?:number;interval?:number}={}){
  const now=options.now??Date.now,wait=options.wait??(ms=>new Promise(resolve=>setTimeout(resolve,ms)));
- const ttl=options.ttl??60000,interval=options.interval??400;
+ const ttl=options.ttl??15*60*1000,interval=options.interval??400;
  const cache=new Map<string,{at:number;book:UpgradeBook}>(),pending=new Map<string,Promise<UpgradeBook>>(),retryAfter=new Map<string,number>();
  let queue=Promise.resolve(),lastStart:number|null=null;
  return (slug:string,platform='pc',force=false):Promise<UpgradeBook>=>{
@@ -40,7 +40,7 @@ export function createUpgradeBookCache(load:(slug:string,platform:string)=>Promi
    // Base freshness on server receipt time, so old backend-cache data does not
    // gain another full lifetime every time a component mounts.
    cache.set(key,{at:Math.min(now(),Date.parse(value.fetchedAt)),book});retryAfter.delete(key);
-   if(cache.size>256)cache.delete(cache.keys().next().value!);
+   if(cache.size>4096)cache.delete(cache.keys().next().value!);
    return book;
   }).catch(error=>{retryAfter.set(key,now()+30000);throw error;}).finally(()=>pending.delete(key));
   pending.set(key,job);queue=job.then(()=>{},()=>{});return job;

@@ -272,7 +272,7 @@ fn open_live(app: &tauri::AppHandle) -> Result<(), String> {
         tauri::WebviewUrl::App("index.html?arbitrationLive=1&mini=1".into()),
     )
     .title("TennoLedger · 实时仲裁")
-    .inner_size(380., 280.)
+    .inner_size(380., 320.)
     .min_inner_size(320., 48.)
     .always_on_top(true)
     .decorations(false)

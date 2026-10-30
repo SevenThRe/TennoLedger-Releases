@@ -18,7 +18,7 @@ test('all ranks share one in-flight book and cache while platforms remain separa
  const book=await zero;assert.equal(rankQuotes(book.orders,0).sell,10);assert.equal(rankQuotes((await max).orders,10).sell,200);assert.equal(calls,1);
  assert.equal(await read('serration','pc'),book);assert.equal(calls,1);
  await read('serration','ps4');assert.equal(calls,2);assert.deepEqual(waits,[400]);
- now+=60001;await read('serration','pc');assert.equal(calls,3);
+ now+=15*60*1000+1;await read('serration','pc');assert.equal(calls,3);
 });
 test('different books run sequentially with a bounded interval and failures cool down',async()=>{
  let now=1000000,active=0,maxActive=0,calls=0,fail=true;const starts:number[]=[];
@@ -41,3 +41,14 @@ test('rank target survives validation and sidebar copies the actual rank',()=>{
  assert.deepEqual(quotes.map(q=>q.id),['ten']);assert.match(marketWhisper('Serration',quotes[0]),/Serration \(rank 10\)/);
  assert.deepEqual(marketRankTradeQuotes([order('none',undefined,1)],0),[]);
 });
+
+ test('inventory-sized sweeps survive navigation and keep exact rank prices',async()=>{
+ let now=1000000,calls=0;
+ const read=createUpgradeBookCache(async()=>{calls++;return {data:[order('zero',0,200),order('max',5,80)],fetchedAt:new Date(now).toISOString()};},{now:()=>now,interval:0});
+ for(let i=0;i<1382;i++)await read('mod_'+i);
+ now+=61000;
+ const book=await read('mod_0');
+ assert.equal(calls,1382);
+ assert.deepEqual(rankQuotes(book.orders,0),{sell:200,buy:null});
+ assert.deepEqual(rankQuotes(book.orders,5),{sell:80,buy:null});
+ });

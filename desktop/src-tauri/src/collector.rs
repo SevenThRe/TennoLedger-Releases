@@ -280,7 +280,7 @@ impl Collector {
                 let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());
                 if r.generation!=generation {break;}
                 if v["schemaVersion"]!=1 {continue;}
-                let active=if matches!(v["type"].as_str(),Some("capture-start"|"inventory"|"trade-candidate"|"relic"|"riven-capture")){handle.state::<AppState>().0.lock().ok().and_then(|db|db.active_scope().ok())}else{None};
+                let active=if matches!(v["type"].as_str(),Some("capture-start"|"inventory"|"trade-candidate"|"relic"|"relic-selection"|"relic-selection-ended"|"relic-rewards-ended"|"riven-capture")){handle.state::<AppState>().0.lock().ok().and_then(|db|db.active_scope().ok())}else{None};
                 match v["type"].as_str() {
                     Some("capture-start")=>{if let (Some(id),Some(started),Some(active))=(v["captureId"].as_str(),v["startedAt"].as_str(),active.as_deref()){r.capture_start(id,started,active);}}
                     Some("capture-end")=>{if let Some(id)=v["captureId"].as_str(){r.captures.remove(id);}}
@@ -300,12 +300,16 @@ impl Collector {
                         let Some(binding)=v["captureId"].as_str().and_then(|id|active.as_deref().and_then(|scope|r.capture_result(id,scope))) else{continue;};
                         if v["candidate"].is_object(){let mut event=v.clone();event["accountScope"]=binding.scope.into();event["captureStartedAt"]=binding.started_at.into();let _=handle.emit("trade-candidate",&event);}
                     }
+                    Some("relic-rewards-ended")=>{
+                        let Some(_binding)=v["captureId"].as_str().and_then(|id|active.as_deref().and_then(|scope|r.capture_result(id,scope)))else{continue;};
+                        if matches!(v["evidence"].as_str(),Some("ocr"|"game-log")){if let Some(overlays)=handle.try_state::<Arc<crate::overlays::Service>>(){overlays.dismiss(&handle,"relic-rewards");}}
+                    }
                     Some("relic-selection")=>{
                         let Some(binding)=v["captureId"].as_str().and_then(|id|active.as_deref().and_then(|scope|r.capture_result(id,scope)))else{continue;};
                         if v["evidence"]!="ocr"||!matches!(v["era"].as_str(),Some("Lith"|"Meso"|"Neo"|"Axi"|"Requiem")){continue;}
                         let Some(session)=v["selectionSession"].as_str().filter(|s|!s.is_empty()&&s.len()<=100&&s.bytes().all(|c|c.is_ascii_alphanumeric()||c==b'-'))else{continue;};
                         let payload=serde_json::json!({"accountScope":binding.scope,"capturedAt":v["capturedAt"],"era":v["era"],"selectionSession":session,"eraEvidence":"selection-title-ocr"});
-                        if let Some(overlays)=handle.try_state::<Arc<crate::overlays::Service>>(){let _=overlays.show(&handle,"relic-recommendations",payload,false);}
+                        if let Some(overlays)=handle.try_state::<Arc<crate::overlays::Service>>(){overlays.dismiss(&handle,"relic-rewards");let _=overlays.show(&handle,"relic-recommendations",payload,false);}
                     }
                     Some("relic-selection-ended")=>{
                         let Some(binding)=v["captureId"].as_str().and_then(|id|active.as_deref().and_then(|scope|r.capture_result(id,scope)))else{continue;};

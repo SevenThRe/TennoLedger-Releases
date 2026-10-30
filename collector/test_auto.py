@@ -2,7 +2,7 @@ import tempfile
 from pathlib import Path
 import unittest
 from unittest.mock import patch
-from auto import Tail, Signals, Aliases, reward_cards, inventory_observations, Confirmation, CaptureRecord, relic_selection_era, RelicSelectionSession
+from auto import reward_screen_closed, Tail, Signals, Aliases, reward_cards, inventory_observations, Confirmation, CaptureRecord, relic_selection_era, RelicSelectionSession
 
 
 def line(text,x=100,y=300,w=100,h=20):
@@ -90,6 +90,19 @@ class AutoTests(unittest.TestCase):
         self.assertEqual([c['itemId'] for c in cards],['a','b'])
         aliases=Aliases([dict(id='a',name='Same'),dict(id='b',name='Same')])
         self.assertEqual(reward_cards([line('Same')],aliases,1000,1000),[])
+
+    def test_reward_screen_close_uses_actual_log_markers(self):
+        self.assertTrue(reward_screen_closed('8608.474 Script [Info]: ProjectionRewardChoice.lua: Relic reward screen shut down'))
+        self.assertTrue(reward_screen_closed('ProjectionRewardChoice.lua: Reward choice force closed'))
+        self.assertFalse(reward_screen_closed('ProjectionsCountdown.lua: Relic timer closed'))
+        self.assertFalse(reward_screen_closed('ProjectionRewardChoice.lua: Relic rewards initialized'))
+
+    def test_reward_columns_preserve_unknown_and_wrapped_prime_blueprints(self):
+        aliases=Aliases([dict(id='frame',name='Test Prime',zh='Test Prime',recipe={'parts':[{'itemId':'bp'}]}),dict(id='bp',name='Blueprint'),dict(id='neuro',name='Test Prime Neuroptics Blueprint',zh='Test Prime 头部神经光元 蓝图'),dict(id='pet',name='铁甲狐帕菲拉')])
+        rows=[line('Test Prime 蓝图',x=50,y=430),line('Test Prime 头部神经',x=500,y=416,w=200,h=31),line('光元蓝图',x=545,y=445,w=110,h=34),line('Unknown Prime 蓝图',x=800,y=430),line('铁甲狐帕菲拉',x=50,y=300)]
+        cards=reward_cards(rows,aliases,1000,1000,menu_scale={'mode':'full','percent':100})
+        self.assertEqual([c['itemId'] for c in cards],['bp','neuro',None])
+        self.assertEqual(reward_cards([line('铁甲狐帕菲拉')],aliases,1000,1000),[])
 
     def test_inventory_requires_heading_exact_name_and_explicit_count(self):
         aliases=Aliases([dict(id='a',name='Forma')])

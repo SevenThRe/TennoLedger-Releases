@@ -93,6 +93,13 @@ class Signals:
         return ('Got rewards' in line or 'Created /Lotus/Interface/ProjectionRewardChoice.swf' in line) and not self.requiem
 
 
+def reward_screen_closed(line):
+    return any(marker in line for marker in (
+        'ProjectionRewardChoice.lua: Reward choice force closed',
+        'ProjectionRewardChoice.lua: Relic reward screen shut down',
+    ))
+
+
 class Aliases:
     def __init__(self, items):
         self.aliases = {}
@@ -112,7 +119,7 @@ class Aliases:
                 child = by_id.get(part['itemId'], {})
                 if child.get('name') not in generic:
                     continue
-                for name in (parent.get('name','') + ' ' + child['name'], parent.get('zh','') + ' ' + child.get('zh','')):
+                for name in (parent.get('name','') + ' ' + child['name'], parent.get('zh','') + ' ' + (child.get('zh') or {'Blueprint':'蓝图'}.get(child.get('name'),''))):
                     if normalize(name) and name.strip() not in (parent.get('zh'), parent.get('name')):
                         self.aliases.setdefault(normalize(name), set()).add(child['id'])
 
@@ -152,12 +159,12 @@ def reward_scale_settings(path):
 
 def reward_cards(lines, aliases, width, height, menu_scale=None):
     # Reward names occupy the central strip; cluster aligned wrapped lines before matching.
-    top, bottom = reward_scale_bounds(height, menu_scale) if menu_scale is not None else (.18, .72)
-    candidates = [l for l in lines if top*height < l['y'] < bottom*height and l['w'] < .44*width]
+    top, bottom = reward_scale_bounds(height, menu_scale) if menu_scale is not None else (.18, .55)
+    candidates = [l for l in lines if top*height < l['y'] < min(.6,bottom+.035)*height and l['w'] < .44*width]
     groups = []
     for line in sorted(candidates, key=lambda l: l['y']):
         cx = line['x'] + line['w']/2
-        group = next((g for g in groups if abs(cx-(g[0]['x']+g[0]['w']/2)) < .045*width and 0 <= line['y']-(g[-1]['y']+g[-1]['h']) < .045*height), None)
+        group = next((g for g in groups if abs(cx-(g[0]['x']+g[0]['w']/2)) < .045*width and -.01*height <= line['y']-(g[-1]['y']+g[-1]['h']) < .045*height), None)
         if group is None:
             groups.append([line])
         else:
@@ -173,12 +180,18 @@ def reward_cards(lines, aliases, width, height, menu_scale=None):
                 if item:
                     matches.append((end-start, item, text, group[start:end]))
         if not matches:
+            text = ' '.join(l['text'] for l in group)
+            if 'prime' in normalize(text):
+                x,y=min(l['x'] for l in group),min(l['y'] for l in group)
+                cards.append(dict(itemId=None,text=text,matchStatus='unresolved',box=[x,y,max(l['x']+l['w'] for l in group)-x,max(l['y']+l['h'] for l in group)-y]))
             continue
         longest = max(m[0] for m in matches)
         matches = [m for m in matches if m[0] == longest]
         if len({m[1] for m in matches}) != 1:
             continue
         _, item, text, used = matches[0]
+        if not any(token in normalize(text) for token in ('prime','blueprint','蓝图')):
+            continue
         x,y = min(l['x'] for l in used), min(l['y'] for l in used)
         cards.append(dict(itemId=item,text=text,matchStatus='matched',ocrConfidence=min(l['confidence'] for l in used),box=[x,y,max(l['x']+l['w'] for l in used)-x,max(l['y']+l['h'] for l in used)-y]))
     cards.sort(key=lambda c: c['box'][0])
@@ -361,6 +374,7 @@ def main():
     engine = RapidOCR(intra_op_num_threads=2, inter_op_num_threads=1)
     tail, signals, confirm = Tail(args.log,args.replay_log), Signals(), Confirmation()
     last_status, due, next_scan, last_reward = None, None, 0, -100
+    reward_until, reward_misses = 0, 0
     def status(code):
         nonlocal last_status
         if code != last_status:
@@ -368,6 +382,11 @@ def main():
             last_status = code
     while parent_alive(args.parent_pid):
         for line in tail.poll():
+            if reward_screen_closed(line):
+                due=None
+                reward_until=0
+                with CaptureRecord() as capture:
+                    capture.emit('relic-rewards-ended',capturedAt=timestamp(),evidence='game-log')
             if 'UIConsoleTrigger::Open()' in line:
                 last_console=time.monotonic()
             if 'ThemedProjectionManager.lua: LoadingCompleteEnd' in line and time.monotonic()-last_console>1:
@@ -377,11 +396,14 @@ def main():
             if signals.accept(line) and time.monotonic()-last_reward > 2:
                 last_reward = time.monotonic()
                 due = last_reward+.65
+                reward_until = last_reward+18
+                reward_misses = 0
         if not args.inventory_ocr and due is None:
             status('watching' if args.log.exists() else 'waiting-log')
         reward = due is not None and time.monotonic() >= due
         if args.once_image or reward or time.monotonic() >= next_scan:
-            next_scan = time.monotonic()+3
+            reward_scan = bool(reward or args.once_image or time.monotonic()<reward_until)
+            next_scan = time.monotonic()+(.5 if time.monotonic()<reward_until else 1)
             if reward:
                 due = None
             with CaptureRecord() as capture:
@@ -421,9 +443,17 @@ def main():
                     for candidate in candidates(' '.join(line['text'] for line in lines)):
                         capture.emit('trade-candidate', capturedAt=timestamp(), candidate=candidate)
                     status('watching' if args.log.exists() else 'waiting-log')
-                    if reward or args.once_image:
+                    if reward_scan:
                         cards = reward_cards(lines, aliases, *image.size, menu_scale=reward_scale_settings(args.menu_scale_config))
-                        capture.emit('relic', capturedAt=timestamp(),status='matched' if cards else 'unresolved',cards=cards)
+                        if cards and relic_selection_era(lines,*image.size) is None:
+                            reward_misses=0
+                            reward_until=time.monotonic()+3
+                            capture.emit('relic', capturedAt=timestamp(),status='matched' if all(c.get('itemId') for c in cards) else 'partial',cards=cards)
+                        else:
+                            reward_misses+=1
+                            if reward_misses>=2:
+                                capture.emit('relic-rewards-ended',capturedAt=timestamp(),evidence='ocr')
+                                reward_until=0
                     if args.inventory_ocr and not reward and not args.once_image:
                         observations = inventory_observations(lines,aliases,*image.size)
                         if confirm.accept(observations):

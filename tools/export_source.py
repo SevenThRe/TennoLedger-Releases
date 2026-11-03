@@ -14,7 +14,11 @@ FILES=['README.md','LICENSE','desktop/package.json','desktop/package-lock.json',
        'collector/requirements.txt','collector/requirements-build.txt','tools/build-update.ps1','tools/publish-update.ps1','tools/verify-update.ps1',
        'tools/update-manifest.mjs','tools/with-msvc.ps1','tools/fetch_helper.ps1','tools/prepare-build.ps1',
        'tools/export_source.py','tools/build_incremental.py','tools/test_incremental_update.py','desktop/src-tauri/update-host/Program.cs','desktop/src-tauri/update-host/installer-hooks.nsh','tools/build_resources.py','tools/prepare_resources.py','tools/build-resources.json',
-       'tools/set-version.mjs','tools/test_updater_e2e.py','tools/accept_wm_prices.py','tools/test_accept_wm_prices.py']
+       'tools/set-version.mjs','tools/test_updater_e2e.py','tools/accept_wm_prices.py','tools/test_accept_wm_prices.py',
+       'desktop/tests/browser/relic-market.html','desktop/tests/browser/relic-market.html.tsx',
+       'desktop/tests/browser/reward-latency-production.html','desktop/tests/browser/reward-latency-production.tsx',
+       'desktop/tests/MARKET-REGRESSION.md','desktop/tests/mounted/package.json',
+       'desktop/tests/mounted/package-lock.json','desktop/tests/mounted/composer.test.mjs']
 IGNORE='''*.jsonl
 TennoLedger-debug-*.json
 *.dpapi
@@ -27,6 +31,7 @@ screenshots/
 .rea-lab/
 *.md
 !README.md
+!desktop/tests/MARKET-REGRESSION.md
 *.log
 *.har
 *.pcap

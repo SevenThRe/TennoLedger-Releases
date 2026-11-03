@@ -12,15 +12,21 @@ import type {InventoryTradeTarget} from './inventoryTrade';
 /** One composer shared by Inventory, Analytics and the Market order workspace. */
 export default function QuoteOrderComposer({target,mode,suggested,en,onPosted,onVariant}:{target:InventoryTradeTarget;mode:'sell'|'buy';suggested:number|null;en:boolean;onPosted:()=>void;onVariant:(patch:Partial<Pick<InventoryTradeTarget,'rank'|'subtype'|'charges'|'amberStars'|'cyanStars'|'perTrade'>>)=>void}){
  const session=useMarketSession(),[item,setItem]=useState<QuoteMarketItem|null>(null),[quantity,setQuantity]=useState(1),[price,setPrice]=useState<number|''>(''),[rank,setRank]=useState(target.rank??0),[extra,setExtra]=useState<MarketExtras>({}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[receipt,setReceipt]=useState<'idle'|'posted'|'uncertain'>('idle'),[attempt,setAttempt]=useState(0);
- const edited=useRef(false),context=useMemo(()=>({}),[session.connected,session.accountId,session.sessionGeneration,session.platform,target.slug]),active=useRef<object|null>(context),gate=useMemo(()=>new MarketActionGate(),[context]);active.current=context;
+ const latestTarget=useRef(target);latestTarget.current=target;
+ const edited=useRef(false),context=useMemo(()=>({}),[session.connected,session.accountId,session.sessionGeneration,session.platform,target.slug,target.platform]),active=useRef<object|null>(context),gate=useMemo(()=>new MarketActionGate(),[context]);active.current=context;
  useEffect(()=>{setBusy(false);},[context]);
  useEffect(()=>()=>{if(active.current===context)active.current=null;},[context]);
  useEffect(()=>{let alive=true;setItem(null);setError('');setReceipt('idle');setQuantity(target.perTrade??1);edited.current=false;
-  if(native)void invoke<{data:QuoteMarketItem[]}>('market_request',{action:'items',key:'',platform:target.platform??session.platform??'pc',token:'',body:{}}).then(result=>{if(!Array.isArray(result.data))throw Error('Invalid market catalog');const matches=result.data.filter(row=>row.slug===target.slug);if(matches.length!==1)throw Error(en?'Item unavailable for posting':'无法确认可挂售的市场物品');if(alive){const item=matches[0],next={...defaultMarketExtras(item),...(target.subtype?{subtype:target.subtype}:{})};for(const field of ['charges','amberStars','cyanStars','perTrade'] as const)if(target[field]!=null)next[field]=target[field];setItem(item);setExtra(next);setRank(target.rank??0);onVariant({...(item.maxRank!=null?{rank:target.rank??0}:{}),subtype:next.subtype,charges:next.charges,amberStars:next.amberStars,cyanStars:next.cyanStars,perTrade:next.perTrade});}}).catch(e=>{if(alive)setError(String(e));});
+  if(native)void invoke<{data:QuoteMarketItem[]}>('market_request',{action:'items',key:'',platform:target.platform??session.platform??'pc',token:'',body:{}}).then(result=>{if(!Array.isArray(result.data))throw Error('Invalid market catalog');const matches=result.data.filter(row=>row.slug===target.slug);if(matches.length!==1)throw Error(en?'Item unavailable for posting':'无法确认可挂售的市场物品');if(alive){const target=latestTarget.current,item=matches[0],next={...defaultMarketExtras(item),...(target.subtype?{subtype:target.subtype}:{})};for(const field of ['charges','amberStars','cyanStars','perTrade'] as const)if(target[field]!=null)next[field]=target[field];setItem(item);setExtra(next);setRank(target.rank??0);onVariant({...(item.maxRank!=null?{rank:target.rank??0}:{}),subtype:next.subtype,charges:next.charges,amberStars:next.amberStars,cyanStars:next.cyanStars,perTrade:next.perTrade});}}).catch(e=>{if(alive)setError(String(e));});
   return()=>{alive=false;};
- },[target.slug,session.platform,session.sessionGeneration,attempt]);
+ },[target.slug,target.platform,session.platform,session.accountId,session.connected,session.sessionGeneration,attempt]);
  useEffect(()=>{if(!edited.current)setPrice(suggested??'');},[suggested,mode,target.slug]);
- useEffect(()=>{setRank(target.rank??0);},[target.rank]);
+ useEffect(()=>{
+  setRank(target.rank??0);
+  const next:MarketExtras={...(item?defaultMarketExtras(item):{}),...(target.subtype?{subtype:target.subtype}:{})};
+  for(const field of ['charges','amberStars','cyanStars','perTrade'] as const)if(target[field]!=null)next[field]=target[field];
+  setExtra(next);
+ },[item,target.rank,target.subtype,target.charges,target.amberStars,target.cyanStars,target.perTrade]);
  const edit=()=>{edited.current=true;setReceipt('idle');setError('');};
  async function submit(){const current=()=>active.current===context;await gate.run(async()=>{if(!current())return;setBusy(true);setError('');let sent=false;try{
    if(!session.connected||session.verified!==true)throw Error(en?'Sign in with a verified warframe.market account':'请连接已验证的 warframe.market 账户');

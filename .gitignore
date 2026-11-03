@@ -10,6 +10,7 @@ screenshots/
 .rea-lab/
 *.md
 !README.md
+!desktop/tests/MARKET-REGRESSION.md
 *.log
 *.har
 *.pcap

@@ -11,3 +11,5 @@
 .relicTradeQuotes button{padding:4px;background:none;border:0;cursor:pointer}.relicTradeQuotes button img{width:16px;height:16px;object-fit:contain}
 
 .relicRewardImage{position:relative;width:55px;height:45px;flex-shrink:0}.relicRewardImage>img{width:100%;height:100%;object-fit:contain}.relicRewardImage>.relicParentTick{position:absolute;bottom:0;left:0;width:22px;height:22px}@media(max-width:550px){.relicRewardImage{width:30px}}
+
+.referenceRelicDialog button.relicRewardRow{width:100%;text-align:left;color:inherit;font:inherit;cursor:pointer}.referenceRelicDialog button.relicRewardRow:disabled{cursor:default;opacity:1}.referenceRelicDialog button.relicRewardRow:focus-visible{outline:2px solid #b6f7de;outline-offset:1px}.referenceRelicDialog button.relicRewardRow:not(:disabled):hover{background:var(--color-bg-3,#29334e)}

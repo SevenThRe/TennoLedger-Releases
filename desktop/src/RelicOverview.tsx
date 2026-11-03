@@ -1,3 +1,4 @@
+import {useMarketPrices} from './useMarketPrices';
 import {openInventoryTrade} from './inventoryTrade';
 import {loadUpgradeBook} from './upgradeQuotes';
 import {marketOrderQuotes} from './marketModel';
@@ -25,6 +26,7 @@ import {refinementLabel} from './relicLabels';
 export {refinementLabel} from './relicLabels';
 type CatalogItem=MasteryItem;
 export default function RelicOverview({relic,variants,counts,complete,en,onClose,snapshot,initialPlayers=1}:{initialPlayers?:number;snapshot?:Inventory|null;relic:Relic;variants:Relic[];counts:Record<string,number>;complete:boolean;en:boolean;onClose:()=>void}){
+ const sharedPrices=useMarketPrices();
  const {favorites,toggleFavorite,favoriteError}=useRelicFavorites();
  const [sources,setSources]=useState<Sources|null>(null);
  const L=(zh:string,english:string)=>en?english:zh;
@@ -44,6 +46,7 @@ export default function RelicOverview({relic,variants,counts,complete,en,onClose
  },[active.rewards]);
  useEffect(()=>{setPrices({});setStale(false);if(native)void refresh();return()=>{generation.current++;};},[refresh]);
 
+ useEffect(()=>{if(!sharedPrices.snapshot)return;const rows=new Map(sharedPrices.snapshot.rows.map(r=>[r.slug,r]));const next:Record<string,number|null>={};for(const reward of active.rewards){const row=reward.marketSlug?rows.get(reward.marketSlug):undefined;if(row)next[reward.id]=row.unitPrice;}setPrices(old=>({...old,...next}));},[sharedPrices.snapshot,active.rewards]);
  const [marketPrice,setMarketPrice]=useState<number|null>(null);
  useEffect(()=>{let live=true;setMarketPrice(null);if(native&&active.marketSlug)void loadUpgradeBook(active.marketSlug,'pc').then(book=>{const order=marketOrderQuotes(book.orders,{subtype:active.refinement.toLowerCase()}).find(row=>row.type==='sell');if(live)setMarketPrice(order?order.platinum/(order.perTrade??1):null);}).catch(()=>{});return()=>{live=false;};},[active.marketSlug,active.refinement]);
  const tiers=relicRewardTiers(active,levels),ducatValues=relicDucatValues(active);

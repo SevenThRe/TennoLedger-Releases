@@ -1,4 +1,4 @@
-import {loadMarketPrices,useMarketPrices} from './useMarketPrices';
+import {loadMarketPrices,useMarketPrices,warmMarketPrices} from './useMarketPrices';
 import {parseMasterySources} from './masterySources';
 import {masteryRows} from './masteryRows';
 import Artwork from './Artwork';
@@ -41,6 +41,7 @@ export default function Mastery({items,snapshot,en,onOpen,onFavorite,busy}:{item
    const result=await loadMarketPrices();
    if(!current())return;
    const next=batchMasteryQuotes(ids,sources.marketSlugs,result.rows);
+   void warmMarketPrices(ids.filter(id=>next[id]==null).map(id=>sources.marketSlugs[id]).filter((s):s is string=>!!s)).catch(()=>{});
    setQuotes(next);setQuoteProgress(`${Object.keys(next).length} / ${ids.length}`);
    setQuotedAt(new Date(result.fetchedAt).toLocaleTimeString());
   }catch(e){if(current())setError(String(e));}finally{if(current())setLoading(false);}

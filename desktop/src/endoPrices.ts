@@ -7,7 +7,7 @@ export function endoPrices(ids:readonly string[],slugs:Record<string,string>,row
  for(const id of ids){
   const row=byId.get(canonical(id))??bySlug.get(slugs[id]);
   const price=row?.unitPrice;
-  if(typeof price==='number'&&Number.isSafeInteger(price)&&price>0)result[id]=price;
+  if(typeof price==='number'&&Number.isFinite(price)&&price<=Number.MAX_SAFE_INTEGER&&price>0)result[id]=price;
  }
  return result;
 }

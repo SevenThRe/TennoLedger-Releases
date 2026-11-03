@@ -1,6 +1,6 @@
 [package]
 name = "myframe-desktop"
-version = "0.1.8"
+version = "0.1.9"
 license = "MIT"
 edition = "2021"
 default-run = "myframe-desktop"
@@ -45,6 +45,11 @@ opt-level = 3
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 diagnostics = []
+
+[[bin]]
+name = "price-probe"
+path = "src/bin/price-probe.rs"
+required-features = ["diagnostics"]
 
 [[bin]]
 name = "arbitration-probe"

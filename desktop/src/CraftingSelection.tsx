@@ -13,13 +13,16 @@ import {craftableQuantity,craftingDuration,craftingQuantity,type CraftingItem} f
 import {craftingDrops} from './craftingDropModel';
 import {openInventoryTrade} from './inventoryTrade';
 import {rewardQuote} from './priceService';
+import {useMarketPrices} from './useMarketPrices';
 export default function CraftingSelection({node,item,items,name,englishName,describe,en,counts,complete,snapshot,root,rootId,onOpenRelated}:{snapshot?:Inventory|null;node:TreeNode;item?:CraftingItem;items:ReadonlyMap<string,CraftingItem>;name:string;englishName:string;describe:(id:string)=>string;en:boolean;counts:Record<string,number>;complete:boolean;root:boolean;rootId?:string;onOpenRelated?:(id:string)=>void}){
  const locationName=useDropLocation(en),L=(zh:string,english:string)=>en?english:zh;
  const [details,setDetails]=useState<MaterialDetails>({}),[relics,setRelics]=useState<Relic[]>([]),[sources,setSources]=useState<Sources|null>(null),[failed,setFailed]=useState<Array<'details'|'relics'|'sources'>>([]),[attempt,setAttempt]=useState(0),[loading,setLoading]=useState(true),[linkError,setLinkError]=useState(''),[openedRelic,setOpenedRelic]=useState<Relic|null>(null);
  const locations=useRef<HTMLDivElement>(null);
  const [price,setPrice]=useState<number|null>(null);
  const slug=sources?.marketSlugs?.[node.itemId];
+ const sharedPrices=useMarketPrices();
  useEffect(()=>{let live=true;setPrice(null);if(native&&slug)void rewardQuote(slug).then(quote=>{if(live)setPrice(quote.price);}).catch(()=>{});return()=>{live=false;};},[slug]);
+ useEffect(()=>{const row=sharedPrices.snapshot?.rows.find(r=>r.slug===slug);if(row)setPrice(row.unitPrice);},[sharedPrices.snapshot,slug]);
  useEffect(()=>{locations.current?.scrollTo({top:0});setLinkError('');setOpenedRelic(null);},[node]);
  useEffect(()=>{let live=true;setLoading(true);void loadCraftingSources(url=>fetch(url).then(r=>{if(!r.ok)throw Error(String(r.status));return r.json();})).then(result=>{if(!live)return;if(result.details!==null)setDetails(result.details);if(result.relics!==null)setRelics(result.relics);if(result.sources!==null)setSources(result.sources);setFailed(result.failed);setLoading(false);});return()=>{live=false;};},[attempt]);
  const drops=craftingDrops(node.itemId,!!item?.recipe,details,relics,sources,{counts,complete}),craftable=craftableQuantity(node,items),missing=node.missing===null||craftable===null?null:Math.max(0,node.missing-craftable);

@@ -2,13 +2,24 @@ import tempfile
 from pathlib import Path
 import unittest
 from unittest.mock import patch
-from auto import reward_screen_closed, Tail, Signals, Aliases, reward_cards, inventory_observations, Confirmation, CaptureRecord, relic_selection_era, RelicSelectionSession
+from auto import reward_screen_visible, reward_screen_closed, Tail, Signals, Aliases, reward_cards, inventory_observations, Confirmation, CaptureRecord, relic_selection_era, RelicSelectionSession
 
 
 def line(text,x=100,y=300,w=100,h=20):
     return dict(text=text,x=x,y=y,w=w,h=h,confidence=.99)
 
 class AutoTests(unittest.TestCase):
+    def test_reward_title_recovers_missed_log_without_matching_inventory(self):
+        for text in ['虚空裂缝 / 报酬', '虛空裂縫 / 報酬', 'VOID FISSURE / REWARDS']:
+            self.assertTrue(reward_screen_visible([line(text,y=70)],1080))
+        self.assertFalse(reward_screen_visible([line('Prime 蓝图',y=450)],1080))
+        self.assertFalse(reward_screen_visible([line('虚空裂缝 / 报酬',y=800)],1080))
+
+    def test_reward_quantity_prefix_preserves_forma_identity(self):
+        aliases=Aliases([dict(id='forma',name='Forma Blueprint',zh='Forma 蓝图')])
+        for text in ['2 X Forma 蓝图','2XForma蓝图','2 × Forma Blueprint']:
+            self.assertEqual(aliases.exact(text),'forma')
+
     def test_game_chinese_century_labels_and_reentry_heartbeat(self):
         for text,era in [('古世纪','Lith'),('前世纪','Meso'),('中世纪','Neo'),('后世纪','Axi')]:
             self.assertEqual(relic_selection_era([line(text,x=25,y=70,w=120)],1000,1000),era)

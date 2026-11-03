@@ -1,3 +1,4 @@
+import {useMarketPrices} from './useMarketPrices';
 import {readPlannerOverlayFilters,plannerOverlayKey,plannerOverlayEvent, matchesRelicTenCopies,type PlannerOverlayFilters} from './relicPlannerFilters';
 import {useAccounts} from './AccountProvider';
 import {accountStorageKey} from './accountScopeModel';
@@ -23,6 +24,7 @@ import {relicImage} from './relicImage';
 import {recommendationRows,mergeRecommendationQuotes,voidTraceId} from './relicRecommendationsModel';
 import './relicRecommendationsOverlay.css';
 export default function RelicRecommendationsOverlay({data,en}:{data:{payload:any;preview:boolean;preferences?:unknown};en:boolean}){
+ const sharedPrices=useMarketPrices();
  const L=(a:string,b:string)=>en?b:a,snapshot=useCollectionSnapshot(),{favorites,toggleFavorite,favoriteError}=useRelicFavorites();
  const [relics,setRelics]=useState<Relic[]>([]),[catalog,setCatalog]=useState<MasteryItem[]>([]),[sources,setSources]=useState<Sources|null>(null),[era,setEra]=useState(data.payload?.era??''),[players,setPlayers]=useState(4),[refinement,setRefinement]=useState(''),[vault,setVault]=useState('all'),[onlyFavorites,setOnlyFavorites]=useState(false),[sort,setSort]=useState('platinum'),[descending,setDescending]=useState(true),[quotes,setQuotes]=useState<Record<string,number|null>>({}),[progress,setProgress]=useState(''),[notice,setNotice]=useState(''),[error,setError]=useState('');
  const generation=useRef(0),loading=useRef(false),{scope}=useAccounts();
@@ -31,7 +33,7 @@ export default function RelicRecommendationsOverlay({data,en}:{data:{payload:any
  useEffect(()=>{let live=true;void Promise.all([fetch('/relic-catalog.json').then(r=>{if(!r.ok)throw Error('遗物目录读取失败');return r.json();}),fetch('/catalog.json').then(r=>r.json()),fetch('/mastery-sources.json').then(r=>r.json())]).then(([r,c,s])=>{if(live){setRelics(mergeRelicAliases(r.items));setCatalog(c.items);setSources(s);}}).catch(e=>{if(live)setError(String(e));});return()=>{live=false;generation.current++;};},[]);
  useEffect(()=>setEra(data.payload?.era??''),[data.payload?.selectionSession,data.payload?.era]);
  useEffect(()=>{generation.current++;setProgress('');loading.current=false;},[snapshot?.accountScope,data.preview]);
- useEffect(()=>{const restored:Record<string,number|null>={};try{for(const reward of new Map(relics.flatMap(r=>r.rewards).map(r=>[r.id,r])).values())if(reward.marketSlug){const quote=cachedRewardQuote(reward.marketSlug);if(quote)restored[reward.id]=quote.price;}setQuotes(old=>mergeRecommendationQuotes(restored,old));}catch{setNotice(L('行情缓存不可读取','Price cache unavailable'));}},[relics]);
+ useEffect(()=>{const restored:Record<string,number|null>={};try{for(const reward of new Map(relics.flatMap(r=>r.rewards).map(r=>[r.id,r])).values())if(reward.marketSlug){const row=sharedPrices.snapshot?.rows.find(r=>r.slug===reward.marketSlug);if(row)restored[reward.id]=row.unitPrice;}setQuotes(old=>({...old,...restored}));}catch{setNotice(L('行情缓存不可读取','Price cache unavailable'));}},[relics,sharedPrices.snapshot]);
  const inventory=data.preview?{complete:false,counts:data.payload?.sampleCounts??{}}:snapshot;
  const parents=useMemo(()=>{const result=new Map<string,MasteryItem[]>();for(const item of catalog){if(item.maxRank<=0)continue;for(const id of new Set([item.id,...(sources?.items[item.id]?.parts??[]).flatMap(p=>[p.itemId,p.ownedItemId].filter((x):x is string=>!!x))])){const rows=result.get(id)??[];rows.push(item);result.set(id,rows);}}return result;},[catalog,sources]);
  const all=relics.map(relic=>({relic,amount:relicOwned(inventory,relic),platinum:expectedBest(relic,quotes,players),ducats:expectedBest(relic,relicDucatValues(relic),players),favorite:isRelicFavorite(favorites,relic,relics)||relic.rewards.some(r=>isRewardFavorite(snapshot?.favorites??[],r.id,parents.get(r.id)??[]))}));

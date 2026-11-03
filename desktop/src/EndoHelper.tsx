@@ -1,4 +1,4 @@
-import {loadMarketPrices,useMarketPrices} from './useMarketPrices';
+import {loadMarketPrices,useMarketPrices,warmMarketPrices} from './useMarketPrices';
 import {PlannerFilterPanel,PlannerFilterSummary,type PlannerFilterGroup} from './PlannerFilters';
 import ModDetails from './ModDetails';
 import {invoke} from '@tauri-apps/api/core';
@@ -28,6 +28,8 @@ export default function EndoHelper({catalog,items,snapshot,en,onFavorite,busy=fa
  useEffect(()=>{if(!native)return;let live=true;setQuoteLoading(true);setQuoteError('');loadMarketPrices().then(result=>{if(live){setQuotes(endoPrices(catalog.map(m=>m.id),{},result.rows));setQuotedAt(result.fetchedAt);}}).catch(e=>{if(live)setQuoteError(String(e));}).finally(()=>{if(live)setQuoteLoading(false);});return()=>{live=false;};},[catalog,quoteRetry,sharedPrices.snapshot]);
  const valid=keep.trim()!==''&&Number.isSafeInteger(Number(keep))&&Number(keep)>=1&&Number(keep)<=100;
  const data=useMemo(()=>buildEndoRows(catalog,snapshot,valid?Number(keep):1,protect),[catalog,snapshot,keep,protect,valid]);
+ const priceTargets=JSON.stringify(data.rows.map(r=>tradeSlugs[r.id]).filter((s):s is string=>!!s));
+ useEffect(()=>{void warmMarketPrices(JSON.parse(priceTargets)).catch(()=>{});},[priceTargets]);
  useEffect(()=>{if(!valid)return;try{localStorage.setItem(preferencesKey,JSON.stringify({keep:Number(keep),protect,rarity}));setStorageError(false);}catch{setStorageError(true);}},[keep,protect,rarity,valid,preferencesKey]);
  const groups:PlannerFilterGroup[]=[{id:'rarity',label:L('稀有度','Rarity'),value:rarity,change:setRarity,options:['Common','Uncommon','Rare','Legendary'].map(value=>({value,label:value}))}];
  const name=(id:string)=>itemName(items.get(id),en)||id.split('/').at(-1)||id;

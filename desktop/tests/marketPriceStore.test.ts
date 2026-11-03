@@ -55,3 +55,32 @@ test('packaged real catalog snapshot hydrates all rows without any network work'
  assert.ok(result.rows.find(row=>row.slug==='acceltra_prime_barrel')?.unitPrice);
  console.log(`Full snapshot hydrate: ${result.rows.length} rows in ${(performance.now()-start).toFixed(1)} ms, ${requests} network requests`);
 });
+
+test('aging during failed IPC publishes immutable expiry, retains errors and recovers',async()=>{
+ let clock=now,fail=true,calls=0;
+ const algorithm='median-online-sell-v1';
+ const quote=():PriceSnapshot=>({...sample(),algorithm,fetchedAt:new Date(clock).toISOString(),rows:[{...sample().rows[0],algorithm,priceFetchedAt:new Date(clock).toISOString()}]});
+ const store=createMarketPriceStore(async()=>{calls++;if(fail)throw Error('IPC unavailable');return quote();},storage(),()=>clock);
+ store.seed(quote());const original=store.getSnapshot().snapshot!;
+ const observed:PriceSnapshot[]=[];store.subscribe(()=>{if(store.getSnapshot().snapshot)observed.push(store.getSnapshot().snapshot!);});
+ clock=now+86400000;await assert.rejects(store.refresh(true),/IPC unavailable/);
+ assert.equal(store.getSnapshot().snapshot,original);
+ clock++;await store.read(); // retry backoff must still expire locally
+ const expired=store.getSnapshot();assert.notEqual(expired.snapshot,original);
+ assert.equal(expired.snapshot?.rows[0].unitPrice,null);assert.equal(original.rows[0].unitPrice,19);
+ assert.equal(expired.snapshot?.rows[0].priceFetchedAt,original.rows[0].priceFetchedAt);
+ assert.equal(expired.snapshot?.fetchedAt,original.fetchedAt);assert.match(expired.error,/IPC unavailable/);
+ assert.ok(observed.includes(expired.snapshot!));assert.equal(store.getSnapshot(),expired);assert.equal(calls,1);
+ fail=false;await store.refresh(true);assert.equal(store.getSnapshot().snapshot?.rows[0].unitPrice,19);assert.equal(store.getSnapshot().error,'');
+});
+test('five second refreshes coalesce while pending and expire without a successful load',async()=>{
+ let clock=now,calls=0,reject!:(error:Error)=>void;
+ const algorithm='median-online-sell-v1';
+ const store=createMarketPriceStore(()=>{calls++;return new Promise((_r,j)=>{reject=j;});},storage(),()=>clock);
+ store.seed({...sample(),algorithm,rows:[{...sample().rows[0],algorithm,priceFetchedAt:new Date(now-86400000+5000).toISOString()}]});
+ const first=store.refresh(true);await Promise.resolve();clock+=5000;
+ assert.equal(store.refresh(true),first);assert.equal(store.getSnapshot().snapshot?.rows[0].unitPrice,19);
+ clock+=5000;assert.equal(store.refresh(true),first);assert.equal(store.getSnapshot().snapshot?.rows[0].unitPrice,null);
+ assert.equal(calls,1);reject(Error('IPC unavailable'));await assert.rejects(first,/IPC unavailable/);
+ const stable=store.getSnapshot();assert.equal(store.getSnapshot(),stable);
+});

@@ -100,6 +100,16 @@ def reward_screen_closed(line):
     ))
 
 
+def reward_screen_visible(lines, height):
+    # Explicit screen title is required for recovery without a log event.
+    # Prime names alone also occur in inventory, chat and relic selection.
+    title = ''.join(normalize(line['text']) for line in lines
+                    if line['y'] < .18 * height and line.get('confidence', 0) >= .85)
+    return (('虚空裂缝' in title or '虛空裂縫' in title) and
+            any(word in title for word in ('奖励', '獎勵', '报酬', '報酬'))) or (
+                'voidfissure' in title and 'reward' in title)
+
+
 class Aliases:
     def __init__(self, items):
         self.aliases = {}
@@ -124,6 +134,7 @@ class Aliases:
                         self.aliases.setdefault(normalize(name), set()).add(child['id'])
 
     def exact(self, text):
+        text = re.sub(r'^\s*\d+\s*[xX×]\s*', '', text)
         ids = self.aliases.get(normalize(text), set())
         return next(iter(ids)) if len(ids) == 1 else None
 
@@ -155,6 +166,39 @@ def reward_scale_settings(path):
     if len(raw) > 4096:
         raise ValueError('Menu scale settings too large')
     return json.loads(raw.decode('utf-8-sig'))
+
+
+def reward_ocr(engine, image, settings):
+    """Read title + reward strip together, preserving original coordinates."""
+    from PIL import Image
+    import numpy as np
+    top, bottom = reward_scale_bounds(image.height, settings)
+    bands = [(int(.035*image.height), int(.15*image.height)),
+             (int(max(top,bottom-.12)*image.height), int(min(.6,bottom+.04)*image.height))]
+    canvas = Image.new('RGB', (image.width, sum(b-a for a,b in bands)))
+    offset, mapping = 0, []
+    for a,b in bands:
+        canvas.paste(image.crop((0,a,image.width,b)), (0,offset))
+        mapping.append((offset,offset+b-a,a));offset+=b-a
+    result,_ = engine(np.asarray(canvas)[:,:,::-1].copy())
+    lines=lines_from_ocr(result)
+    for line in lines:
+        for a,b,original in mapping:
+            if a <= line['y'] < b:
+                line['y'] += original-a
+                break
+    return lines
+
+
+def warm_reward_ocr(engine):
+    # Pay lazy inference setup at worker startup, before a timed reward screen.
+    from PIL import Image, ImageDraw
+    image=Image.new('RGB',(1280,720),'black')
+    draw=ImageDraw.Draw(image)
+    draw.text((40,50),'VOID FISSURE / REWARDS',fill='white',font_size=32)
+    for x in (120,420,720,1020):
+        draw.text((x,310),'Prime Blueprint',fill='white',font_size=22)
+    reward_ocr(engine,image,dict(mode='full',percent=100))
 
 
 def reward_cards(lines, aliases, width, height, menu_scale=None):
@@ -372,10 +416,12 @@ def main():
     from rapidocr_onnxruntime import RapidOCR
     import numpy as np
     engine = RapidOCR(intra_op_num_threads=2, inter_op_num_threads=1)
+    warm_reward_ocr(engine)
     tail, signals, confirm = Tail(args.log,args.replay_log), Signals(), Confirmation()
     last_status, due, next_scan, last_reward = None, None, 0, -100
     reward_until, reward_misses = 0, 0
     reward_session = None
+    reward_seen = False
     def status(code):
         nonlocal last_status
         if code != last_status:
@@ -386,6 +432,8 @@ def main():
             if reward_screen_closed(line):
                 due=None
                 reward_until=0
+                reward_session=None
+                reward_seen=False
                 with CaptureRecord() as capture:
                     capture.emit('relic-rewards-ended',capturedAt=timestamp(),evidence='game-log')
             if 'UIConsoleTrigger::Open()' in line:
@@ -400,6 +448,7 @@ def main():
                 reward_session=f'{os.getpid()}-{time.monotonic_ns()}'
                 reward_until = last_reward+18
                 reward_misses = 0
+                reward_seen = False
         if not args.inventory_ocr and due is None:
             status('watching' if args.log.exists() else 'waiting-log')
         reward = due is not None and time.monotonic() >= due
@@ -423,8 +472,19 @@ def main():
                     time.sleep(.2)
                     continue
                 try:
-                    result,_ = engine(np.asarray(image.convert('RGB'))[:,:,::-1].copy())
-                    lines = lines_from_ocr(result)
+                    settings=reward_scale_settings(args.menu_scale_config)
+                    lines=reward_ocr(engine,image,settings)
+                    title_visible=reward_screen_visible(lines,image.height)
+                    if not reward_scan and not title_visible:
+                        result,_ = engine(np.asarray(image.convert('RGB'))[:,:,::-1].copy())
+                        lines = lines_from_ocr(result)
+                    if reward_screen_visible(lines, image.height) and not signals.requiem:
+                        reward_scan = True
+                        if reward_session is None:
+                            reward_session=f'{os.getpid()}-{time.monotonic_ns()}'
+                            reward_until=time.monotonic()+18
+                            reward_seen=False
+                            reward_misses=0
                     # Observe the explicit heading continuously. A log event can
                     # be missed on startup and the player may stay here >30s.
                     selection = selection_session.observe(relic_selection_era(lines,*image.size),time.monotonic())
@@ -446,16 +506,21 @@ def main():
                         capture.emit('trade-candidate', capturedAt=timestamp(), candidate=candidate)
                     status('watching' if args.log.exists() else 'waiting-log')
                     if reward_scan:
-                        cards = reward_cards(lines, aliases, *image.size, menu_scale=reward_scale_settings(args.menu_scale_config))
+                        cards = reward_cards(lines, aliases, *image.size, menu_scale=settings)
                         if cards and relic_selection_era(lines,*image.size) is None:
                             reward_misses=0
-                            reward_until=time.monotonic()+3
+                            reward_seen=True
+                            reward_until=max(reward_until,time.monotonic()+3)
                             capture.emit('relic', rewardSession=reward_session,capturedAt=timestamp(),status='matched' if all(c.get('itemId') for c in cards) else 'partial',cards=cards)
                         else:
                             reward_misses+=1
-                            if reward_misses>=2:
+                            # Loading/animation frames before the first match
+                            # must not cancel the original 18-second retry window.
+                            if reward_seen and reward_misses>=3:
                                 capture.emit('relic-rewards-ended',capturedAt=timestamp(),evidence='ocr')
                                 reward_until=0
+                                reward_session=None
+                                reward_seen=False
                     if args.inventory_ocr and not reward and not args.once_image:
                         observations = inventory_observations(lines,aliases,*image.size)
                         if confirm.accept(observations):

@@ -2,7 +2,7 @@ import type {Recommendation} from './masteryModel';
 import type {Quote} from './quoteCache';
 import type {MarketRankingRow} from './marketRankingModel';
 
-/** Reference mastery uses priceData.post, not live order-book lowest asks. */
+/** Reference mastery consumes the shared WM median snapshot. */
 export function batchMasteryQuotes(ids:readonly string[],slugs:Record<string,string>,rows:readonly MarketRankingRow[]){
  const bySlug=new Map(rows.map(row=>[row.slug,row]));
  const canonical=(id:string)=>id.replace(/^\/Lotus\/StoreItems\//,'/Lotus/');
@@ -10,7 +10,7 @@ export function batchMasteryQuotes(ids:readonly string[],slugs:Record<string,str
  const prices:Record<string,number>={};
  for(const id of ids){
   const row=bySlug.get(slugs[id])??byId.get(canonical(id)),price=row?.unitPrice;
-  if(typeof price==='number'&&Number.isSafeInteger(price)&&price>0)prices[id]=price;
+  if(typeof price==='number'&&Number.isFinite(price)&&price<=Number.MAX_SAFE_INTEGER&&price>0)prices[id]=price;
  }
  return prices;
 }

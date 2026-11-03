@@ -378,6 +378,7 @@ fn session_view(s: Option<&Session>) -> Value {
     }
 }
 fn pace(g: &mut Gateway, riven: bool) {
+    crate::wm_rate::wait();
     if let Some(at) = g.last {
         let d = Duration::from_millis(400);
         if at.elapsed() < d {

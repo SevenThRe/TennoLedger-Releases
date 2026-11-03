@@ -36,6 +36,8 @@ mod presence_transport;
 mod market_aleca;
 mod theme_presets;
 mod market_analytics;
+mod price_engine;
+mod wm_rate;
 mod collector;
 mod acquisition;
 mod helper_inventory;
@@ -287,6 +289,8 @@ fn main() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             diagnostics::initialize(&dir);
+            let prices=price_engine::PriceEngine::open(&dir.join("market-prices.sqlite3")).map_err(std::io::Error::other)?;
+            prices.start();app.manage(prices);
             let db =
                 store::Store::open(&dir.join("myframe.sqlite3")).map_err(std::io::Error::other)?;
             if isolated {db.set_auto_collect(false).map_err(std::io::Error::other)?;}
@@ -420,6 +424,8 @@ fn main() {
             riven_services::riven_history,
             riven_services::riven_market_list,
             market_analytics::market_analytics,
+            market_analytics::market_price_quote,
+            market_analytics::market_price_warm,
             market::market_login,
             market::market_connect,
             market::market_session,

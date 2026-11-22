@@ -21,7 +21,7 @@
 .craftGoalEmpty>p{line-height:1.6;margin:0 0 12px}
 .craftGoalEmpty>button,.craftShoppingEmpty>button{border:1px solid #ac8df4;background:#402878;border-radius:6px;padding:8px;font-size:12px;font-weight:600;color:#fff}
 .craftToolbar{gap:8px;margin-bottom:11px}
-.craftToolbar>select{width:142px;max-width:32%;font-size:12px;border:1px solid #34394b;border-radius:7px}
+.craftToolbar>select{width:auto;min-width:158px;max-width:220px;flex:none;font-size:12px;border:1px solid #34394b;border-radius:7px}
 .craftSearch{display:flex;align-items:center;flex:1;min-width:100px;height:40px;padding:0 10px;gap:8px;background:#10141f;border:1px solid #34394b;border-radius:7px}
 .craftSearch>svg{flex:none;width:17px;height:17px;color:#d2d9e6}
 .resourceToolbar .craftSearch>input{background:transparent;border:0;outline:0;height:36px;padding:0;min-width:0;font-size:13px}
@@ -33,13 +33,18 @@
 .craftFilterTrigger>svg{width:17px;height:17px}
 .craftFilterTrigger.selected{border-color:#b49ae8;background:#393252}
 .craftFilterTrigger b{background:#51268d;border-radius:3px;padding:1px 4px;font-size:11px;font-weight:500}
-.craftFilterPanel{position:absolute;right:0;top:calc(100% + 5px);width:240px;padding:14px;background:#151c2d;border:1px solid #52536d;border-radius:9px;box-shadow:0 10px 30px #05081066}
+.craftFilterPanel{position:absolute;right:0;top:calc(100% + 5px);width:264px;padding:12px;background:var(--color-bg-2);border:1px solid var(--ui-line-strong);border-radius:10px;box-shadow:0 12px 32px rgba(4,6,12,.62);display:flex;flex-direction:column;gap:10px}
 .craftFilterPanel:before{content:'';position:absolute;left:0;right:0;top:-6px;height:6px}
-.craftFilterPanel fieldset{margin:0 0 12px;padding:0;border:0}
-.craftFilterPanel legend{font-size:12px;font-weight:600;color:#e0d5ff;margin-bottom:6px}
-.craftFilterPanel label{display:flex;align-items:center;gap:7px;font-size:12px;padding:6px 0;color:#d0d8e9;cursor:pointer}
-.craftFilterPanel input{accent-color:#aa82ee}
-.craftFilterPanel>button{width:100%;font-size:12px;background:#2a3046;border:1px solid #444c66;padding:7px}
+.craftFilterPanel fieldset{margin:0;padding:0 0 10px;border:0;border-bottom:1px solid var(--ui-line)}
+.craftFilterPanel fieldset:last-of-type{padding-bottom:0;border-bottom:0}
+.craftFilterPanel legend{font-size:11px;font-weight:500;color:var(--color-navigation-hover);margin-bottom:7px}
+.craftFilterOptions{display:flex;flex-wrap:wrap;gap:6px}
+.craftFilterOptions button{padding:5px 10px;border:1px solid var(--ui-line);border-radius:6px;background:var(--color-bg-1);color:var(--color-navigation-hover);font-size:12px;line-height:1.25;cursor:pointer;white-space:nowrap}
+.craftFilterOptions button:hover{border-color:var(--ui-line-strong);background:var(--color-card-hover);color:var(--color-text)}
+.craftFilterOptions button[aria-pressed=true]{background:var(--color-card-active);border-color:var(--color-tab-lighter);color:var(--color-text)}
+.craftFilterClear{width:100%;font-size:12px;background:var(--color-bg-1);border:1px solid var(--ui-line);border-radius:7px;color:var(--color-text);padding:7px;cursor:pointer}
+.craftFilterClear:hover:not(:disabled){background:var(--color-card-hover);border-color:var(--ui-line-strong)}
+.craftFilterClear:disabled{opacity:.45;cursor:default}
 .craftFilters{min-height:35px;margin-bottom:10px;gap:8px}
 .craftQuickFilters{display:flex;gap:2px;align-items:center}
 .craftQuickFilters>button{background:#101622;border:1px solid transparent;border-radius:6px;font-size:12px;padding:8px 12px;color:#c6d1e6;white-space:nowrap}
@@ -54,7 +59,7 @@
 .craftNext>button>small{color:#a7b9d6;font-size:11px}
 .craftMaterials article.satisfied .craftNext strong{color:#a1c5b8}
 .craftWorkspace button:focus-visible{outline:2px solid #b6a0ed;outline-offset:2px}
-@media(max-width:1100px){.craftGoals{width:190px;min-width:170px}.craftToolbar{flex-wrap:nowrap}.craftToolbar>select{width:110px}.craftTableHeading{grid-template-columns:minmax(110px,1fr) 95px}.craftTableHeading>span:last-child{display:none}.craftFilterTrigger{padding:8px}.craftNext>button{flex-direction:row;gap:8px}}
+@media(max-width:1100px){.craftGoals{width:190px;min-width:170px}.craftToolbar{flex-wrap:nowrap}.craftToolbar>select{width:auto;min-width:136px;max-width:190px}.craftTableHeading{grid-template-columns:minmax(110px,1fr) 95px}.craftTableHeading>span:last-child{display:none}.craftFilterTrigger{padding:8px}.craftNext>button{flex-direction:row;gap:8px}}
 @media(max-width:760px){.craftWorkspace{flex-direction:column;overflow:auto}.craftGoals{width:100%;max-height:220px;min-height:110px;flex-shrink:0}.craftGoalEmpty{padding:12px}.craftGoalEmpty>span{display:none}.craftShopping{min-height:300px}}
 /* 3.0.4: original 248px favorites column and main material table. */
 .craftWorkspace{display:grid;grid-template-columns:248px minmax(0,1fr);gap:14px;align-items:stretch}.craftWorkspace>.craftGoals{width:auto;min-width:0;padding:0;border:1px solid var(--ui-line);border-radius:10px;background:var(--color-bg-1);gap:0;overflow:hidden}.craftGoalsHeading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 8px}.craftGoalsHeading h3{margin:0;font-size:17px;line-height:23px;font-weight:500}.craftGoalsToggle{display:none;border:0;background:none;padding:0;color:var(--color-navigation-hover);font-size:12px;cursor:pointer}.craftGoals>button{margin:0 9px 9px;border-color:var(--color-tab-lighter);background:var(--color-tab);font-size:12px;font-weight:500}.craftGoalList{padding:0 9px 9px}.craftGoalList article{padding:10px;margin-bottom:8px;border:1px solid var(--ui-line);border-radius:8px;background:var(--color-card)}.craftGoalList article.selected{border-color:var(--color-tab-lighter);background:var(--color-card-active)}.craftGoalIdentity{padding:0;gap:9px}.craftGoalIdentity img{width:44px;height:44px}.craftGoalIdentity strong{font-size:14px;line-height:19px;font-weight:500}.craftGoalIdentity small{margin-top:3px;color:var(--color-navigation-hover)}.craftRemove{left:-5px;right:auto;top:-5px;padding:0;width:20px;height:20px;background:var(--color-card)}.craftRemove img{width:20px;height:20px;object-fit:contain}

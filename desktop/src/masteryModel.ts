@@ -1,3 +1,4 @@
+import {isInventoryAvailable} from './resourceDemand.ts';
 export type Tally={current:number;max:number};
 // MasteryResponseCategory uses float division then multiplication; summary
 // headers multiply before dividing. Math.Round uses ties-to-even in both.
@@ -10,13 +11,20 @@ export function masteryPercent(tally:Tally|null|undefined,aggregate=false):numbe
 export type MasteryCoverage={knownXp?:number;unknownMissionIds?:string[];unknownEquipmentIds?:string[];equipmentRecords:number;unknownEquipmentRecords:number;unknownMissionRecords:number;sourceSha256:string;complete:boolean};
 export type MasteryAccount={coverage?:MasteryCoverage|null;totalXp?:number|null;ranksComplete?:boolean;starNormal?:Tally|null;starSteel?:Tally|null;junctions?:Tally|null;steelJunctions?:Tally|null;railjack?:Tally|null;duviri?:Tally|null};
 export type PlayerProfile={name?:string|null;platinum?:number|null;endo?:number|null;ducats?:number|null};
-export type MasterySnapshot={masteryRank:number|null;credits:number|null;complete:boolean;counts:Record<string,number>;ranks:Record<string,number>;favorites:string[];pendingRecipes?:Record<string,number>|null;playerProfile?:PlayerProfile|null;masteryAccount?:MasteryAccount|null};
+export type MasterySnapshot={masteryRank:number|null;credits:number|null;complete:boolean;missingOwnedGroups?:string[]|null;counts:Record<string,number>;ranks:Record<string,number>;favorites:string[];pendingRecipes?:Record<string,number>|null;playerProfile?:PlayerProfile|null;masteryAccount?:MasteryAccount|null};
 export type MasteryItem={id:string;name:string;zh:string;category:string;maxRank:number;xpPerRank:number;prime:boolean;masteryReq?:number;image?:string;imageUrl?:string;displayParts?:{itemId:string;quantity:number}[];recipe?:{parts:{itemId:string;quantity:number;reusable?:boolean}[]}};
 export type Sources={items:Record<string,{parts:{itemId:string;quantity:number;ownedItemId?:string;drops:{relicId:string;chance:number}[]}[]}>;marketSlugs:Record<string,string>};
 export const threshold=(rank:number)=>rank<=30?2500*rank*rank:2250000+147500*(rank-30);
-export function progress(s:MasterySnapshot|null){const r=s?.masteryRank,t=s?.masteryAccount?.totalXp;if(r==null||t==null)return null;const needed=threshold(r+1)-threshold(r),current=Math.max(0,t-threshold(r));return {current,needed,percent:Math.min(100,Math.floor(100*current/needed))};}
+export function progress(s:MasterySnapshot|null){
+ const r=s?.masteryRank,a=s?.masteryAccount;
+ if(r==null||!a)return null;
+ const exact=a.totalXp,fallback=exact==null&&a.coverage?.knownXp!=null&&a.starNormal!=null?a.coverage.knownXp:null,t=exact??fallback;
+ if(t==null)return null;
+ const needed=threshold(r+1)-threshold(r),current=Math.max(0,t-threshold(r)),remaining=Math.max(0,needed-current);
+ return {current,needed,remaining,percent:Math.min(100,Math.floor(100*current/needed)),approximate:exact==null};
+}
 export const knownRank=(s:MasterySnapshot|null,id:string):number|null=>s?.ranks[id]??(s?.masteryAccount?.ranksComplete?0:null);
-export const knownCount=(s:MasterySnapshot|null,id:string):number|null=>s?(s.counts[id]??(s.complete?0:null)):null;
+export const knownCount=(s:MasterySnapshot|null,id:string):number|null=>s?(s.counts[id]??(isInventoryAvailable(s)?0:null)):null;
 export type MasteryPart={itemId:string;quantity:number;ownedItemId?:string};
 // Blueprints and already-built equivalents satisfy the same acquisition requirement.
 export function masteryPartCount(s:MasterySnapshot|null,p:MasteryPart):number|null{

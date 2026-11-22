@@ -1,4 +1,4 @@
-export type AnalyticsCatalogItem={id:string;name:string;category:string;marketSlug?:string;zh?:string;image?:string;imageUrl?:string;mod?:{wikiaThumbnail?:string;cardImage?:string}};
+export type AnalyticsCatalogItem={id:string;name:string;category:string;marketSlug?:string;zh?:string;image?:string;imageUrl?:string;mod?:{wikiaThumbnail?:string;cardImage?:string};recipe?:{output:number;credits?:number;seconds?:number;parts:{itemId:string;quantity:number;reusable?:boolean}[]}};
 export function parseAnalyticsCatalog(value:unknown):AnalyticsCatalogItem[]{
  if(!value||typeof value!=='object'||!('items' in value)||!Array.isArray(value.items)||!value.items.length)throw Error('物品目录为空或格式无效');
  for(const item of value.items){

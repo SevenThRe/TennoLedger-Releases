@@ -35,13 +35,15 @@ mod tests {
         let catalog = crate::collection::catalog().unwrap();
         let snapshot = crate::inventory_data::from_value(&json!({"LastInventorySync":{"$oid":"650000000000000000000000"},"MiscItems":[],"XPInfo":[],"LongGuns":[],"Pistols":[],"Melee":[],"PlayerLevel":12,"RegularCredits":8000,"Suits":[
             {"ItemType":"/Lotus/TestFrame","ItemId":"private-instance","ArchonCrystalUpgrades":[{"Color":"ACC_RED_MYTHIC","UpgradeType":"unknown-effect"},null]},
-            {"ItemType":"/Lotus/TestFrame","ItemId":"private-second"}
+            {"ItemType":"/Lotus/TestFrame","ItemId":"private-second"},
+            {"ItemType":"/Lotus/TestFrame","ItemId":"private-third","ArchonCrystalUpgrades":false}
         ]}), &catalog, None, "test", "2026-10-24T00:00:00Z").unwrap();
         let result = summarize(&snapshot).unwrap();
-        assert_eq!(result["frameInstances"],2);
+        assert_eq!(result["frameInstances"],3);
+        assert_eq!(result["knownSlotFrames"],2);
         assert_eq!(result["unknownSlotFrames"],1);
         assert_eq!(result["observedInstalledSlots"],1);
-        assert_eq!(result["observedEmptySlots"],4);
+        assert_eq!(result["observedEmptySlots"],9);
         assert_eq!(result["unknownEffects"],1);
         assert_eq!(result["snapshotRoundTrip"],true);
         assert!(!result.to_string().contains("private"));

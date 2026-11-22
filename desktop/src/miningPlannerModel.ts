@@ -1,6 +1,6 @@
 import {planResources,type ResourceGoal} from './resourcePlan.ts';
 import {pendingCrafts} from './pendingCrafts.ts';
-import type {DemandCatalog,DemandSnapshot} from './resourceDemand.ts';
+import {isInventoryAvailable,type DemandCatalog,type DemandSnapshot} from './resourceDemand.ts';
 import {founderIds} from './masteryModel.ts';
 import {
  OPEN_WORLD_ZONES,
@@ -102,6 +102,7 @@ export type ZoneMiningPlan={
 
 export type MiningPlanResult={
  inventoryKnown:boolean;
+ pendingQueueKnown:boolean;
  incomplete:boolean;
  scope:MiningTargetScope;
  totalGoals:number;
@@ -146,7 +147,7 @@ export function buildMiningPlan(
  const prepared=pendingCrafts(catalog.recipes,blueprints,snapshot?.pendingRecipes,snapshot?.counts??{},catalog.pendingRecipeOutputs);
  const stock:Record<string,number>={...prepared.stock,credits:snapshot?.credits??0};
 
- const baseKnown=!!snapshot?.complete&&prepared.known&&snapshot.credits!=null;
+ const baseKnown=isInventoryAvailable(snapshot)&&prepared.ambiguous.length===0;
  const inventoryKnown=options.scope==='favorites'
   ?baseKnown&&Array.isArray(snapshot?.favorites)
   :baseKnown&&snapshot?.masteryAccount?.ranksComplete===true;
@@ -349,6 +350,7 @@ export function buildMiningPlan(
 
  return {
   inventoryKnown,
+  pendingQueueKnown:prepared.queueCaptured,
   incomplete:plan.incomplete,
   scope:options.scope,
   totalGoals:plan.goals.length,

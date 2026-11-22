@@ -35,6 +35,7 @@
 .craftingTreeDialog .owned { --craft-state: #a7dfcc; }
 .craftingTreeDialog .craftable { --craft-state: var(--color-tab-lighter); }
 .craftingTreeDialog .missing { --craft-state: #edc867; }
+.craftingTreeDialog .upstream { --craft-state: var(--color-tab-lighter); }
 .craftingLegend > span, .craftingNodeState, .craftingOwnership > div > strong { color: var(--craft-state); }
 .craftingLegend svg, .craftingNodeState svg { width: 14px; height: 14px; }
 .craftingZoomControls { display: flex; align-items: center; gap: 3px; margin-left: auto; flex-shrink: 0; }
@@ -50,7 +51,23 @@
 .craftingCanvasEmpty { position: absolute; inset: 0; min-height: 0; cursor: default; }
 .craftingCanvasEmpty > svg { width: 36px; height: 36px; color: var(--color-tab-lighter); }
 .craftingBranch { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 7px; width: max-content; }
+.craftingTreeStack { display: flex; flex-direction: column; align-items: center; width: max-content; }
+.craftingUpstreamSection { display: flex; flex-direction: column; align-items: center; width: max-content; }
+.craftingUpstreamTag { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 6px; padding: 2px 8px; border: 1px dashed color-mix(in srgb, var(--color-tab-lighter) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--color-tab-lighter) 10%, var(--color-bg-1)); color: var(--color-tab-lighter); font-size: var(--ui-font-caption, 10px); line-height: 16px; }
+.craftingUpstreamTag svg { width: 12px; height: 12px; }
+.craftingParents { position: relative; display: flex; align-items: flex-end; margin-bottom: 18px; }
+.craftingParents::after { content: ''; position: absolute; top: 100%; height: 18px; left: 50%; border-left: 1px dashed color-mix(in srgb, var(--color-tab-lighter) 70%, transparent); }
+.craftingParentBranch { position: relative; display: flex; flex-direction: column; align-items: center; padding: 0 7px 12px; width: max-content; }
+.craftingParentBranch::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; border-bottom: 1px dashed color-mix(in srgb, var(--color-tab-lighter) 70%, transparent); }
+.craftingParentBranch:first-child::after { left: 50%; }
+.craftingParentBranch:last-child::after { right: 50%; }
+.craftingParentBranch > .craftingNode.upstream::after { content: ''; position: absolute; top: 100%; height: 12px; left: 50%; border-left: 1px dashed color-mix(in srgb, var(--color-tab-lighter) 70%, transparent); }
 .craftingModal .craftingNode { position: relative; display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 8px; width: 184px; min-height: 76px; height: auto; padding: 8px; text-align: left; }
+.craftingModal .craftingNode.upstream { border-style: dashed; border-color: color-mix(in srgb, var(--color-tab-lighter) 55%, transparent); background: color-mix(in srgb, var(--color-tab-lighter) 8%, var(--color-bg-1)); }
+.craftingModal .craftingNode.upstream.owned:not(.selected) { --craft-state: #a7dfcc; border-color: #78c9ad66; background: color-mix(in srgb, #78c9ad 7%, var(--color-bg-1)); }
+.craftingModal .craftingNode.upstream.overflow { display: flex; flex-direction: column; justify-content: center; gap: 2px; width: 108px; min-height: 76px; text-align: center; }
+.craftingNode.upstream.overflow strong { font-size: 16px; line-height: 20px; color: var(--color-tab-lighter); }
+.craftingNode.upstream.overflow span { font-size: var(--ui-font-caption, 10px); color: var(--color-navigation-hover); }
 .craftingNode.owned:not(.selected) { background: color-mix(in srgb, #78c9ad 7%, var(--color-bg-1)); border-color: #78c9ad50; }
 .craftingNode.craftable:not(.selected) { border-color: color-mix(in srgb, var(--color-tab-lighter) 45%, transparent); }
 .craftingNodeImage { width: 38px; height: 42px; background: center / contain no-repeat; }
@@ -91,13 +108,22 @@
 .craftingModal .craftingMarket { width: 100%; height: 34px; min-height: 34px; flex: 0 0 auto; font-size: var(--ui-font-caption, 11px); }
 .craftingLocationsHeading { border-top: 1px solid var(--ui-line); padding-top: 12px; padding-bottom: 0; margin-top: 1px; }
 .craftingLocationsHeading h3 { font-size: 14px; }
-.craftingLocations { flex: 1 0 120px; min-height: 100px; max-height: none; }
+.craftingLocations { flex: 1 1 100px; min-height: 80px; max-height: none; }
+.craftingLocations.empty { flex: 0 0 auto; min-height: 0; }
 .craftingLocations .itemDetailsLocationRow { grid-template-columns: 24px minmax(0, 1fr) auto; gap: 6px; padding: 8px 3px; }
 .craftingLocations .itemDetailsLocationRow > span:nth-child(2) { font-size: var(--ui-font-caption, 11px); line-height: 17px; }
 .craftingLocations .itemDetailsLocationRow > strong { font-size: var(--ui-font-caption, 11px); }
-.craftingUsedFor { display: flex; flex-direction: column; gap: 5px; padding-top: 10px; border-top: 1px solid var(--ui-line); }
-.craftingModal .craftingUsedFor > button { display: flex; align-items: center; gap: 7px; width: 100%; height: auto; min-height: 38px; padding: 5px 7px; text-align: left; font-size: var(--ui-font-small, 12px); }
-.craftingUsedFor > button > span:nth-child(2) { flex: 1; }
+.craftingUsedFor { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--ui-line); }
+.craftingUsedForHeading h3 { font-size: 14px; }
+.craftingUsedForList { display: flex; flex-direction: column; gap: 5px; }
+.craftingUsedForList.scrollable { max-height: 210px; overflow-y: auto; scrollbar-width: thin; padding-right: 2px; }
+.craftingModal .craftingUsedForList > .itemDetailsChoice { display: flex; align-items: center; gap: 7px; width: 100%; height: auto; min-height: 38px; padding: 5px 7px; text-align: left; font-size: var(--ui-font-small, 12px); }
+.craftingModal .craftingUsedForList > .itemDetailsChoice.readonly { cursor: default; }
+.craftingUsedForList > .itemDetailsChoice > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.craftingUseQty { font-size: var(--ui-font-caption, 10px); color: var(--color-navigation-hover); white-space: nowrap; }
+.craftingUseOwned { display: inline-flex; color: #a7dfcc; }
+.craftingUseOwned svg { width: 13px; height: 13px; }
+.craftingModal .craftingUsedForToggle { width: 100%; height: 30px; font-size: var(--ui-font-caption, 11px); }
 .craftingSummary { flex-shrink: 0; padding: 10px 12px; }
 .craftingSummaryHeading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 0 2px 10px; border-bottom: 1px solid var(--ui-line); }
 .craftingSummaryHeading .itemDetailsSectionHeading { padding: 0; justify-content: flex-start; }

@@ -1,5 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import {native} from './api';
 import {
  BellIcon,
  ClockIcon,
@@ -14,34 +15,43 @@ import {
  BOUNTY_SYNDICATE_ORDER,
  bountyRotationProgress,
  bountyTierVisual,
+ buildBountyPriceIndex,
  buildCatalogRewardRows,
  catalogDecksForRotation,
  cleanBountyTitle,
  cleanChallengeDesc,
+ collectBountyWarmupSlugs,
  extractHubFeaturedRewards,
  extractNarmerHighlights,
  filterCatalogRewardRows,
  findMatchingSubscription,
+ formatPlatinum,
+ formatPlatinumNumber,
  groupRewardsByRarity,
  isBountyActive,
  pickOverviewJobs,
  rarityLabel,
  rarityShortLabel,
+ resolveBountyItemPrice,
  resolveBountyRewardIcon,
+ sortCatalogRewardRows,
  syndicateIconPath,
  syndicateLabel,
  tierLabel,
  type BountyFeaturedReward,
+ type BountyItemPrice,
  type BountyJob,
  type BountyRarity,
  type BountyRarityFilter,
  type BountyReward,
  type BountyRotation,
+ type BountySortMode,
  type BountySubscription,
  type BountySubscriptionTarget,
  type BountySyndicate,
 } from './bountyModel';
-import {useBounties} from './useBounties';
+import {useBounties,useBountyPriceRows} from './useBounties';
+import {warmMarketPrices} from './useMarketPrices';
 import {countdown,missionZh,notificationStateHint,rewardOwned} from './worldModel';
 import './bounties.css';
 
@@ -128,6 +138,73 @@ function formatChance(chance:number):string{
  return `${chance.toFixed(chance%1===0?0:chance*10%1===0?1:2)}%`;
 }
 
+function formatPriceTooltip(
+ price:BountyItemPrice,
+ quantity:number,
+ live:boolean,
+ en:boolean,
+):string{
+ const L=(zh:string,eng:string)=>en?eng:zh;
+ if(price.state==='priced'&&price.unitPrice!==null&&price.totalPrice!==null){
+  const parts=[L(`warframe.market 卖单中位价 ${formatPlatinum(price.unitPrice)}`,`warframe.market sell median ${formatPlatinum(price.unitPrice)}`)];
+  if(quantity>1){
+   parts.push(`×${quantity} = ${formatPlatinum(price.totalPrice)}`);
+  }
+  if(price.sampleCount!==null){
+   parts.push(`${price.sampleCount} ${L('笔在线卖单','online offers')}`);
+  }
+  if(price.stale){
+   parts.push(L('缓存待刷新','Cached, refreshing'));
+  }
+  return parts.join(' · ');
+ }
+ if(price.state==='no-orders')return L('暂无在线卖单','No online sell orders');
+ if(price.state==='error'){
+  return price.error
+   ?`${L('行情读取失败','Price fetch failed')} · ${price.error}`
+   :L('行情读取失败','Price fetch failed');
+ }
+ return live?L('行情获取中','Fetching price'):L('桌面端实时获取行情','Live prices in desktop app');
+}
+
+function BountyPriceBadge({
+ price,
+ quantity=1,
+ live,
+ en,
+ compact=false,
+}:{
+ price:BountyItemPrice;
+ quantity?:number;
+ live:boolean;
+ en:boolean;
+ compact?:boolean;
+}){
+ if(price.state==='untradable')return null;
+ const title=formatPriceTooltip(price,quantity,live,en);
+ if(compact){
+  if(price.state!=='priced'||price.totalPrice===null)return null;
+  return (
+   <span className="bountyChipPrice" title={title}>
+    {formatPlatinum(price.totalPrice)}
+   </span>
+  );
+ }
+ if(price.state==='priced'&&price.totalPrice!==null){
+  return (
+   <span className={'bountyPriceBadge priced'+(price.stale?' stale':'')} title={title}>
+    <img src="/reference/ui/platinum.png" alt=""/>
+    <span>{formatPlatinumNumber(price.totalPrice)}</span>
+   </span>
+  );
+ }
+ return (
+  <span className="bountyPriceBadge unpriced" title={title}>
+   —
+  </span>
+ );
+}
+
 function levelBadgeTone(job:Pick<BountyJob,'isSteelPath'|'isNarmer'>):string{
  if(job.isSteelPath)return 'sp';
  if(job.isNarmer)return 'narmer';
@@ -206,8 +283,10 @@ export default function Bounties({
  const en=i18n.language.startsWith('en');
  const L=(zh:string,eng:string)=>en?eng:zh;
  const b=useBounties();
+ const bountyPrices=useBountyPriceRows();
  const snapshot=useCollectionSnapshot();
  const scrollRef=useRef<HTMLDivElement>(null);
+ const warmedAtRef=useRef<Map<string,number>>(new Map());
 
  const [selectedHub,setSelectedHub]=useState<string|null>(null);
  const [rotationView,setRotationView]=useState<'live'|BountyRotation>('live');
@@ -222,6 +301,8 @@ export default function Bounties({
  const [filterTier,setFilterTier]=useState<string>('all');
  const [filterRarity,setFilterRarity]=useState<BountyRarityFilter>('all');
  const [filterAvailability,setFilterAvailability]=useState<'all'|'active'|'waiting'>('all');
+ const [filterTradableOnly,setFilterTradableOnly]=useState(false);
+ const [explorerSort,setExplorerSort]=useState<BountySortMode>('default');
 
  useEffect(()=>{
   scrollRef.current?.scrollTo(0,0);
@@ -317,21 +398,41 @@ export default function Bounties({
   [b.catalog,selectedHub],
  );
 
+ const priceIndex=useMemo(
+  ()=>buildBountyPriceIndex(bountyPrices.rows),
+  [bountyPrices.rows],
+ );
+
  const allCatalogRows=useMemo(
   ()=>b.catalog?buildCatalogRewardRows(b.catalog,b.bounties,b.now):[],
   [b.catalog,b.bounties,b.now],
  );
 
- const filteredExplorerRows=useMemo(
-  ()=>filterCatalogRewardRows(allCatalogRows,{
+ const filteredExplorerRows=useMemo(()=>{
+  const filtered=filterCatalogRewardRows(allCatalogRows,{
    query:filterQuery,
    syndicate:filterSyndicate,
    tierKey:filterTier,
    rarity:filterRarity,
    availability:filterAvailability,
-  }),
-  [allCatalogRows,filterQuery,filterSyndicate,filterTier,filterRarity,filterAvailability],
- );
+   tradableOnly:filterTradableOnly,
+  },priceIndex);
+  return sortCatalogRewardRows(filtered,explorerSort,priceIndex);
+ },[allCatalogRows,filterQuery,filterSyndicate,filterTier,filterRarity,filterAvailability,filterTradableOnly,explorerSort,priceIndex]);
+
+ const explorerPriceStats=useMemo(()=>{
+  if(explorerSort==='default')return null;
+  let tradable=0;
+  let priced=0;
+  for(const row of filteredExplorerRows){
+   const state=resolveBountyItemPrice(row,priceIndex).state;
+   if(state!=='untradable'){
+    tradable++;
+    if(state==='priced')priced++;
+   }
+  }
+  return {tradable,priced};
+ },[explorerSort,filteredExplorerRows,priceIndex]);
 
  const itemRotationsMap=useMemo(()=>{
   const map=new Map<string,BountyRotation[]>();
@@ -353,6 +454,60 @@ export default function Bounties({
   ()=>extractNarmerHighlights(displaySyndicates),
   [displaySyndicates],
  );
+
+ useEffect(()=>{
+  if(!native||bountyPrices.rows.length===0)return;
+  const candidates:Pick<BountyReward,'itemId'|'en'>[]=[];
+  if(view==='active'){
+   if(selectedJob){
+    candidates.push(...selectedJob.rewards);
+    for(const job of selectedDisplaySyn?.jobs??[]){
+     if(job.id!==selectedJob.id)candidates.push(...job.rewards);
+    }
+   }else{
+    if(narmerHighlight){
+     candidates.push(...narmerHighlight.items.map(item=>item.reward));
+    }
+    for(const syn of displaySyndicates){
+     const featured=extractHubFeaturedRewards(syn);
+     candidates.push(...featured.items.map(item=>item.reward));
+    }
+    for(const syn of displaySyndicates){
+     for(const job of syn.jobs)candidates.push(...job.rewards);
+    }
+   }
+  }else{
+   for(const sub of b.preferences.subscriptions){
+    if(sub.itemId){
+     candidates.push({itemId:sub.itemId,en:sub.itemNameEn??''});
+    }
+   }
+   candidates.push(...filteredExplorerRows);
+  }
+  const limit=view==='active'?48:(explorerSort==='default'?60:172);
+  const rawSlugs=collectBountyWarmupSlugs(candidates,priceIndex,limit);
+  const nowMs=Date.now();
+  const toWarm=rawSlugs.filter(slug=>{
+   const prev=warmedAtRef.current.get(slug);
+   return prev===undefined||nowMs-prev>=600_000;
+  });
+  if(!toWarm.length)return;
+  for(const slug of toWarm){
+   warmedAtRef.current.set(slug,nowMs);
+  }
+  void warmMarketPrices(toWarm,'pc').catch(()=>{});
+ },[
+  view,
+  bountyPrices.rows.length,
+  priceIndex,
+  selectedJob,
+  selectedDisplaySyn,
+  narmerHighlight,
+  displaySyndicates,
+  b.preferences.subscriptions,
+  filteredExplorerRows,
+  explorerSort,
+ ]);
 
  const bountyNotifications=useMemo(
   ()=>b.status.notifications.filter(n=>n.kind==='bounty').slice(0,10),
@@ -433,6 +588,8 @@ export default function Bounties({
   setFilterTier('all');
   setFilterRarity('all');
   setFilterAvailability('all');
+  setFilterTradableOnly(false);
+  setExplorerSort('default');
   setShowAllExplorer(false);
  }
 
@@ -524,6 +681,14 @@ export default function Bounties({
    ['all',L('全部状态','All')] as const,
    ['active',L('在池','Active')] as const,
    ['waiting',L('待轮','Wait')] as const,
+  ],
+  [en],
+ );
+ const sortFilterOptions=useMemo(
+  ()=>[
+   ['default',L('默认排序','Default')] as const,
+   ['platinum-desc',L('白金高→低','Plat High→Low')] as const,
+   ['platinum-asc',L('白金低→高','Plat Low→High')] as const,
   ],
   [en],
  );
@@ -707,6 +872,8 @@ export default function Bounties({
             const tracked=isTracked(target);
             const hit=isItemHit(entry.syndicate,entry.tierKey,entry.reward);
             const name=formatRewardName(entry.reward,en);
+            const price=resolveBountyItemPrice(entry.reward,priceIndex);
+            const priceTag=price.state==='priced'&&price.totalPrice!==null?` · ${formatPlatinum(price.totalPrice)}`:'';
             return (
              <button
               key={entry.reward.itemId}
@@ -714,11 +881,12 @@ export default function Bounties({
               className={'bountyInlineLootChip'+(tracked?' tracked':'')+(hit?' hit':'')}
               disabled={!b.canEdit}
               aria-pressed={!!tracked}
-              title={`${name} · ${formatChance(entry.reward.chance)}`}
+              title={`${name} · ${formatChance(entry.reward.chance)}${priceTag}`}
               onClick={()=>void b.toggleSubscription(target)}
              >
               <RewardThumb reward={entry.reward} itemIcons={b.itemIcons} size="xs"/>
-              <span>{name}</span>
+              <span className="bountyChipName">{name}</span>
+              <BountyPriceBadge price={price} quantity={entry.reward.quantity} live={bountyPrices.live} en={en} compact/>
              </button>
             );
            })}
@@ -768,6 +936,8 @@ export default function Bounties({
                 const tracked=isTracked(target);
                 const hit=isItemHit(entry.syndicate,entry.tierKey,entry.reward);
                 const chipLabel=formatInlineChipName(entry.reward,en);
+                const price=resolveBountyItemPrice(entry.reward,priceIndex);
+                const priceTag=price.state==='priced'&&price.totalPrice!==null?` · ${formatPlatinum(price.totalPrice)}`:'';
                 return (
                  <button
                   key={`${entry.tierKey}-${entry.reward.itemId}`}
@@ -775,11 +945,12 @@ export default function Bounties({
                   className={'bountyInlineLootChip'+(tracked?' tracked':'')+(hit?' hit':'')}
                   disabled={!b.canEdit}
                   aria-pressed={!!tracked}
-                  title={`${tierLabel(entry.tierKey,en)} · ${rarityShortLabel(entry.reward.rarity,en)} · ${chipLabel} · ${formatChance(entry.reward.chance)}`}
+                  title={`${tierLabel(entry.tierKey,en)} · ${rarityShortLabel(entry.reward.rarity,en)} · ${chipLabel} · ${formatChance(entry.reward.chance)}${priceTag}`}
                   onClick={()=>void b.toggleSubscription(target)}
                  >
                   <RewardThumb reward={entry.reward} itemIcons={b.itemIcons} size="xs"/>
-                  <span>{chipLabel}</span>
+                  <span className="bountyChipName">{chipLabel}</span>
+                  <BountyPriceBadge price={price} quantity={entry.reward.quantity} live={bountyPrices.live} en={en} compact/>
                  </button>
                 );
                })}
@@ -1080,6 +1251,7 @@ export default function Bounties({
                   ?rewardOwned(snapshot?.counts,snapshot?.complete,reward.itemId)
                   :null;
                  const displayName=formatRewardName(reward,en);
+                 const price=resolveBountyItemPrice(reward,priceIndex);
                  const barPct=Math.min(100,Math.max(5,reward.finalChance??reward.chance));
                  const chanceTitle=[
                   `${L('基础概率','Base')} ${formatChance(reward.chance)}`,
@@ -1093,7 +1265,10 @@ export default function Bounties({
                   >
                    <RewardThumb reward={reward} itemIcons={b.itemIcons}/>
                    <div className="bountyLootInfo">
-                    <span className="bountyLootName" title={displayName}>{displayName}</span>
+                    <div className="bountyLootHead">
+                     <span className="bountyLootName" title={displayName}>{displayName}</span>
+                     <BountyPriceBadge price={price} quantity={reward.quantity} live={bountyPrices.live} en={en}/>
+                    </div>
                     <div className="bountyChanceBar" aria-hidden="true">
                      <span className={rarity} style={{width:`${barPct}%`}}/>
                     </div>
@@ -1150,6 +1325,9 @@ export default function Bounties({
          {b.preferences.subscriptions.map(sub=>{
           const info=describeSubscription(sub);
           const hits=subscriptionMatchCount(sub.id);
+          const subPrice=sub.itemId
+           ?resolveBountyItemPrice({itemId:sub.itemId,en:sub.itemNameEn,quantity:1},priceIndex)
+           :null;
           return (
            <article key={sub.id} className={'bountySubCard'+(hits>0?' hit':'')+(!sub.enabled?' paused':'')}>
             {sub.itemId&&(
@@ -1167,6 +1345,7 @@ export default function Bounties({
             <div className="bountySubBody">
              <div className="bountySubTop">
               <strong>{info.title}</strong>
+              {subPrice&&<BountyPriceBadge price={subPrice} quantity={1} live={bountyPrices.live} en={en}/>}
               <span className={'bountyStatusBadge'+(hits>0?' hit':!sub.enabled?' muted':' wait')}>
                <span className={'bountyDot'+(hits>0?' hit':' muted')}/>
                {!sub.enabled?L('暂停','Paused'):hits>0?(hits>1?L(`命中 ${hits}`,`Active ${hits}`):L('命中','Active')):L('待轮','Wait')}
@@ -1232,7 +1411,14 @@ export default function Bounties({
       <section className="bountyExplorerPanel">
        <div className="bountySectionHead">
         <h2>{L('全池检索','All rewards')}</h2>
-        <span className="bountyCountPill">{filteredExplorerRows.length}</span>
+        <div className="bountySectionCounts">
+         {explorerPriceStats&&explorerPriceStats.tradable>0&&explorerPriceStats.priced<explorerPriceStats.tradable&&(
+          <span className="bountyCountPill" title={L('warframe.market 实时行情缓存','warframe.market live price cache')}>
+           {`${explorerPriceStats.priced}/${explorerPriceStats.tradable} ${L('已报价','Priced')}`}
+          </span>
+         )}
+         <span className="bountyCountPill">{filteredExplorerRows.length}</span>
+        </div>
        </div>
 
        <div className="bountyExplorerFilters">
@@ -1277,6 +1463,24 @@ export default function Bounties({
           options={availabilityFilterOptions}
           onChange={val=>{setFilterAvailability(val as 'all'|'active'|'waiting');setShowAllExplorer(false);}}
          />
+         <ThemeSelect
+          label={L('按白金排序','Sort by platinum')}
+          value={explorerSort}
+          options={sortFilterOptions}
+          onChange={val=>{setExplorerSort(val as BountySortMode);setShowAllExplorer(false);}}
+         />
+         <label
+          className={'bountyTradableToggle'+(filterTradableOnly?' active':'')}
+          title={L('仅显示可在 warframe.market 交易的奖励','Show only rewards tradable on warframe.market')}
+         >
+          <span>{L('仅可交易','Tradable')}</span>
+          <input
+           type="checkbox"
+           role="switch"
+           checked={filterTradableOnly}
+           onChange={e=>{setFilterTradableOnly(e.target.checked);setShowAllExplorer(false);}}
+          />
+         </label>
         </div>
 
         {(filterSyndicate!=='all'||filterTier!=='all'||filterRarity!=='all')&&(
@@ -1307,6 +1511,7 @@ export default function Bounties({
          };
          const saved=isTracked(target);
          const activeRot=b.bounties.find(s=>s.tag===row.syndicate)?.rotation??null;
+         const rowPrice=resolveBountyItemPrice(row,priceIndex);
          return (
           <article key={row.key} className={'bountyExplorerRow'+(row.activeNow?' active':'')+(saved?' tracked':'')}>
            <RewardThumb reward={row} itemIcons={b.itemIcons} size="sm"/>
@@ -1334,6 +1539,7 @@ export default function Bounties({
             </small>
            </div>
            <div className="bountyExplorerActions">
+            <BountyPriceBadge price={rowPrice} quantity={row.quantity} live={bountyPrices.live} en={en}/>
             <span className={'bountyStatusBadge'+(row.activeNow?' live':' muted')}>
              <span className={'bountyDot'+(row.activeNow?' live':' muted')}/>
              {row.activeNow?L('在池','Active'):L('待轮','Wait')}

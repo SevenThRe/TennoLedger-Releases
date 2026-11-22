@@ -308,7 +308,7 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
       {plan.inventoryKnown&&row.readyAfterMiningGoals.length>0
        ?`${row.readyAfterMiningGoals.length} ${L('可开工','ready')}`
        :row.usedByGoals.length>0
-        ?`${row.usedByGoals.length} ${L('件','items')}`
+        ?`${row.usedByGoals.length} ${row.usedByGoals.length===1?L('件','item'):L('件','items')}`
         :`${L('详情','Info')} ›`}
      </span>
     </div>
@@ -467,29 +467,41 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
     </div>
    </div>
 
-   {masteryProgress&&(
-    <section className="miningXpStrip" aria-label={L('精通经验预览','Mastery XP preview')}>
-     <span className="miningMrTag">MR {snapshot?.masteryRank??'—'}</span>
-     <div className="miningXpTrackWrap">
-      <div className="masteryTrack" role="progressbar" aria-label={L('段位经验预览','Mastery progress')} aria-valuenow={masteryProgress.percent} aria-valuemin={0} aria-valuemax={100}>
-       <div className="masteryActual" style={{width:`${masteryProgress.percent}%`}}/>
-       <div className="masteryFav" style={{width:`${xpWidths.fav>0?masteryProgress.percent+xpWidths.fav:0}%`}} title={`+${favXp.toLocaleString()} XP`}/>
-       <div className="masteryHover" style={{width:`${xpWidths.hover>0?masteryProgress.percent+xpWidths.fav+xpWidths.hover:0}%`}} title={`+${hoverXp.toLocaleString()} XP`}/>
+   {(masteryProgress!==null||plan.inventoryKnown)&&(()=>{
+    const totalMissingMinerals=OPEN_WORLD_ZONES.reduce((sum,z)=>sum+plan.zones[z].missingCount,0);
+    return (
+     <section className="miningXpStrip" aria-label={masteryProgress?L('精通经验预览','Mastery XP preview'):L('采矿缺口汇总','Mining summary')}>
+      {snapshot?.masteryRank!=null&&<span className="miningMrTag">MR {snapshot.masteryRank}</span>}
+      {masteryProgress?(
+       <div className="miningXpTrackWrap">
+        <div className="masteryTrack" role="progressbar" aria-label={L('段位经验预览','Mastery progress')} aria-valuenow={masteryProgress.percent} aria-valuemin={0} aria-valuemax={100}>
+         <div className="masteryActual" style={{width:`${masteryProgress.percent}%`}}/>
+         <div className="masteryFav" style={{width:`${xpWidths.fav>0?masteryProgress.percent+xpWidths.fav:0}%`}} title={`+${favXp.toLocaleString()} XP`}/>
+         <div className="masteryHover" style={{width:`${xpWidths.hover>0?masteryProgress.percent+xpWidths.fav+xpWidths.hover:0}%`}} title={`+${hoverXp.toLocaleString()} XP`}/>
+        </div>
+       </div>
+      ):(
+       <span className={'miningStatusBadge miningStripStatus'+(totalMissingMinerals===0?' ok':'')}>
+        <i className="statusDot"/>
+        {totalMissingMinerals>0
+         ?L(`缺 ${totalMissingMinerals} 种矿物`,`Need ${totalMissingMinerals} minerals`)
+         :L('全部齐备','All covered')}
+       </span>
+      )}
+      <div className="miningXpSummary">
+       <span title={L('悬停矿区或矿石可预览对应经验收益','Hover a zone or mineral to preview XP gain')}>
+        <b>{plan.inventoryKnown?`+${(hoverXp>0?hoverXp:plan.totalPotentialXp).toLocaleString()}`:'—'}</b> XP
+       </span>
+       <span
+        className="miningReadyCounter"
+        title={L('其余非矿石材料均已备齐，挖完矿即可制造的装备数量','Gear with all non-mineral materials already covered')}
+       >
+        {L('可开工','Ready')} <b>{plan.inventoryKnown?plan.miningOnlyGoalsCount:'—'}</b>/{plan.inventoryKnown?plan.goalsUsingMining:'—'}
+       </span>
       </div>
-     </div>
-     <div className="miningXpSummary">
-      <span title={L('悬停矿区或矿石可预览对应经验收益','Hover a zone or mineral to preview XP gain')}>
-       <b>{plan.inventoryKnown?`+${(hoverXp>0?hoverXp:plan.totalPotentialXp).toLocaleString()}`:'—'}</b> XP
-      </span>
-      <span
-       className="miningReadyCounter"
-       title={L('其余非矿石材料均已备齐，挖完矿即可制造的装备数量','Gear with all non-mineral materials already covered')}
-      >
-       {L('可开工','Ready')} <b>{plan.inventoryKnown?plan.miningOnlyGoalsCount:'—'}</b>/{plan.inventoryKnown?plan.goalsUsingMining:'—'}
-      </span>
-     </div>
-    </section>
-   )}
+     </section>
+    );
+   })()}
 
    <div className="miningZones" role="group" aria-label={L('开放世界矿区','Open-world zones')}>
     {OPEN_WORLD_ZONES.map(zone=>renderZoneCard(zone,plan.zones[zone]))}
@@ -510,7 +522,7 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
          <h4>{activeZoneMeta.oreColor==='yellow'?L('黄矿脉 · 矿石','Yellow veins · Ores'):L('红矿脉 · 矿石','Red veins · Ores')}</h4>
          <span>{oreRows.length}</span>
         </header>
-        <div className="miningCardGrid">{oreRows.map(renderMineralCard)}</div>
+        <div className="miningCardGrid ores">{oreRows.map(renderMineralCard)}</div>
        </section>
       )}
       {gemRows.length>0&&(
@@ -520,7 +532,7 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
          <h4>{L('蓝宝石脉 · 宝石','Blue veins · Gems')}</h4>
          <span>{gemRows.length}</span>
         </header>
-        <div className="miningCardGrid">{gemRows.map(renderMineralCard)}</div>
+        <div className="miningCardGrid gems">{gemRows.map(renderMineralCard)}</div>
        </section>
       )}
      </>

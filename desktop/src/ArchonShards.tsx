@@ -2,6 +2,7 @@ import {findShardFrame,type ShardFocus} from './shardFocus';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {archonOverview,shardColors,shardId,type ShardSnapshot,type ShardColor} from './archonModel';
 import type {DetailItem} from './ItemDetails';
+import {isInventoryAvailable} from './resourceDemand';
 import Artwork from './Artwork';
 import {itemName} from './itemNames';
 import {searchText} from './searchText';
@@ -35,7 +36,7 @@ export default function ArchonShards({snapshot,items,en,onOpen,focus,preferences
  return <div className="shardWorkspace"><div className="shardScroll">
   <header className="shardHero"><h2>{L('执刑官源力石','Archon shards')}</h2><div>{[[available,L('可用','Available')],[data.rosterKnown?installed:null,L('已镶嵌','Installed')],[data.rosterKnown?tau:null,L('赤陶','Tauforged')]].map(([n,label])=><span key={String(label)}><strong>{count(n as number|null)}</strong><small>{label}</small></span>)}</div></header>
   {storageError&&<p role="alert">{L('源力石偏好无法读取或保存，当前设置仍可使用','Shard preferences could not be read or saved; current settings remain usable')}</p>}
-  {(!snapshot?.complete||!data.rosterKnown)&&<p role="status">{L('部分库存或战甲槽位尚未读取','Some inventory or Warframe slots are unavailable')}</p>}
+  {(!isInventoryAvailable(snapshot)||!data.rosterKnown)&&<p role="status">{L('部分库存或战甲槽位尚未读取','Some inventory or Warframe slots are unavailable')}</p>}
   {!!data.unknownEquipped&&<p>{data.unknownEquipped} {L('枚已镶嵌源力石颜色未知','installed shards have an unknown color')}</p>}
   <div className="shardCollection">{data.colors.map(c=><button key={c.key} data-shard-color={c.key} style={{'--shard-color':({red:'#ed6969',yellow:'#e4c269',blue:'#67b9e1',green:'#65c493',orange:'#e0a365',purple:'#b992e4'} as Record<string,string>)[c.key]} as import('react').CSSProperties} aria-pressed={(page==='guide'?guideColor:color)===c.key} onClick={()=>{if(page==='guide')update({guideColor:c.key});else update({color:color===c.key?'':c.key,page:'arsenal'});}}><Gem color={c.key}/><strong>{colorName(c.key)}</strong><div className="shardStock"><span/><small>{L('普通','Regular')}</small><small>✦ {L('赤陶','Tauforged')}</small><small>{L('可用','Available')}</small><b>{count(c.available)}</b><b>{count(c.availableTau)}</b><small>{L('已镶嵌','Installed')}</small><b>{count(c.equipped)}</b><b>{count(c.equippedTau)}</b></div></button>)}</div>
   <nav className="shardNavigation"><button aria-pressed={page==='arsenal'} onClick={()=>setPage('arsenal')}>{L('战甲','Warframes')}</button><button aria-pressed={page==='fusion'} onClick={()=>setPage('fusion')}>{L('融合实验室','Fusion lab')}</button><button aria-pressed={page==='guide'} onClick={()=>setPage('guide')}>{L('效果图鉴','Shard guide')}</button></nav>

@@ -209,10 +209,98 @@ test('shipped catalog.json and resource-index.json build clean full mining plan 
 
  const plan=buildMiningPlan(resourceIndex,baseSnapshot(),items,defaultOptions({scope:'unmastered_all'}));
  assert.equal(plan.inventoryKnown,true);
+ assert.equal(plan.pendingQueueKnown,true);
  assert.equal(plan.incomplete,false);
  assert.ok('/Lotus/Weapons/Ostron/Melee/ModularMelee01/Tip/TipOne' in plan.goalsById,'Expected Balla Zaw strike in mining goals');
  for(const zone of OPEN_WORLD_ZONES){
   assert.ok(plan.zones[zone].missingCount>0,`Expected missing minerals in zone ${zone}`);
   assert.ok(plan.zones[zone].potentialXp>0,`Expected potential XP in zone ${zone}`);
  }
+});
+
+test('optional progression groups, non-catalog Foundry jobs, null credits/queue, and ambiguity gates behave accurately',()=>{
+ const pyrol='/Lotus/Types/Items/Gems/Eidolon/CommonOreAItem';
+ const pyrolAlloy='/Lotus/Types/Items/Gems/Eidolon/CommonOreAAlloyItem';
+ const pyrolBp='/Lotus/Types/Recipes/Eidolon/CommonOreAAlloyBlueprint';
+ const sharedBp='/Lotus/Types/Recipes/SharedBlueprint';
+ const catalog:DemandCatalog={
+  ids:[pyrol,pyrolAlloy],
+  resourceIds:[pyrol,pyrolAlloy],
+  blueprintIds:[pyrolBp,sharedBp],
+  goalIds:['weapon'],
+  recipes:{
+   weapon:{output:1,parts:[{itemId:pyrolAlloy,quantity:20},{itemId:pyrol,quantity:5}]},
+   [pyrolAlloy]:{output:20,parts:[{itemId:pyrolBp,quantity:1,reusable:true},{itemId:pyrol,quantity:20}]},
+  },
+ };
+ const items=new Map<string,MiningPlannerItem>([
+  ['weapon',{id:'weapon',name:'Test Rifle',category:'primary',maxRank:30,xpPerRank:100,masteryReq:0}],
+ ]);
+
+ // 1. complete:false with only OPTIONAL_PROGRESSION_OWNED_GROUPS -> inventoryKnown: true
+ const optionalMissing=buildMiningPlan(
+  catalog,
+  baseSnapshot({
+   complete:false,
+   missingOwnedGroups:['Hoverboards','MechSuits','MoaPets','OperatorAmps','CrewShipHarnesses','LevelKeys'],
+   counts:{[pyrol]:10},
+  }),
+  items,
+  defaultOptions(),
+ );
+ assert.equal(optionalMissing.inventoryKnown,true);
+ assert.equal(optionalMissing.zones.eidolon.ores.find(r=>r.id===pyrol)!.needed,25);
+ assert.equal(optionalMissing.zones.eidolon.ores.find(r=>r.id===pyrol)!.missing,15);
+
+ // 2. complete:false with non-optional 'Recipes' or absent missingOwnedGroups -> inventoryKnown: false
+ assert.equal(
+  buildMiningPlan(catalog,baseSnapshot({complete:false,missingOwnedGroups:['Recipes']}),items,defaultOptions()).inventoryKnown,
+  false,
+ );
+ assert.equal(
+  buildMiningPlan(catalog,baseSnapshot({complete:false}),items,defaultOptions()).inventoryKnown,
+  false,
+ );
+
+ // 3. Unrelated consumable in pendingRecipes alongside known alloy blueprint -> inventoryKnown: true
+ const unrelatedConsumable='/Lotus/Types/Recipes/Consumables/LargeTeamEnergyRestoreBlueprint';
+ const withConsumable=buildMiningPlan(
+  catalog,
+  baseSnapshot({
+   counts:{[pyrol]:2},
+   pendingRecipes:{[unrelatedConsumable]:1,[pyrolBp]:1},
+  }),
+  items,
+  defaultOptions(),
+ );
+ assert.equal(withConsumable.inventoryKnown,true);
+ assert.equal(withConsumable.pendingQueueKnown,true);
+ assert.equal(withConsumable.zones.eidolon.ores.find(r=>r.id===pyrol)!.needed,5);
+ assert.equal(withConsumable.zones.eidolon.ores.find(r=>r.id===pyrol)!.missing,3);
+
+ // 4. pendingRecipes: null & credits: null with ranksComplete:true -> inventoryKnown:true, pendingQueueKnown:false
+ const noQueueOrCredits=buildMiningPlan(
+  catalog,
+  baseSnapshot({pendingRecipes:null,credits:null,counts:{[pyrol]:5}}),
+  items,
+  defaultOptions(),
+ );
+ assert.equal(noQueueOrCredits.inventoryKnown,true);
+ assert.equal(noQueueOrCredits.pendingQueueKnown,false);
+ assert.equal(noQueueOrCredits.zones.eidolon.ores.find(r=>r.id===pyrol)!.needed,25);
+ assert.equal(noQueueOrCredits.zones.eidolon.ores.find(r=>r.id===pyrol)!.missing,20);
+
+ // 5. Ambiguous blueprint matching two recipes -> inventoryKnown: false
+ const ambiguousCatalog:DemandCatalog={
+  ...catalog,
+  recipes:{
+   ...catalog.recipes,
+   dupA:{output:1,parts:[{itemId:sharedBp,quantity:1}]},
+   dupB:{output:1,parts:[{itemId:sharedBp,quantity:1}]},
+  },
+ };
+ assert.equal(
+  buildMiningPlan(ambiguousCatalog,baseSnapshot({pendingRecipes:{[sharedBp]:1}}),items,defaultOptions()).inventoryKnown,
+  false,
+ );
 });

@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {activeResurgence,resurgenceOffers,rotationCountdown,type ResurgenceTrader} from '../src/resurgenceModel.ts';
+import {activeResurgence,resurgenceItemIds,resurgenceOffers,rotationCountdown,type ResurgenceTrader} from '../src/resurgenceModel.ts';
 const rotation=(start:number,end:number,completed=false):ResurgenceTrader=>({Activation:{$date:{$numberLong:String(start)}},Expiry:{$date:{$numberLong:String(end)}},Node:'TradeHUB1',Completed:completed});
 test('resurgence selects active incomplete rotation, excludes future and expired rotations',()=>{
  const live=rotation(100,200);
@@ -24,4 +24,14 @@ test('rotation time folds every 24 hours into days without rounding up',()=>{
  assert.equal(rotationCountdown(49*3600000,0,true),'2d 1h');
  assert.equal(rotationCountdown(0,1),'0小时 0分钟');
  assert.equal(rotationCountdown(NaN,0),'—');
+});
+test('resurgenceItemIds returns normalized IDs for active rotation and null when absent or expired',()=>{
+ const live={...rotation(100,200),Manifest:[{ItemType:'/Lotus/StoreItems/Powersuits/Saryn/SarynPrime'}],EvergreenManifest:[{ItemType:'/Lotus/StoreItems/Weapons/Tenno/Rifle/BratonPrime'}]};
+ const ids=resurgenceItemIds([live],150);
+ assert.ok(ids instanceof Set);
+ assert.equal(ids.has('/Lotus/Powersuits/Saryn/SarynPrime'),true);
+ assert.equal(ids.has('/Lotus/Weapons/Tenno/Rifle/BratonPrime'),true);
+ assert.equal(resurgenceItemIds([live],200),null);
+ assert.equal(resurgenceItemIds([],150),null);
+ assert.equal(resurgenceItemIds(undefined,150),null);
 });

@@ -1,6 +1,7 @@
+import {isInventoryAvailable} from './resourceDemand.ts';
 export type ShardSlot={color:string;upgradeType:string};
 export type ShardFrame={itemId:string;instanceId:string;slots:(ShardSlot|null)[]|null};
-export type ShardSnapshot={complete:boolean;counts:Record<string,number>;favorites?:string[];archonShardFrames?:ShardFrame[]|null};
+export type ShardSnapshot={complete:boolean;missingOwnedGroups?:string[]|null;counts:Record<string,number>;favorites?:string[];archonShardFrames?:ShardFrame[]|null};
 export const stelaId='/Lotus/Types/Gameplay/EntratiLab/Resources/MurmurItem';
 const prefix='/Lotus/Types/Gameplay/NarmerSorties/ArchonCrystal';
 export const shardColors=[
@@ -26,7 +27,7 @@ export const shardRecipes:ShardRecipe[]=[
 ];
 export function shardStock(snapshot:ShardSnapshot|null,id:string):number|null{
  const value=snapshot?.counts[id];
- return value===undefined?(snapshot?.complete?0:null):Number.isSafeInteger(value)&&value>=0?value:null;
+ return value===undefined?(isInventoryAvailable(snapshot)?0:null):Number.isSafeInteger(value)&&value>=0?value:null;
 }
 /** Each recipe is an independent capacity estimate, not a combined shopping plan. */
 export function shardCapacity(snapshot:ShardSnapshot|null,recipe:ShardRecipe):number|null{

@@ -55,5 +55,8 @@
 .visualCard .componentOrb .orbCount{bottom:0;right:0;font-size:12px;line-height:16px;border-radius:4px;background:#000b;padding:0 3px}
 .visualCard .cardStatus{grid-row:3;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-around;gap:4px;min-height:32px;padding:6px 0 0;border-top:1px solid var(--ui-line);font-size:13px;color:var(--color-text)}
 .visualCard .cardStatus .masteredLaurel{width:25px;height:25px;object-fit:contain}.visualCard .cardStatus>span:empty{display:none}
+.visualCard .foundryUsedBadge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border:1px solid color-mix(in srgb,var(--color-tab-lighter) 50%,transparent);border-radius:999px;background:color-mix(in srgb,var(--color-tab-lighter) 12%,transparent);color:var(--color-tab-lighter);font:inherit;font-size:11px;line-height:16px;font-weight:500;white-space:nowrap;cursor:pointer;transition:background-color 140ms ease,border-color 140ms ease}
+.visualCard .foundryUsedBadge svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.visualCard .foundryUsedBadge:hover{background:color-mix(in srgb,var(--color-tab-lighter) 22%,transparent);border-color:var(--color-tab-lighter);color:var(--color-text)}
 .visualCard .cardActions{display:none}.visualCard:focus-visible{outline:2px solid var(--color-tab-lighter);outline-offset:-2px}
 .masteryRecCard{cursor:pointer}

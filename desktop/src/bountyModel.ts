@@ -1,4 +1,5 @@
 import {searchText} from './searchText.ts';
+import type {MarketRankingRow} from './marketRankingModel.ts';
 
 export type BountyRarity='common'|'uncommon'|'rare';
 export type BountyRarityFilter='all'|BountyRarity;
@@ -165,7 +166,27 @@ export type BountyBrowseFilter={
  tierKey:string;
  rarity:BountyRarityFilter;
  availability:'all'|'active'|'waiting';
+ tradableOnly?:boolean;
 };
+
+export type BountySortMode='default'|'platinum-desc'|'platinum-asc';
+export type BountyPriceState='priced'|'no-orders'|'pending'|'error'|'untradable';
+
+export interface BountyItemPrice{
+ slug:string|null;
+ state:BountyPriceState;
+ unitPrice:number|null;
+ totalPrice:number|null;
+ stale:boolean;
+ sampleCount:number|null;
+ fetchedAt:string|null;
+ error:string|null;
+}
+
+export interface BountyPriceIndex{
+ byGameRef:ReadonlyMap<string,MarketRankingRow>;
+ byEnName:ReadonlyMap<string,MarketRankingRow>;
+}
 
 export type BountySubscriptionTarget={
  syndicate:string;
@@ -472,6 +493,7 @@ export function buildCatalogRewardRows(
 export function filterCatalogRewardRows(
  rows:readonly BountyCatalogRewardRow[],
  filter:BountyBrowseFilter,
+ priceIndex?:BountyPriceIndex,
 ):BountyCatalogRewardRow[]{
  return rows.filter(row=>{
   if(filter.syndicate!=='all'&&row.syndicate!==filter.syndicate)return false;
@@ -479,6 +501,7 @@ export function filterCatalogRewardRows(
   if(filter.rarity!=='all'&&row.rarity!==filter.rarity)return false;
   if(filter.availability==='active'&&!row.activeNow)return false;
   if(filter.availability==='waiting'&&row.activeNow)return false;
+  if(filter.tradableOnly&&priceIndex&&resolveBountyItemPrice(row,priceIndex).state==='untradable')return false;
   if(filter.query.trim()){
    return searchText(
     filter.query,
@@ -693,4 +716,157 @@ export function pickOverviewJobs(syndicate:BountySyndicate):BountyJob[]{
   return list.length?list:syndicate.jobs.slice(-3);
  }
  return syndicate.jobs.slice(0,3);
+}
+
+const PROJECTION_PREFIX='/Lotus/Types/Game/Projections/';
+const EMPTY_PRICE_INDEX:BountyPriceIndex={
+ byGameRef:new Map(),
+ byEnName:new Map(),
+};
+
+/** Normalize relic itemIds from bounty decks by stripping Bronze/Silver/Gold tier suffixes. */
+export function normalizeBountyGameRef(itemId:string):string{
+ if(itemId.startsWith(PROJECTION_PREFIX)){
+  return itemId.replace(/(Bronze|Silver|Gold)$/,'');
+ }
+ return itemId;
+}
+
+export function buildBountyPriceIndex(rows:readonly MarketRankingRow[]|undefined):BountyPriceIndex{
+ if(!rows?.length)return EMPTY_PRICE_INDEX;
+ const byGameRef=new Map<string,MarketRankingRow>();
+ const byEnName=new Map<string,MarketRankingRow>();
+ for(const row of rows){
+  if(row.gameRef&&!byGameRef.has(row.gameRef)){
+   byGameRef.set(row.gameRef,row);
+  }
+  const enName=row.i18n?.en?.name?.trim().toLowerCase();
+  if(enName&&!byEnName.has(enName)){
+   byEnName.set(enName,row);
+  }
+ }
+ return {byGameRef,byEnName};
+}
+
+function lookupMarketRow(
+ reward:{itemId:string;en?:string|null},
+ index:BountyPriceIndex,
+):MarketRankingRow|undefined{
+ const direct=index.byGameRef.get(reward.itemId);
+ if(direct)return direct;
+ const normalized=normalizeBountyGameRef(reward.itemId);
+ if(normalized!==reward.itemId){
+  const byNormalized=index.byGameRef.get(normalized);
+  if(byNormalized)return byNormalized;
+ }
+ if(reward.itemId.startsWith('@endo:')||reward.itemId.startsWith('@credits:')){
+  return undefined;
+ }
+ const enKey=reward.en?.trim().toLowerCase();
+ return enKey?index.byEnName.get(enKey):undefined;
+}
+
+export function resolveBountyItemPrice(
+ reward:{itemId:string;en?:string|null;quantity?:number},
+ index:BountyPriceIndex,
+):BountyItemPrice{
+ const row=lookupMarketRow(reward,index);
+ if(!row){
+  return {
+   slug:null,
+   state:'untradable',
+   unitPrice:null,
+   totalPrice:null,
+   stale:false,
+   sampleCount:null,
+   fetchedAt:null,
+   error:null,
+  };
+ }
+ const qty=Math.max(1,reward.quantity??1);
+ const hasUnitPrice=typeof row.unitPrice==='number'&&Number.isFinite(row.unitPrice)&&row.unitPrice>=0;
+ const unitPrice=hasUnitPrice?row.unitPrice:null;
+ const state:BountyPriceState=unitPrice!==null
+  ?'priced'
+  :row.lastError
+   ?'error'
+   :row.priceFetchedAt
+    ?'no-orders'
+    :'pending';
+ return {
+  slug:row.slug,
+  state,
+  unitPrice,
+  totalPrice:unitPrice!==null?unitPrice*qty:null,
+  stale:Boolean(row.stale),
+  sampleCount:typeof row.sampleCount==='number'?row.sampleCount:null,
+  fetchedAt:row.priceFetchedAt??null,
+  error:row.lastError??null,
+ };
+}
+
+export function formatPlatinumNumber(value:number):string{
+ if(Math.abs(value-Math.round(value))<0.05)return String(Math.round(value));
+ return value.toFixed(1);
+}
+
+export function formatPlatinum(value:number):string{
+ return `${formatPlatinumNumber(value)}p`;
+}
+
+export function sortCatalogRewardRows(
+ rows:readonly BountyCatalogRewardRow[],
+ sortMode:BountySortMode,
+ priceIndex:BountyPriceIndex,
+):BountyCatalogRewardRow[]{
+ if(sortMode==='default')return [...rows];
+ const desc=sortMode==='platinum-desc';
+ const decorated=rows.map((row,index)=>({
+  row,
+  index,
+  price:resolveBountyItemPrice(row,priceIndex),
+ }));
+ decorated.sort((a,b)=>{
+  const rank=(state:BountyPriceState)=>state==='priced'?0:state==='untradable'?2:1;
+  const tierDiff=rank(a.price.state)-rank(b.price.state);
+  if(tierDiff!==0)return tierDiff;
+  if(a.price.state==='priced'&&b.price.state==='priced'){
+   const totalDiff=desc
+    ?(b.price.totalPrice!)-(a.price.totalPrice!)
+    :(a.price.totalPrice!)-(b.price.totalPrice!);
+   if(totalDiff!==0)return totalDiff;
+   const unitDiff=desc
+    ?(b.price.unitPrice!)-(a.price.unitPrice!)
+    :(a.price.unitPrice!)-(b.price.unitPrice!);
+   if(unitDiff!==0)return unitDiff;
+   if(a.row.activeNow!==b.row.activeNow)return a.row.activeNow?-1:1;
+   if(a.row.chance!==b.row.chance)return b.row.chance-a.row.chance;
+   return a.index-b.index;
+  }
+  if(a.price.state!=='untradable'&&a.row.activeNow!==b.row.activeNow){
+   return a.row.activeNow?-1:1;
+  }
+  return a.index-b.index;
+ });
+ return decorated.map(entry=>entry.row);
+}
+
+export function collectBountyWarmupSlugs(
+ rewards:readonly Pick<BountyReward,'itemId'|'en'>[],
+ priceIndex:BountyPriceIndex,
+ limit=60,
+):string[]{
+ if(limit<=0)return [];
+ const out:string[]=[];
+ const seen=new Set<string>();
+ for(const reward of rewards){
+  const row=lookupMarketRow(reward,priceIndex);
+  if(!row||seen.has(row.slug))continue;
+  // Skip rows already carrying a fresh quote to avoid flooding the global wm_rate queue.
+  if(!row.stale&&Boolean(row.priceFetchedAt))continue;
+  seen.add(row.slug);
+  out.push(row.slug);
+  if(out.length>=limit)break;
+ }
+ return out;
 }

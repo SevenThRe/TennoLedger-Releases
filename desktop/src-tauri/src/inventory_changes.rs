@@ -29,7 +29,7 @@ impl Changes {
   Ok((rank_total(&gains,arcane)?==added).then_some(gains))
  }
  pub fn record(&mut self,snapshot:&Snapshot,catalog:&Catalog)->Result<(),String>{
-  if !snapshot.complete||snapshot.account_scope.is_none(){return Ok(());}
+  if !snapshot.inventory_available()||snapshot.account_scope.is_none(){return Ok(());}
   let at=chrono::DateTime::parse_from_rfc3339(&snapshot.captured_at).map_err(|_|"增量快照时间无效")?;
   if self.captured_at.as_ref().and_then(|s|chrono::DateTime::parse_from_rfc3339(s).ok()).is_some_and(|old|at<=old){return Ok(());}
   let categories:BTreeMap<_,_>=catalog.items.iter().map(|i|(i.id.as_str(),i.category.as_str())).collect();

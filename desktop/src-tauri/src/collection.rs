@@ -279,7 +279,7 @@ pub fn count(s: &Snapshot, id: &str) -> Option<u64> {
     s.counts
         .get(id)
         .copied()
-        .or(if s.complete { Some(0) } else { None })
+        .or(if s.inventory_available() { Some(0) } else { None })
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

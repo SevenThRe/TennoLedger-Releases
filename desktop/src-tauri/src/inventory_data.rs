@@ -58,14 +58,59 @@ const EQUIPMENT: &[&str] = &[
     "CrewShipHarnesses",
     "Upgrades",
 ];
-fn unranked_equipment_counts(value:&Value,catalog:&Catalog)->BTreeMap<String,Option<u64>>{
- let mut out:BTreeMap<String,Option<u64>>=BTreeMap::new();
- for (group,category)in [("Suits","warframe"),("LongGuns","primary"),("Pistols","secondary"),("Melee","melee"),("Sentinels","sentinel"),("SentinelWeapons","sentinelweapon")]{
-  let Some(rows)=value[group].as_array()else{continue;};
-  for item in catalog.items.iter().filter(|i|i.category==category){out.entry(item.id.clone()).or_insert(Some(0));}
-  for row in rows{let Some(id)=row["ItemType"].as_str()else{continue;};let entry=out.entry(id.into()).or_insert(Some(0));match row.get("XP").and_then(numeric){Some(0)=>{*entry=entry.and_then(|n|n.checked_add(1));},Some(_)=>{},None=>{*entry=None;}}}
- }
- out
+fn unranked_equipment_counts(value: &Value, catalog: &Catalog) -> BTreeMap<String, Option<u64>> {
+    let mut out: BTreeMap<String, Option<u64>> = BTreeMap::new();
+    for (group, category) in [
+        ("Suits", "warframe"),
+        ("LongGuns", "primary"),
+        ("Pistols", "secondary"),
+        ("Melee", "melee"),
+        ("Sentinels", "sentinel"),
+        ("SentinelWeapons", "sentinelweapon"),
+    ] {
+        let rows = match value.get(group) {
+            Some(Value::Array(rows)) => rows.as_slice(),
+            None | Some(Value::Null)
+                if crate::collection::OPTIONAL_PROGRESSION_OWNED_GROUPS.contains(&group) =>
+            {
+                for item in catalog.items.iter().filter(|i| i.category == category) {
+                    out.entry(item.id.clone()).or_insert(Some(0));
+                }
+                continue;
+            }
+            _ => continue,
+        };
+        for item in catalog.items.iter().filter(|i| i.category == category) {
+            out.entry(item.id.clone()).or_insert(Some(0));
+        }
+        for row in rows {
+            let Some(id) = row["ItemType"].as_str() else {
+                continue;
+            };
+            let entry = out.entry(id.into()).or_insert(Some(0));
+            let xp = match row.get("XP") {
+                None | Some(Value::Null) => Some(0),
+                Some(v) => numeric(v),
+            };
+            let polarized = match row.get("Polarized") {
+                None | Some(Value::Null) => Some(0),
+                Some(v) => numeric(v),
+            };
+            let has_focus_lens = match row.get("FocusLens") {
+                None | Some(Value::Null) => Some(false),
+                Some(Value::String(s)) => Some(!s.trim().is_empty()),
+                Some(_) => None,
+            };
+            match (xp, polarized, has_focus_lens) {
+                (Some(0), Some(0), Some(false)) => {
+                    *entry = entry.and_then(|n| n.checked_add(1));
+                }
+                (Some(_), Some(_), Some(_)) => {}
+                _ => *entry = None,
+            }
+        }
+    }
+    out
 }
 const STACKS: &[&str] = &[
     "MiscItems",
@@ -131,16 +176,22 @@ fn optional_number(value: &Value, key: &str) -> Result<Option<u64>, String> {
     }
 }
 fn intrinsic_progress(value: &Value, keys: &[&str]) -> Result<Option<MasteryProgress>, String> {
+    let skills = match value.get("PlayerSkills") {
+        None | Some(Value::Null) => None,
+        Some(v) if v.is_object() => Some(v),
+        Some(_) => return Err("内源之力数据无效".into()),
+    };
     let mut sum = 0;
-    let mut complete = true;
-    for key in keys {
-        match optional_number(&value["PlayerSkills"], key)? {
-            Some(n) if n <= 10 => sum += n as u32,
-            Some(_) => return Err("内源之力等级超限".into()),
-            None => complete = false,
+    if let Some(skills) = skills {
+        for key in keys {
+            match optional_number(skills, key)? {
+                Some(n) if n <= 10 => sum += n as u32,
+                Some(_) => return Err("内源之力等级超限".into()),
+                None => {}
+            }
         }
     }
-    Ok(complete.then_some(MasteryProgress {
+    Ok(Some(MasteryProgress {
         current: sum,
         max: keys.len() as u32 * 10,
     }))
@@ -199,18 +250,22 @@ pub fn from_value(
     if chrono::DateTime::parse_from_rfc3339(&captured_at).is_err() {
         return Err("库存时间无效".into());
     }
+    let missing_groups: Vec<String> = missing_owned_groups(value)
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let complete = missing_groups
+        .iter()
+        .all(|g| crate::collection::OPTIONAL_PROGRESSION_OWNED_GROUPS.contains(&g.as_str()));
     let mut out = Snapshot {
         account_scope,
-        missing_owned_groups: missing_owned_groups(value).into_iter().map(str::to_owned).collect(),
+        missing_owned_groups: missing_groups,
         pending_recipes: pending_recipe_counts(value),
         schema_version: 1,
         rivens: Some(crate::riven_inventory::normalize(value)),
         captured_at,
         source: source.to_owned(),
-        complete: EQUIPMENT
-            .iter()
-            .chain(STACKS.iter())
-            .all(|k| value[*k].is_array()),
+        complete,
         mastery_rank: optional_number(value, "PlayerLevel")?
             .map(|n| u32::try_from(n).unwrap_or(u32::MAX)),
         credits: optional_number(value, "RegularCredits")?,
@@ -334,17 +389,25 @@ pub fn from_value(
                 .or_insert(rank);
         }
     }
-    if let Some(consumed) = value["InfestedFoundry"]["ConsumedSuits"].as_array() {
-        let mut set = std::collections::BTreeSet::new();
-        for entry in consumed {
-            if let Some(id) = entry["s"].as_str() {
-                if id.starts_with("/Lotus/") {
-                    set.insert(id.to_owned());
+    out.helminth = match value.get("InfestedFoundry") {
+        None | Some(Value::Null) => Some(std::collections::BTreeSet::new()),
+        Some(Value::Object(foundry)) => match foundry.get("ConsumedSuits") {
+            None | Some(Value::Null) => Some(std::collections::BTreeSet::new()),
+            Some(Value::Array(consumed)) => {
+                let mut set = std::collections::BTreeSet::new();
+                for entry in consumed {
+                    if let Some(id) = entry["s"].as_str() {
+                        if id.starts_with("/Lotus/") {
+                            set.insert(id.to_owned());
+                        }
+                    }
                 }
+                Some(set)
             }
-        }
-        out.helminth = Some(set);
-    }
+            Some(_) => None,
+        },
+        Some(_) => None,
+    };
     out.archon_shard_frames = crate::collection::archon_inventory::parse(&value["Suits"]);
     out.archon_shards = out.archon_shard_frames.as_deref()
         .and_then(crate::collection::archon_inventory::equipped_types);
@@ -546,6 +609,10 @@ mod tests {
         v["Suits"][1]["ArchonCrystalUpgrades"]=json!([]);
         assert!(from_value(&v,&cat,None,"test","2026-10-24T00:00:00Z").unwrap().archon_shards.unwrap().is_empty());
         v["Suits"][1].as_object_mut().unwrap().remove("ArchonCrystalUpgrades");
+        let absent=from_value(&v,&cat,None,"test","2026-10-24T00:00:00Z").unwrap();
+        assert!(absent.archon_shards.unwrap().is_empty());
+        assert!(absent.archon_shard_frames.unwrap()[1].slots.is_some());
+        v["Suits"][1]["ArchonCrystalUpgrades"]=json!(false);
         let unknown=from_value(&v,&cat,None,"test","2026-10-24T00:00:00Z").unwrap();
         assert!(unknown.archon_shards.is_none());
         assert!(unknown.archon_shard_frames.unwrap()[1].slots.is_none());
@@ -570,9 +637,23 @@ mod tests {
         let a = out.mastery_account.unwrap();
         assert!(a.ranks_complete);
         assert_eq!(a.railjack.unwrap().current, 50);
-        assert!(a.duviri.is_none());
+        let duviri = a.duviri.unwrap();
+        assert_eq!(duviri.current, 0);
+        assert_eq!(duviri.max, 40);
         assert!(a.total_xp.is_none());
         assert!(a.star_normal.is_none());
+
+        let mut early = raw();
+        early["Missions"] = json!([]);
+        early["PlayerLevel"] = json!(2);
+        let early_out = from_value(&early, &cat, None, "test", "2026-10-23T00:00:00Z").unwrap();
+        let early_m = early_out.mastery_account.unwrap();
+        assert_eq!(early_m.railjack.as_ref().unwrap().current, 0);
+        assert_eq!(early_m.railjack.as_ref().unwrap().max, 50);
+        assert_eq!(early_m.duviri.as_ref().unwrap().current, 0);
+        assert_eq!(early_m.duviri.as_ref().unwrap().max, 40);
+        assert_eq!(early_m.total_xp, Some(0));
+
         for bad in [
             json!(-1),
             json!(1.5),
@@ -583,7 +664,11 @@ mod tests {
             assert!(from_value(&v, &cat, None, "test", "2026-10-23T00:00:00Z").is_err());
         }
         v["PremiumCredits"] = json!(0);
-        v["PlayerSkills"]["LPS_TACTICAL"] = json!(11);
+        for bad_skills in [json!("bad"), json!([])] {
+            v["PlayerSkills"] = bad_skills;
+            assert!(from_value(&v, &cat, None, "test", "2026-10-23T00:00:00Z").is_err());
+        }
+        v["PlayerSkills"] = json!({"LPS_TACTICAL":11});
         assert!(from_value(&v, &cat, None, "test", "2026-10-23T00:00:00Z").is_err());
     }
     #[test]
@@ -705,9 +790,18 @@ mod tests {
         v.as_object_mut().unwrap().remove("MechSuits");
         assert_eq!(missing_owned_groups(&v),vec!["MechSuits"]);
         let out = from_value(&v, &cat, None, "game-memory", "2026-10-23T00:00:00Z").unwrap();
-        assert!(!out.complete);
+        assert!(out.complete);
+        assert!(out.inventory_available());
         assert_eq!(
             crate::collection::count(&out, "/Lotus/Powersuits/EntratiMech"),
+            Some(0)
+        );
+        v.as_object_mut().unwrap().remove("Recipes");
+        let partial = from_value(&v, &cat, None, "game-memory", "2026-10-23T00:00:00Z").unwrap();
+        assert!(!partial.complete);
+        assert!(!partial.inventory_available());
+        assert_eq!(
+            crate::collection::count(&partial, "/Lotus/Powersuits/EntratiMech"),
             None
         );
     }
@@ -722,11 +816,13 @@ mod tests {
         v["LastInventorySync"]=json!("invalid");
         v.as_object_mut().unwrap().remove("Hoverboards");
         let missing=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
-        assert!(!missing.complete);assert!(missing.inventory_available());
-        assert_eq!(crate::collection::count(&missing,board),None);
+        assert!(missing.complete);assert!(missing.inventory_available());
+        assert_eq!(missing.missing_owned_groups,vec!["Hoverboards"]);
+        assert_eq!(crate::collection::count(&missing,board),Some(0));
         assert_eq!(crate::acquisition::choose(None,&missing,false),crate::acquisition::Decision::Accept);
         let saved=crate::collection::parse(&serde_json::to_string(&missing).unwrap()).unwrap();
-        assert!(saved.inventory_available());assert!(!saved.complete);
+        assert!(saved.inventory_available());assert!(saved.complete);
+        assert_eq!(saved.missing_owned_groups,vec!["Hoverboards"]);
         v["Hoverboards"]=json!([]);
         let empty=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
         assert!(empty.complete);assert_eq!(crate::collection::count(&empty,board),Some(0));
@@ -738,12 +834,13 @@ mod tests {
             v.as_object_mut().unwrap().remove(group);
         }
         let prog=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
-        assert!(!prog.complete);
+        assert!(prog.complete);
         assert!(prog.inventory_available());
-        assert_eq!(crate::collection::count(&prog,"/Lotus/Powersuits/EntratiMech"),None);
+        assert_eq!(crate::collection::count(&prog,"/Lotus/Powersuits/EntratiMech"),Some(0));
         assert_eq!(crate::acquisition::choose(None,&prog,false),crate::acquisition::Decision::Accept);
         v.as_object_mut().unwrap().remove("Recipes");
         let broken=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
+        assert!(!broken.complete);
         assert!(!broken.inventory_available());assert_eq!(crate::acquisition::choose(None,&broken,false),crate::acquisition::Decision::Incomplete);
     }
     #[test]
@@ -778,4 +875,69 @@ mod tests {
 
 }
 
-#[cfg(test)]mod tradable_equipment_tests{use super::*;use serde_json::json;#[test]fn only_explicit_instance_xp_zero_counts(){let catalog=crate::collection::catalog().unwrap();let id="/Lotus/Sentinels/Shade/PrismaShadePowerSuit";let values=json!({"Sentinels":[{"ItemType":id,"XP":0},{"ItemType":id,"XP":900000}],"XPInfo":[{"ItemType":id,"XP":900000}]});assert_eq!(unranked_equipment_counts(&values,&catalog).get(id),Some(&Some(1)));let missing=json!({"Sentinels":[{"ItemType":id}]});assert_eq!(unranked_equipment_counts(&missing,&catalog).get(id),Some(&None));let absent=unranked_equipment_counts(&json!({}),&catalog);assert!(!absent.contains_key(id));}}
+#[cfg(test)]
+mod helminth_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn helminth_distinguishes_absent_empty_and_malformed() {
+        let cat = crate::collection::catalog().unwrap();
+        let mut v = json!({"LastInventorySync":{"$oid":"650000000000000000000000"},"MiscItems":[],"XPInfo":[],"Suits":[],"LongGuns":[],"Pistols":[],"Melee":[]});
+        let absent = from_value(&v, &cat, None, "test", "2026-10-23T00:00:00Z").unwrap();
+        assert_eq!(absent.helminth, Some(std::collections::BTreeSet::new()));
+
+        v["InfestedFoundry"] = json!({});
+        let empty_foundry = from_value(&v, &cat, None, "test", "2026-10-23T00:00:00Z").unwrap();
+        assert_eq!(empty_foundry.helminth, Some(std::collections::BTreeSet::new()));
+
+        v["InfestedFoundry"] = json!({"ConsumedSuits":[{"s":"/Lotus/Powersuits/Excalibur/Excalibur"}]});
+        let populated = from_value(&v, &cat, None, "test", "2026-10-23T00:00:00Z").unwrap();
+        assert_eq!(
+            populated.helminth,
+            Some(std::collections::BTreeSet::from(["/Lotus/Powersuits/Excalibur/Excalibur".into()]))
+        );
+
+        v["InfestedFoundry"] = json!("bad");
+        assert!(from_value(&v, &cat, None, "test", "2026-10-23T00:00:00Z").unwrap().helminth.is_none());
+
+        v["InfestedFoundry"] = json!({"ConsumedSuits": 42});
+        assert!(from_value(&v, &cat, None, "test", "2026-10-23T00:00:00Z").unwrap().helminth.is_none());
+    }
+}
+
+#[cfg(test)]
+mod tradable_equipment_tests {
+    use super::*;
+    use serde_json::json;
+    #[test]
+    fn omitted_xp_and_optional_sentinel_groups_resolve_while_modified_or_malformed_stay_excluded_or_unknown() {
+        let catalog = crate::collection::catalog().unwrap();
+        let id = "/Lotus/Types/Sentinels/SentinelPowersuits/PrismaShadePowerSuit";
+        let values = json!({
+            "Sentinels": [
+                {"ItemType": id, "XP": 0},
+                {"ItemType": id, "XP": 900000}
+            ],
+            "XPInfo": [{"ItemType": id, "XP": 900000}]
+        });
+        assert_eq!(unranked_equipment_counts(&values, &catalog).get(id), Some(&Some(1)));
+
+        let omitted_xp = json!({
+            "Sentinels": [
+                {"ItemType": id},
+                {"ItemType": id, "Polarized": 1},
+                {"ItemType": id, "FocusLens": "/Lotus/Types/Items/MiscItems/FocusLensGreater"}
+            ]
+        });
+        assert_eq!(unranked_equipment_counts(&omitted_xp, &catalog).get(id), Some(&Some(1)));
+
+        let malformed_xp = json!({"Sentinels": [{"ItemType": id, "XP": "bad"}]});
+        assert_eq!(unranked_equipment_counts(&malformed_xp, &catalog).get(id), Some(&None));
+
+        let absent = unranked_equipment_counts(&json!({}), &catalog);
+        assert_eq!(absent.get(id), Some(&Some(0)));
+        let suit_id = catalog.items.iter().find(|i| i.category == "warframe").unwrap().id.as_str();
+        assert!(!absent.contains_key(suit_id));
+    }
+}

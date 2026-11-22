@@ -100,7 +100,8 @@
 .bountyInlineLootChip:hover:not(:disabled){background:rgba(255,255,255,.07);border-color:rgba(155,175,220,.25)}
 .bountyInlineLootChip.tracked{background:color-mix(in srgb,var(--bounty-accent) 18%,rgba(16,21,34,.85));border-color:color-mix(in srgb,var(--bounty-accent) 62%,transparent);color:#fff}
 .bountyInlineLootChip.hit{background:color-mix(in srgb,var(--bounty-rare) 18%,rgba(16,21,34,.9));border-color:color-mix(in srgb,var(--bounty-rare) 65%,transparent);color:#f9e39e}
-.bountyInlineLootChip>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.bountyChipName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.bountyChipPrice{flex:none;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;color:#f3d27a;padding:0 4px;border-radius:4px;background:rgba(230,197,104,.14);border:1px solid rgba(230,197,104,.32)}
 
 .bountyMiniJobList{display:flex;flex-direction:column;gap:6px;margin-top:auto}
 .bountyMiniJob{display:flex;flex-direction:column;gap:4px;width:100%;padding:7px 4px 2px;border:0;border-top:1px solid rgba(255,255,255,.06);background:transparent;color:var(--color-text);font:inherit;text-align:left;cursor:pointer;min-width:0;border-radius:4px;transition:background .12s ease}
@@ -218,7 +219,8 @@
 .bountyLootTile.tracked{border-color:color-mix(in srgb,var(--bounty-accent) 62%,transparent);background:color-mix(in srgb,var(--bounty-accent) 14%,rgba(16,21,34,.85))}
 .bountyLootTile.hit{border-color:color-mix(in srgb,var(--bounty-rare) 72%,transparent);background:color-mix(in srgb,var(--bounty-rare) 15%,rgba(16,21,34,.9))}
 .bountyLootInfo{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
-.bountyLootName{display:block;font-size:12px;font-weight:500;line-height:15px;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bountyLootHead{display:flex;align-items:center;gap:5px;min-width:0}
+.bountyLootName{flex:1;min-width:0;display:block;font-size:12px;font-weight:500;line-height:15px;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bountyChanceBar{height:3px;width:100%;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden}
 .bountyChanceBar>span{display:block;height:100%;border-radius:inherit}
 .bountyChanceBar>span.rare{background:var(--bounty-rare)}
@@ -236,6 +238,13 @@
 .bountyTrackedPanel,.bountyExplorerPanel{padding:12px;border-radius:10px;border:1px solid var(--ui-line,#353d50);background:var(--color-bg-1,#101522);min-width:0}
 .bountySectionHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .bountySectionHead h2{font-size:14px;font-weight:600}
+.bountySectionCounts{display:inline-flex;align-items:center;gap:6px;flex:none}
+
+.bountyPriceBadge{display:inline-flex;align-items:center;gap:3px;min-height:0;padding:1px 6px;border-radius:5px;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;flex:none}
+.bountyPriceBadge.priced{background:rgba(230,197,104,.14);border:1px solid rgba(230,197,104,.38);color:#f7df94}
+.bountyPriceBadge.priced img{width:11px;height:11px;object-fit:contain;flex:none}
+.bountyPriceBadge.priced.stale{opacity:.82}
+.bountyPriceBadge.unpriced{background:rgba(255,255,255,.03);border:1px solid var(--ui-line);color:var(--bounty-muted);font-weight:500}
 
 .bountyAccordion{border-radius:10px;border:1px solid var(--ui-line,#353d50);background:var(--color-bg-1,#101522);overflow:hidden}
 .bountyAccordion>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;font-size:13px;font-weight:600;cursor:pointer;list-style:none}
@@ -258,8 +267,12 @@
 .bountyExplorerFilters{display:flex;flex-direction:column;gap:7px;margin-bottom:10px}
 .bountySearchBox{display:flex;align-items:center;gap:8px;padding:3px 9px;min-height:34px;border-radius:8px;border:1px solid var(--ui-line);background:var(--color-bg-2,#191f30)}
 .bountySearchBox input{flex:1;min-width:0;border:0;outline:none;background:transparent;color:var(--color-text);font:inherit;font-size:12px}
-.bountyFilterRow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.bountyFilterRow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .bountyFilterRow .themeSelectTrigger{width:100%;height:32px;padding:0 9px;border-radius:7px;background:var(--color-bg-2,#191f30);border:1px solid var(--ui-line);font-size:12px}
+.bountyTradableToggle{display:flex;align-items:center;justify-content:space-between;gap:8px;height:32px;padding:0 10px;border-radius:7px;border:1px solid var(--ui-line);background:var(--color-bg-2,#191f30);color:var(--color-text);font-size:12px;cursor:pointer;user-select:none;min-width:0;box-sizing:border-box}
+.bountyTradableToggle:hover{background:var(--color-card-hover,#232b42)}
+.bountyTradableToggle.active{border-color:color-mix(in srgb,var(--bounty-accent) 65%,transparent);background:color-mix(in srgb,var(--bounty-accent) 14%,var(--color-bg-2))}
+.bountyTradableToggle span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bountyQuickRuleBar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:6px 9px;border-radius:8px;background:var(--color-bg-2,#191f30);border:1px solid var(--ui-line);font-size:12px}
 
 .bountyExplorerList{display:flex;flex-direction:column;gap:6px}
@@ -290,6 +303,5 @@
 .bountyEmpty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:28px 16px;text-align:center;color:var(--bounty-muted)}
 .bountyEmpty svg{width:24px;height:24px}
 
-@media(max-width:1560px){.bountyFilterRow{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:1180px){.bountyBoard{grid-template-columns:1fr}.bountyTierRail{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}}
+@media(max-width:1180px){.bountyBoard{grid-template-columns:1fr}.bountyTierRail{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}.bountyFilterRow{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:980px){.bountyOverviewGrid,.bountyLootGrid{grid-template-columns:1fr}}

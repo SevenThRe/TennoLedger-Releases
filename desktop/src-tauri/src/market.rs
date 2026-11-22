@@ -1,9 +1,9 @@
 use serde_json::{json, Value};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use std::path::PathBuf;
 use std::{
     collections::HashMap,
-    sync::{Mutex, OnceLock},
+    sync::{mpsc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 struct Gateway {
@@ -17,11 +17,22 @@ struct Gateway {
     restore_attempt: Option<Instant>,
     restore_allowed: bool,
     remembered: bool,
+    remembered_platform: Option<String>,
+    restore_failures: u32,
+    last_token_refresh: Option<Instant>,
+    last_keepalive_attempt: Option<Instant>,
     session_error: Option<String>,
 }
 static GATE: OnceLock<Mutex<Gateway>> = OnceLock::new();
+static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
+static SESSION_STOP: OnceLock<Mutex<Option<mpsc::SyncSender<()>>>> = OnceLock::new();
 static SESSION_EPOCH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 fn invalidate_presence() { SESSION_EPOCH.fetch_add(1, std::sync::atomic::Ordering::SeqCst); crate::market_presence::invalidate(); }
+fn emit_session_changed() {
+    if let Some(app) = APP_HANDLE.get() {
+        let _ = app.emit("market-session-changed", ());
+    }
+}
 
 fn segment(s: &str) -> Result<&str, String> {
     if s.is_empty()
@@ -328,6 +339,10 @@ fn new_gateway()->Gateway {
             restore_attempt: None,
             restore_allowed: true,
             remembered: false,
+            remembered_platform: None,
+            restore_failures: 0,
+            last_token_refresh: None,
+            last_keepalive_attempt: None,
             session_error: None,
         }
 }
@@ -340,16 +355,29 @@ fn platform_check(p: &str) -> Result<(), String> {
     }
 }
 fn token_check(t: &str) -> Result<String, String> {
-    let t = t
-        .trim()
-        .strip_prefix("JWT ")
-        .or_else(|| t.trim().strip_prefix("Bearer "))
-        .unwrap_or(t.trim());
-    if t.is_empty() || t.len() > 8192 || !t.bytes().all(|b| b.is_ascii_graphic()) {
+    let trimmed = t.trim();
+    if trimmed.eq_ignore_ascii_case("jwt") || trimmed.eq_ignore_ascii_case("bearer") {
+        return Err("无效会话令牌".into());
+    }
+    let stripped = if trimmed.get(..4).is_some_and(|prefix| prefix.eq_ignore_ascii_case("jwt ")) {
+        &trimmed[4..]
+    } else if trimmed.get(..7).is_some_and(|prefix| prefix.eq_ignore_ascii_case("bearer ")) {
+        &trimmed[7..]
+    } else {
+        trimmed
+    }
+    .trim();
+    if stripped.is_empty() || stripped.len() > 8192 || !stripped.bytes().all(|b| b.is_ascii_graphic()) {
         Err("无效会话令牌".into())
     } else {
-        Ok(t.into())
+        Ok(stripped.into())
     }
+}
+fn extract_rotated_token(headers: &reqwest::header::HeaderMap) -> Option<String> {
+    headers
+        .get(reqwest::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|raw| token_check(raw).ok())
 }
 pub(super) struct PresenceCredential { pub account_id: String, pub platform: String, pub token: String, pub epoch: u64 }
 pub(super) fn presence_credential(account: &str, platform: &str, write: bool) -> Result<PresenceCredential, String> {
@@ -408,7 +436,28 @@ fn error_codes(body:&Value)->Vec<String>{
     }
     codes.sort();codes.dedup();codes.truncate(8);codes
 }
+#[derive(Debug)]
+enum ProfileFetchError {
+    Expired(String),
+    Transient(String),
+}
+impl ProfileFetchError {
+    fn into_message(self) -> String {
+        match self {
+            Self::Expired(msg) | Self::Transient(msg) => msg,
+        }
+    }
+}
+fn is_html_response(r: &reqwest::blocking::Response) -> bool {
+    r.headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|s| s.to_ascii_lowercase().contains("text/html"))
+}
 fn http_error(status:u16,body:&Value,html:bool)->String{
+    if status == 401 && html {
+        return "市场 HTTP 401（网页拦截）：WM 的网页访问检查拦截了请求，请检查网络或代理状态".into();
+    }
     let codes=error_codes(body);let lower=codes.join(" ").to_ascii_lowercase();
     let message=if lower.contains("notverified")||lower.contains("unverified") {"WM 账号尚未完成游戏账号验证"}
     else if lower.contains("banned") {"WM 限制了此账号的交易权限"}
@@ -428,7 +477,7 @@ fn http_error(status:u16,body:&Value,html:bool)->String{
 }
 fn response(r: reqwest::blocking::Response) -> Result<Value, String> {
     let status=r.status();if status==reqwest::StatusCode::NO_CONTENT{return Ok(Value::Null);}
-    let html=r.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|s|s.contains("text/html"));
+    let html=is_html_response(&r);
     let body=r.json::<Value>();
     if !status.is_success(){return Err(http_error(status.as_u16(),&body.unwrap_or(Value::Null),html));}
     let v=body.map_err(|_|"市场响应格式异常，请先刷新挂单")?;
@@ -437,90 +486,302 @@ fn response(r: reqwest::blocking::Response) -> Result<Value, String> {
     }
     Ok(v)
 }
-fn handle_market_response(g:&mut Gateway,auth:bool,write:bool,fingerprint:&str,r:reqwest::blocking::Response)->Result<Value,String>{
-    let status=r.status().as_u16();
-    if status==401&&auth{expire_session(g);}
-    let result=response(r);
-    if write&&(definite_rejection(status)||result.as_ref().err().is_some_and(|e|e.starts_with("市场业务拒绝："))){g.writes.remove(fingerprint);}
+fn apply_rotated_token(g: &mut Gateway, new_token: String) {
+    g.last_token_refresh = Some(Instant::now());
+    let rotated_platform = match g.session.as_mut() {
+        Some(session) if session.token != new_token => {
+            session.token = new_token.clone();
+            Some(session.platform.clone())
+        }
+        _ => None,
+    };
+    if let Some(platform) = rotated_platform {
+        if g.remembered {
+            if let Some(path) = g.credential_path.clone() {
+                match crate::market_credentials::save(
+                    &path,
+                    &crate::market_credentials::SavedSession {
+                        token: new_token,
+                        platform,
+                    },
+                ) {
+                    Ok(()) => g.session_error = None,
+                    Err(error) => g.session_error = Some(error),
+                }
+            }
+        }
+    }
+}
+fn handle_market_response_with(
+    g: &mut Gateway,
+    auth: bool,
+    is_v2: bool,
+    write: bool,
+    fingerprint: &str,
+    r: reqwest::blocking::Response,
+    mut probe: impl FnMut(&mut Gateway, &str, &str) -> Result<(Value, Option<String>), ProfileFetchError>,
+) -> Result<Value, String> {
+    let status = r.status().as_u16();
+    let html = is_html_response(&r);
+    let rotated = if auth && (200..300).contains(&status) {
+        extract_rotated_token(r.headers())
+    } else {
+        None
+    };
+    let result = response(r);
+    if result.is_ok() {
+        if let Some(new_token) = rotated {
+            apply_rotated_token(g, new_token);
+        }
+    } else if status == 401 && auth && !html {
+        if is_v2 {
+            expire_session(g);
+        } else if let Some((token, platform, expected)) = g.session.as_ref().map(|s| {
+            (
+                s.token.clone(),
+                s.platform.clone(),
+                session_account_id(&s.profile).map(str::to_string),
+            )
+        }) {
+            match probe(g, &token, &platform) {
+                Ok((profile, probe_rotated)) => {
+                    if session_account_id(&profile).map(str::to_string) == expected {
+                        if let Some(session) = g.session.as_mut() {
+                            session.profile = profile;
+                        }
+                        g.last_token_refresh = Some(Instant::now());
+                        if let Some(new_token) = probe_rotated {
+                            apply_rotated_token(g, new_token);
+                        }
+                    }
+                }
+                Err(ProfileFetchError::Expired(_)) => expire_session(g),
+                Err(ProfileFetchError::Transient(_)) => {}
+            }
+        }
+    }
+    if write
+        && (definite_rejection(status)
+            || result
+                .as_ref()
+                .err()
+                .is_some_and(|e| e.starts_with("市场业务拒绝：")))
+    {
+        g.writes.remove(fingerprint);
+    }
     result
 }
-fn expire_session(g:&mut Gateway){
-    invalidate_presence();g.session=None;g.cache.clear();g.writes.clear();g.remembered=false;g.restore_allowed=false;g.restore_attempt=Some(Instant::now());
-    g.session_error=Some("WM 登录已过期，请重新登录".into());
-    if let Some(path)=&g.credential_path{if let Err(error)=crate::market_credentials::clear(path){g.session_error=Some(error);}}
+fn handle_market_response(
+    g: &mut Gateway,
+    auth: bool,
+    is_v2: bool,
+    write: bool,
+    fingerprint: &str,
+    r: reqwest::blocking::Response,
+) -> Result<Value, String> {
+    handle_market_response_with(g, auth, is_v2, write, fingerprint, r, fetch_profile)
 }
-fn fetch_profile(g:&mut Gateway,token:&str,platform:&str)->Result<Value,String>{
+fn expire_session(g: &mut Gateway) {
+    invalidate_presence();
+    g.session = None;
+    g.cache.clear();
+    g.writes.clear();
+    g.remembered = false;
+    g.remembered_platform = None;
+    g.restore_allowed = false;
+    g.restore_failures = 0;
+    g.last_token_refresh = None;
+    g.last_keepalive_attempt = None;
+    g.restore_attempt = Some(Instant::now());
+    g.session_error = Some("WM 登录已过期，请重新登录".into());
+    if let Some(path) = &g.credential_path {
+        if let Err(error) = crate::market_credentials::clear(path) {
+            g.session_error = Some(error);
+        }
+    }
+}
+fn fetch_profile(g: &mut Gateway, token: &str, platform: &str) -> Result<(Value, Option<String>), ProfileFetchError> {
     pace(g, false);
-    let mut trace=crate::diagnostics::RequestTrace::begin("session_validate",platform,true,None,&Value::Null);
+    let mut trace = crate::diagnostics::RequestTrace::begin("session_validate", platform, true, None, &Value::Null);
     let r = g
         .client
         .get("https://api.warframe.market/v2/me")
         .bearer_auth(token)
+        .header("Accept", "application/json")
+        .header("Language", "en")
         .header("Platform", platform)
         .header("auth_type", "header")
         .send()
-        .map_err(|e|{trace.network(&e);format!("账户校验连接失败 [诊断编号 {}]",trace.id())})?;
-    let status=r.status().as_u16();let html=r.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|s|s.contains("text/html"));
-    let result=response(r);trace.response(status,html,&result);
-    let v=result.map_err(|e|format!("{e} [诊断编号 {}]",trace.id()))?;
-    let profile = v.get("data").cloned().ok_or("账户响应格式变化")?;
+        .map_err(|e| {
+            trace.network(&e);
+            ProfileFetchError::Transient(format!("账户校验连接失败 [诊断编号 {}]", trace.id()))
+        })?;
+    let status = r.status().as_u16();
+    let html = is_html_response(&r);
+    let rotated = if (200..300).contains(&status) {
+        extract_rotated_token(r.headers())
+    } else {
+        None
+    };
+    let result = response(r);
+    trace.response(status, html, &result);
+    let v = match result {
+        Ok(v) => v,
+        Err(e) => {
+            let formatted = format!("{e} [诊断编号 {}]", trace.id());
+            return Err(if status == 401 && !html {
+                ProfileFetchError::Expired(formatted)
+            } else {
+                ProfileFetchError::Transient(formatted)
+            });
+        }
+    };
+    let profile = v
+        .get("data")
+        .cloned()
+        .ok_or_else(|| ProfileFetchError::Transient("账户响应格式变化".into()))?;
     if profile["slug"].as_str().is_none() {
-        return Err("账户缺少市场名称".into());
+        return Err(ProfileFetchError::Transient("账户缺少市场名称".into()));
     }
-    Ok(profile)
+    Ok((profile, rotated))
 }
-fn connect_inner(g: &mut Gateway, token: String, platform: String) -> Result<Value, String> {
-    platform_check(&platform)?;
-    let token = token_check(&token)?;
-    let profile=fetch_profile(g,&token,&platform)?;
+fn connect_inner(g: &mut Gateway, token: String, platform: String) -> Result<Value, ProfileFetchError> {
+    platform_check(&platform).map_err(ProfileFetchError::Transient)?;
+    let token = token_check(&token).map_err(ProfileFetchError::Transient)?;
+    let (profile, rotated) = fetch_profile(g, &token, &platform)?;
     invalidate_presence();
     g.session = Some(Session {
-        token,
+        token: rotated.unwrap_or(token),
         platform,
         profile,
     });
     g.cache.clear();
+    g.last_token_refresh = Some(Instant::now());
+    g.restore_failures = 0;
     Ok(session_view(g.session.as_ref()))
 }
 pub(crate) fn diagnostic_state()->Value {
     match gate().lock(){Ok(g)=>json!({"connected":g.session.is_some(),"verified":g.session.as_ref().and_then(|s|verification(&s.profile)),"platform":g.session.as_ref().map(|s|s.platform.as_str()),"remembered":g.remembered,"hasSessionError":g.session_error.is_some()}),Err(_)=>json!({"unavailable":true})}
 }
 fn session_status(g: &Gateway) -> Value {
-    let mut view=session_view(g.session.as_ref());
-    view["remembered"]=json!(g.remembered);view["sessionError"]=json!(g.session_error);
+    let mut view = session_view(g.session.as_ref());
+    view["remembered"] = json!(g.remembered);
+    view["sessionError"] = json!(g.session_error);
+    if g.session.is_none() && g.remembered {
+        if let Some(platform) = &g.remembered_platform {
+            view["platform"] = json!(platform);
+        }
+    }
     view
 }
-fn remember_session(g:&mut Gateway,path:PathBuf,remember:bool) {
-    g.credential_path=Some(path.clone());g.restore_attempt=Some(Instant::now());
-    let result=if remember {
-        let session=g.session.as_ref().expect("validated login");
-        crate::market_credentials::save(&path,&crate::market_credentials::SavedSession{token:session.token.clone(),platform:session.platform.clone()})
-    } else {crate::market_credentials::clear(&path)};
-    g.remembered=remember&&result.is_ok();g.restore_allowed=g.remembered;
-    g.session_error=match result {Ok(())=>None,Err(error)=>Some(match crate::market_credentials::clear(&path){Ok(())=>error,Err(clear_error)=>format!("{error}；{clear_error}")})};
+fn remember_session(g: &mut Gateway, path: PathBuf, remember: bool) {
+    g.credential_path = Some(path.clone());
+    g.restore_attempt = Some(Instant::now());
+    g.restore_failures = 0;
+    g.last_token_refresh = Some(Instant::now());
+    g.last_keepalive_attempt = None;
+    let (result, platform) = if remember {
+        let session = g.session.as_ref().expect("validated login");
+        (
+            crate::market_credentials::save(
+                &path,
+                &crate::market_credentials::SavedSession {
+                    token: session.token.clone(),
+                    platform: session.platform.clone(),
+                },
+            ),
+            Some(session.platform.clone()),
+        )
+    } else {
+        (crate::market_credentials::clear(&path), None)
+    };
+    g.remembered = remember && result.is_ok();
+    g.remembered_platform = if g.remembered { platform } else { None };
+    g.restore_allowed = g.remembered;
+    g.session_error = match result {
+        Ok(()) => None,
+        Err(error) => Some(match crate::market_credentials::clear(&path) {
+            Ok(()) => error,
+            Err(clear_error) => format!("{error}；{clear_error}"),
+        }),
+    };
 }
-fn restore_session_with(g:&mut Gateway,path:Option<PathBuf>,mut connect:impl FnMut(&mut Gateway,String,String)->Result<Value,String>) {
-    if let Some(path)=path {g.credential_path=Some(path);}
-    if !g.restore_allowed||g.session.is_some()||g.restore_attempt.is_some_and(|at|at.elapsed()<Duration::from_secs(30)){return;}
-    let Some(path)=g.credential_path.clone() else{return;};
-    g.restore_attempt=Some(Instant::now());
+fn restore_session_with(
+    g: &mut Gateway,
+    path: Option<PathBuf>,
+    mut connect: impl FnMut(&mut Gateway, String, String) -> Result<Value, ProfileFetchError>,
+) {
+    if let Some(path) = path {
+        g.credential_path = Some(path);
+    }
+    if !g.restore_allowed
+        || g.session.is_some()
+        || g.restore_attempt.is_some_and(|at| at.elapsed() < Duration::from_secs(30))
+    {
+        return;
+    }
+    let Some(path) = g.credential_path.clone() else {
+        return;
+    };
+    g.restore_attempt = Some(Instant::now());
     match crate::market_credentials::load(&path) {
-        Ok(Some(saved))=>{
-            g.remembered=true;
-            match connect(g,saved.token,saved.platform) {
-                Ok(_)=>g.session_error=None,
-                Err(error) if error.starts_with("市场 HTTP 401：")=>{
-                    g.remembered=false;g.restore_allowed=false;
-                    g.session_error=Some(match crate::market_credentials::clear(&path){Ok(())=>"保存的 WM 登录已过期，请重新登录".into(),Err(e)=>e});
+        Ok(Some(saved)) => {
+            let original_token = saved.token.clone();
+            let saved_platform = saved.platform.clone();
+            g.remembered = true;
+            g.remembered_platform = Some(saved_platform.clone());
+            match connect(g, saved.token, saved.platform) {
+                Ok(_) => {
+                    g.session_error = None;
+                    g.restore_failures = 0;
+                    g.last_token_refresh = Some(Instant::now());
+                    if let Some(s) = g.session.as_ref().filter(|s| s.token != original_token) {
+                        if let Err(err) = crate::market_credentials::save(
+                            &path,
+                            &crate::market_credentials::SavedSession {
+                                token: s.token.clone(),
+                                platform: s.platform.clone(),
+                            },
+                        ) {
+                            g.session_error = Some(err);
+                        }
+                    }
                 }
-                Err(error)=>g.session_error=Some(format!("暂时无法恢复 WM 登录：{error}")),
+                Err(ProfileFetchError::Expired(_)) => {
+                    g.remembered = false;
+                    g.remembered_platform = None;
+                    g.restore_allowed = false;
+                    g.restore_failures = 0;
+                    g.session_error = Some(match crate::market_credentials::clear(&path) {
+                        Ok(()) => "保存的 WM 登录已过期，请重新登录".into(),
+                        Err(e) => e,
+                    });
+                }
+                Err(ProfileFetchError::Transient(error)) => {
+                    g.remembered = true;
+                    g.restore_allowed = true;
+                    g.restore_failures = g.restore_failures.saturating_add(1);
+                    g.session_error = Some(format!("暂时无法恢复 WM 登录：{error}"));
+                }
             }
         }
-        Ok(None)=>{g.remembered=false;g.session_error=None;}
-        Err(error)=>{g.remembered=false;g.session_error=Some(error);}
+        Ok(None) => {
+            g.remembered = false;
+            g.remembered_platform = None;
+            g.restore_failures = 0;
+            g.session_error = None;
+        }
+        Err(error) => {
+            g.remembered = false;
+            g.remembered_platform = None;
+            g.restore_failures = 0;
+            g.session_error = Some(error);
+        }
     }
 }
-fn restore_session(g:&mut Gateway,path:Option<PathBuf>){restore_session_with(g,path,connect_inner);}
+fn restore_session(g: &mut Gateway, path: Option<PathBuf>) {
+    restore_session_with(g, path, connect_inner);
+}
 // Do not rely on the installer or a UI unmount to flush a remembered login.
 // Opted-out sessions remain memory-only; never create a second credential copy.
 fn prepare_session_update(g:&Gateway,path:&std::path::Path)->Result<(),String>{
@@ -547,50 +808,200 @@ async fn read_session(path:Option<PathBuf>)->Result<Value,String> {
 pub async fn market_session(app:tauri::AppHandle) -> Result<Value, String> {
     read_session(Some(crate::market_credentials::path(&app.path().app_data_dir().map_err(|_|"登录存储位置不可用")?))).await
 }
-fn logout_inner(g:&mut Gateway,path:Option<PathBuf>)->Result<Value,String>{
-    if let Some(path)=path{g.credential_path=Some(path);}
-    invalidate_presence();g.session=None;g.cache.clear();g.writes.clear();
-    g.remembered=false;g.restore_allowed=false;g.restore_attempt=Some(Instant::now());g.session_error=None;
-    if let Some(path)=&g.credential_path{if let Err(error)=crate::market_credentials::clear(path){g.session_error=Some(error.clone());return Err(error);}}
+fn logout_inner(g: &mut Gateway, path: Option<PathBuf>) -> Result<Value, String> {
+    if let Some(path) = path {
+        g.credential_path = Some(path);
+    }
+    invalidate_presence();
+    g.session = None;
+    g.cache.clear();
+    g.writes.clear();
+    g.remembered = false;
+    g.remembered_platform = None;
+    g.restore_allowed = false;
+    g.restore_failures = 0;
+    g.last_token_refresh = None;
+    g.last_keepalive_attempt = None;
+    g.restore_attempt = Some(Instant::now());
+    g.session_error = None;
+    if let Some(path) = &g.credential_path {
+        if let Err(error) = crate::market_credentials::clear(path) {
+            g.session_error = Some(error.clone());
+            return Err(error);
+        }
+    }
     Ok(session_status(g))
 }
 async fn logout(path:Option<PathBuf>)->Result<Value,String> {
-    tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         let mut g=gate().lock().map_err(|_|"网络队列锁错误")?;
         logout_inner(&mut g,path)
-    }).await.map_err(|_|"账户任务失败".to_string())?
+    }).await.map_err(|_|"账户任务失败".to_string())?;
+    emit_session_changed();
+    result
 }
 #[tauri::command]
 pub async fn market_logout(app:tauri::AppHandle) -> Result<Value, String> {
     logout(Some(crate::market_credentials::path(&app.path().app_data_dir().map_err(|_|"登录存储位置不可用")?))).await
 }
-#[tauri::command]
-pub async fn market_refresh_session(app:tauri::AppHandle)->Result<Value,String>{
-    let path=crate::market_credentials::path(&app.path().app_data_dir().map_err(|_|"登录存储位置不可用")?);
-    tauri::async_runtime::spawn_blocking(move||{
-        let mut g=gate().lock().map_err(|_|"网络队列锁错误")?;
-        if let Some(session)=&g.session {
-            let token=session.token.clone();let platform=session.platform.clone();let expected=session_account_id(&session.profile).map(str::to_string);
-            let result=fetch_profile(&mut g,&token,&platform);
-            match result {
-                Ok(profile)=>{
-                    if session_account_id(&profile).map(str::to_string)!=expected{return Err("WM 账号已变化，请重新登录".into());}
-                    g.session.as_mut().unwrap().profile=profile;g.session_error=None;
-                }
-                Err(error)=>{if error.starts_with("市场 HTTP 401："){expire_session(&mut g);}else{g.session_error=Some(error.clone());}return Err(error);}
+fn refresh_connected_session_with(
+    g: &mut Gateway,
+    mut fetch: impl FnMut(&mut Gateway, &str, &str) -> Result<(Value, Option<String>), ProfileFetchError>,
+) -> Result<(), ProfileFetchError> {
+    let Some(session) = &g.session else {
+        return Ok(());
+    };
+    let token = session.token.clone();
+    let platform = session.platform.clone();
+    let expected = session_account_id(&session.profile).map(str::to_string);
+    match fetch(g, &token, &platform) {
+        Ok((profile, rotated)) => {
+            if session_account_id(&profile).map(str::to_string) != expected {
+                return Err(ProfileFetchError::Transient("WM 账号已变化，请重新登录".into()));
             }
-        }else{g.restore_attempt=None;restore_session(&mut g,Some(path));}
-        Ok(session_status(&g))
-    }).await.map_err(|_|"账户任务失败".to_string())?
+            if let Some(session) = g.session.as_mut() {
+                session.profile = profile;
+            }
+            g.session_error = None;
+            if let Some(new_token) = rotated {
+                apply_rotated_token(g, new_token);
+            } else {
+                g.last_token_refresh = Some(Instant::now());
+            }
+            Ok(())
+        }
+        Err(ProfileFetchError::Expired(err)) => {
+            expire_session(g);
+            Err(ProfileFetchError::Expired(err))
+        }
+        Err(ProfileFetchError::Transient(err)) => {
+            g.session_error = Some(err.clone());
+            Err(ProfileFetchError::Transient(err))
+        }
+    }
+}
+const KEEPALIVE_POLL: Duration = Duration::from_secs(60);
+const TOKEN_REFRESH_INTERVAL: Duration = Duration::from_secs(4 * 60 * 60);
+const KEEPALIVE_RETRY_COOLDOWN: Duration = Duration::from_secs(10 * 60);
+fn restore_backoff(failures: u32) -> Duration {
+    match failures {
+        0 => Duration::from_secs(30),
+        1 => Duration::from_secs(60),
+        2 => Duration::from_secs(120),
+        _ => Duration::from_secs(300),
+    }
+}
+pub(crate) fn start_background_session_service(app: tauri::AppHandle) {
+    let _ = APP_HANDLE.set(app.clone());
+    let Ok(data_dir) = app.path().app_data_dir() else {
+        return;
+    };
+    let cred_path = crate::market_credentials::path(&data_dir);
+    let slot = SESSION_STOP.get_or_init(|| Mutex::new(None));
+    let Ok(mut guard) = slot.lock() else {
+        return;
+    };
+    if guard.is_some() {
+        return;
+    }
+    let (tx, rx) = mpsc::sync_channel::<()>(1);
+    *guard = Some(tx);
+    drop(guard);
+
+    let _ = std::thread::Builder::new()
+        .name("wm-session-keepalive".into())
+        .spawn(move || {
+            let initial_emit = match gate().lock() {
+                Ok(mut g) => {
+                    restore_session(&mut g, Some(cred_path.clone()));
+                    g.session.is_some() || g.remembered || g.session_error.is_some()
+                }
+                Err(_) => false,
+            };
+            if initial_emit {
+                emit_session_changed();
+            }
+
+            loop {
+                match rx.recv_timeout(KEEPALIVE_POLL) {
+                    Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                }
+                let should_emit = match gate().lock() {
+                    Ok(mut g) => {
+                        if g.session.is_some()
+                            && g.remembered
+                            && g.last_token_refresh
+                                .is_none_or(|at| at.elapsed() >= TOKEN_REFRESH_INTERVAL)
+                            && g.last_keepalive_attempt
+                                .is_none_or(|at| at.elapsed() >= KEEPALIVE_RETRY_COOLDOWN)
+                        {
+                            g.last_keepalive_attempt = Some(Instant::now());
+                            let was_connected = g.session.is_some();
+                            let _ = refresh_connected_session_with(&mut g, fetch_profile);
+                            was_connected && g.session.is_none()
+                        } else if g.session.is_none()
+                            && g.remembered
+                            && g.restore_allowed
+                            && g.restore_attempt
+                                .is_none_or(|at| at.elapsed() >= restore_backoff(g.restore_failures))
+                        {
+                            g.restore_attempt = None;
+                            restore_session(&mut g, Some(cred_path.clone()));
+                            g.session.is_some() || !g.remembered
+                        } else {
+                            false
+                        }
+                    }
+                    Err(_) => false,
+                };
+                if should_emit {
+                    emit_session_changed();
+                }
+            }
+        });
+}
+pub(crate) fn stop_background_session_service() {
+    if let Some(slot) = SESSION_STOP.get() {
+        if let Ok(mut guard) = slot.lock() {
+            if let Some(tx) = guard.take() {
+                let _ = tx.try_send(());
+            }
+        }
+    }
 }
 #[tauri::command]
-pub async fn market_connect(token: String, platform: String, remember:Option<bool>,app:tauri::AppHandle) -> Result<Value, String> {
-    let path=crate::market_credentials::path(&app.path().app_data_dir().map_err(|_|"登录存储位置不可用")?);
-    tauri::async_runtime::spawn_blocking(move || {
+pub async fn market_refresh_session(app: tauri::AppHandle) -> Result<Value, String> {
+    let path = crate::market_credentials::path(&app.path().app_data_dir().map_err(|_| "登录存储位置不可用")?);
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
         let mut g = gate().lock().map_err(|_| "网络队列锁错误")?;
-        connect_inner(&mut g, token, platform)?;
-        remember_session(&mut g,path,remember.unwrap_or(true));Ok(session_status(&g))
-    }).await.map_err(|_| "账户任务失败")?
+        if g.session.is_some() {
+            refresh_connected_session_with(&mut g, fetch_profile)
+                .map_err(ProfileFetchError::into_message)?;
+        } else {
+            g.restore_attempt = None;
+            restore_session(&mut g, Some(path));
+        }
+        Ok(session_status(&g))
+    })
+    .await
+    .map_err(|_| "账户任务失败".to_string())?;
+    emit_session_changed();
+    outcome
+}
+#[tauri::command]
+pub async fn market_connect(token: String, platform: String, remember: Option<bool>, app: tauri::AppHandle) -> Result<Value, String> {
+    let path = crate::market_credentials::path(&app.path().app_data_dir().map_err(|_| "登录存储位置不可用")?);
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        let mut g = gate().lock().map_err(|_| "网络队列锁错误")?;
+        connect_inner(&mut g, token, platform).map_err(ProfileFetchError::into_message)?;
+        remember_session(&mut g, path, remember.unwrap_or(true));
+        Ok(session_status(&g))
+    })
+    .await
+    .map_err(|_| "账户任务失败")?;
+    emit_session_changed();
+    outcome
 }
 #[tauri::command]
 pub async fn market_login(
@@ -601,7 +1012,7 @@ pub async fn market_login(
     app:tauri::AppHandle,
 ) -> Result<Value, String> {
     let path=crate::market_credentials::path(&app.path().app_data_dir().map_err(|_|"登录存储位置不可用")?);
-    tauri::async_runtime::spawn_blocking(move || {
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
         platform_check(&platform)?;
         if !email.contains('@') || email.len() > 254 || password.is_empty() || password.len() > 1024
         {
@@ -641,11 +1052,14 @@ pub async fn market_login(
             &mut g,
             token.ok_or("登录未返回会话；请到 Warframe Market 官网检查账户状态后重试登录")?,
             platform,
-        )?;
+        )
+        .map_err(ProfileFetchError::into_message)?;
         remember_session(&mut g,path,remember.unwrap_or(true));Ok(session_status(&g))
     })
     .await
-    .map_err(|_| "登录任务失败")?
+    .map_err(|_| "登录任务失败")?;
+    emit_session_changed();
+    outcome
 }
 fn validate_login_response(status: u16, body: Option<&Value>) -> Result<(), String> {
     let detail = body.map(login_error_detail).unwrap_or_default();
@@ -943,6 +1357,9 @@ fn request_scoped(
         let response=g.client.get("https://api.warframe.market/v2/orders/my").header("Platform",&platform)
             .bearer_auth(&g.session.as_ref().ok_or("请先登录")?.token).send().map_err(|_|"上架前订单核对失败；未发送变更")?;
         if !response.status().is_success(){return Err("上架前订单核对被拒绝；未发送变更".into());}
+        if let Some(new_token) = extract_rotated_token(response.headers()) {
+            apply_rotated_token(&mut g, new_token);
+        }
         let value:Value=response.json().map_err(|_|"上架前订单数据无效；未发送变更")?;
         if listing_order_state(value.get("data").ok_or("订单数据缺失")?)?!=wanted{return Err("订单已变化，请重新生成预览；未发送变更".into());}
     }
@@ -1000,9 +1417,17 @@ fn request_scoped(
     let r = req
         .send()
         .map_err(|e|{trace.network(&e);format!("{} [诊断编号 {}]",if write{"市场连接失败或超时；写操作未自动重试，请先刷新挂单"}else{"无法读取 WM 数据，请检查网络或代理"},trace.id())})?;
-    let status=r.status().as_u16();let html=r.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v|v.to_str().ok()).is_some_and(|s|s.contains("text/html"));
-    let result=handle_market_response(&mut g,auth,write,&fingerprint,r);
+    let status=r.status().as_u16();let html=is_html_response(&r);
+    let had_session = g.session.is_some();
+    let result=handle_market_response(&mut g,auth,path.starts_with("/v2/"),write,&fingerprint,r);
+    let session_expired = had_session && g.session.is_none();
     trace.response(status,html,&result);
+    if session_expired {
+        drop(g);
+        emit_session_changed();
+        let message = result.err().unwrap_or_else(|| "WM 登录已过期，请重新登录".into());
+        return Err(format!("{message} [诊断编号 {}]", trace.id()));
+    }
     let result=result.map_err(|e|format!("{e} [诊断编号 {}]",trace.id()))?;
     let data = if path.starts_with("/v1/") {
         match action.as_str() {
@@ -1235,7 +1660,7 @@ mod async_session_tests {
         g.session=Some(Session{token:"synthetic-native-only-token".into(),platform:"pc".into(),profile:json!({"id":"fixture-user","slug":"fixture-user","verification":true})});
         (g,path)
     }
-    fn connected(g:&mut Gateway,token:String,platform:String)->Result<Value,String>{
+    fn connected(g:&mut Gateway,token:String,platform:String)->Result<Value,ProfileFetchError>{
         assert_eq!(token,"synthetic-native-only-token");assert_eq!(platform,"pc");
         g.session=Some(Session{token,platform,profile:json!({"id":"fixture-user","slug":"fixture-user","verification":true})});Ok(session_view(g.session.as_ref()))
     }
@@ -1248,10 +1673,10 @@ mod async_session_tests {
     }
     #[test] fn saved_login_is_validated_once_and_network_failure_preserves_it_for_retry(){
         let (mut g,path)=fixture();remember_session(&mut g,path.clone(),true);
-        let mut restored=new_gateway();restore_session_with(&mut restored,Some(path.clone()),|_,_,_|Err("账户校验连接失败".into()));
-        assert!(restored.session.is_none());assert!(restored.remembered);assert!(path.exists());
+        let mut restored=new_gateway();restore_session_with(&mut restored,Some(path.clone()),|_,_,_|Err(ProfileFetchError::Transient("账户校验连接失败".into())));
+        assert!(restored.session.is_none());assert!(restored.remembered);assert_eq!(restored.restore_failures,1);assert_eq!(session_status(&restored)["platform"],"pc");assert!(path.exists());
         restore_session_with(&mut restored,None,|_,_,_|panic!("transient failure must be throttled"));
-        restored.restore_attempt=None;restore_session_with(&mut restored,None,connected);assert!(restored.session.is_some());assert!(restored.session_error.is_none());
+        restored.restore_attempt=None;restore_session_with(&mut restored,None,connected);assert!(restored.session.is_some());assert_eq!(restored.restore_failures,0);assert!(restored.session_error.is_none());
         restore_session_with(&mut restored,None,|_,_,_|panic!("connected session must not reconnect"));
         logout_inner(&mut restored,None).unwrap();std::fs::remove_dir(path.parent().unwrap()).unwrap();
     }
@@ -1263,25 +1688,129 @@ mod async_session_tests {
     }
     #[test] fn expired_saved_login_is_removed_without_repeated_authentication(){
         let (mut g,path)=fixture();remember_session(&mut g,path.clone(),true);
-        let mut restored=new_gateway();restore_session_with(&mut restored,Some(path.clone()),|_,_,_|Err("市场 HTTP 401：expired".into()));
+        let mut restored=new_gateway();restore_session_with(&mut restored,Some(path.clone()),|_,_,_|Err(ProfileFetchError::Expired("市场 HTTP 401：expired".into())));
         assert!(restored.session.is_none());assert!(!restored.remembered);assert!(!path.exists());assert!(restored.session_error.as_deref().unwrap().contains("过期"));
+        std::fs::remove_dir(path.parent().unwrap()).unwrap();
+    }
+    #[test] fn rotated_token_from_profile_and_api_persists_without_dropping_presence(){
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::AUTHORIZATION, "JWT rotated-header-jwt".parse().unwrap());
+        assert_eq!(extract_rotated_token(&headers).as_deref(), Some("rotated-header-jwt"));
+        headers.insert(reqwest::header::AUTHORIZATION, "jwt lower-jwt".parse().unwrap());
+        assert_eq!(extract_rotated_token(&headers).as_deref(), Some("lower-jwt"));
+        headers.insert(reqwest::header::AUTHORIZATION, "Bearer bearer-tok".parse().unwrap());
+        assert_eq!(extract_rotated_token(&headers).as_deref(), Some("bearer-tok"));
+        headers.insert(reqwest::header::AUTHORIZATION, "JWT   ".parse().unwrap());
+        assert!(extract_rotated_token(&headers).is_none());
+        headers.insert(reqwest::header::AUTHORIZATION, "Bearer".parse().unwrap());
+        assert!(extract_rotated_token(&headers).is_none());
+
+        let (mut g,path)=fixture();
+        remember_session(&mut g,path.clone(),true);
+        g.cache.insert("pc/v2/items".into(), (Instant::now(), json!({"ok":true})));
+
+        // Rotate via keepalive profile refresh: session and cache stay intact,
+        // and the new token is persisted immediately to wm-session.dpapi.
+        refresh_connected_session_with(&mut g, |_,_,_| {
+            Ok((json!({"id":"fixture-user","slug":"fixture-user","verification":true}), Some("rotated-keepalive-token".into())))
+        }).unwrap();
+        assert!(g.cache.contains_key("pc/v2/items"));
+        assert!(g.remembered);
+        assert!(g.last_token_refresh.is_some());
+        assert_eq!(g.session.as_ref().unwrap().token, "rotated-keepalive-token");
+        assert_eq!(crate::market_credentials::load(&path).unwrap().unwrap().token, "rotated-keepalive-token");
+
+        // Flush for update preserves the rotated token.
+        prepare_session_update(&g,&path).unwrap();
+        assert_eq!(crate::market_credentials::load(&path).unwrap().unwrap().token, "rotated-keepalive-token");
+
+        // Simulated restart/upgrade: new Gateway restores rotated token and rotates again during connect.
+        let mut restarted=new_gateway();
+        restore_session_with(&mut restarted, Some(path.clone()), |gateway, tok, plat| {
+            assert_eq!(tok, "rotated-keepalive-token");
+            gateway.session = Some(Session {
+                token: "rotated-at-restore-token".into(),
+                platform: plat,
+                profile: json!({"id":"fixture-user","slug":"fixture-user","verification":true}),
+            });
+            Ok(session_view(gateway.session.as_ref()))
+        });
+        assert_eq!(restarted.session.as_ref().unwrap().token, "rotated-at-restore-token");
+        assert_eq!(crate::market_credentials::load(&path).unwrap().unwrap().token, "rotated-at-restore-token");
+
+        logout_inner(&mut restarted,None).unwrap();
         std::fs::remove_dir(path.parent().unwrap()).unwrap();
     }
 }
 
 #[cfg(test)] mod http_rejection_tests {
     use super::*;
-    fn http_response(status:u16,body:&str)->reqwest::blocking::Response{
+    fn http_response_with(status:u16,content_type:&str,extra_header:Option<&str>,body:&str)->reqwest::blocking::Response{
         use std::io::{Read,Write};
         let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();
-        let body=body.to_string();let server=std::thread::spawn(move||{let(mut stream,_)=listener.accept().unwrap();let mut input=[0;4096];stream.read(&mut input).unwrap();write!(stream,"HTTP/1.1 {status} Test\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();});
+        let body=body.to_string();
+        let content_type=content_type.to_string();
+        let extra=extra_header.map(|h|format!("{h}\r\n")).unwrap_or_default();
+        let server=std::thread::spawn(move||{let(mut stream,_)=listener.accept().unwrap();let mut input=[0;4096];stream.read(&mut input).unwrap();write!(stream,"HTTP/1.1 {status} Test\r\nContent-Type: {content_type}\r\n{extra}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).unwrap();});
         let response=reqwest::blocking::Client::builder().no_proxy().build().unwrap().get(format!("http://{address}")).send().unwrap();server.join().unwrap();response
+    }
+    fn http_response(status:u16,body:&str)->reqwest::blocking::Response{
+        http_response_with(status,"application/json",None,body)
     }
     #[test] fn real_http_refusal_releases_dedup_but_server_failure_keeps_the_guard(){
         let mut g=new_gateway();let key="synthetic-order";g.writes.insert(key.into(),Instant::now());
         let refused=http_response(403,r#"{"data":null,"error":{"request":["app.errors.forbidden"]}}"#);
-        assert!(handle_market_response(&mut g,true,true,key,refused).unwrap_err().contains("app.errors.forbidden"));assert!(!g.writes.contains_key(key));
+        assert!(handle_market_response(&mut g,true,true,true,key,refused).unwrap_err().contains("app.errors.forbidden"));assert!(!g.writes.contains_key(key));
         g.writes.insert(key.into(),Instant::now());let unknown=http_response(503,"{}");
-        assert!(handle_market_response(&mut g,true,true,key,unknown).is_err());assert!(g.writes.contains_key(key));
+        assert!(handle_market_response(&mut g,true,true,true,key,unknown).is_err());assert!(g.writes.contains_key(key));
+    }
+    #[test] fn html_401_and_v1_401_do_not_wipe_saved_session(){
+        let directory=std::env::temp_dir().join(format!("wm-session-401-{}-{}",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap()));
+        let path=crate::market_credentials::path(&directory);
+        let mut g=new_gateway();
+        g.session=Some(Session{token:"original-token".into(),platform:"pc".into(),profile:json!({"id":"u1","slug":"u1","verification":true})});
+        remember_session(&mut g,path.clone(),true);
+
+        // Authenticated 2xx response with rotated Authorization header updates disk DPAPI store.
+        let rotated_resp=http_response_with(200,"application/json",Some("Authorization: JWT api-rotated-token"),r#"{"data":[]}"#);
+        assert!(handle_market_response_with(&mut g,true,true,false,"k",rotated_resp,|_,_,_|unreachable!()).is_ok());
+        assert_eq!(g.session.as_ref().unwrap().token,"api-rotated-token");
+        assert_eq!(crate::market_credentials::load(&path).unwrap().unwrap().token,"api-rotated-token");
+
+        // HTML 401 (proxy / Cloudflare block) must NOT expire session or delete DPAPI file.
+        let html_401=http_response_with(401,"text/html; charset=utf-8",None,"<html>blocked</html>");
+        let err=handle_market_response_with(&mut g,true,true,false,"k",html_401,|_,_,_|unreachable!()).unwrap_err();
+        assert!(err.contains("网页拦截"));
+        assert!(g.session.is_some());
+        assert!(g.remembered);
+        assert!(path.exists());
+
+        // Legacy /v1/ 401 when /v2/me probe succeeds must NOT delete DPAPI file.
+        let v1_401_ok=http_response(401,r#"{"error":"legacy"}"#);
+        assert!(handle_market_response_with(&mut g,true,false,false,"k",v1_401_ok,|_,_,_|{
+            Ok((json!({"id":"u1","slug":"u1","verification":true}),Some("probe-rotated-token".into())))
+        }).is_err());
+        assert!(g.session.is_some());
+        assert_eq!(g.session.as_ref().unwrap().token,"probe-rotated-token");
+        assert!(path.exists());
+
+        // Legacy /v1/ 401 when /v2/me probe fails transiently must NOT delete DPAPI file.
+        let v1_401_transient=http_response(401,r#"{"error":"legacy"}"#);
+        assert!(handle_market_response_with(&mut g,true,false,false,"k",v1_401_transient,|_,_,_|{
+            Err(ProfileFetchError::Transient("network".into()))
+        }).is_err());
+        assert!(g.session.is_some());
+        assert!(path.exists());
+
+        // Legacy /v1/ 401 when /v2/me confirms Expired MUST expire session and remove DPAPI file.
+        let v1_401_expired=http_response(401,r#"{"error":"expired"}"#);
+        assert!(handle_market_response_with(&mut g,true,false,false,"k",v1_401_expired,|_,_,_|{
+            Err(ProfileFetchError::Expired("401".into()))
+        }).is_err());
+        assert!(g.session.is_none());
+        assert!(!g.remembered);
+        assert!(!path.exists());
+
+        std::fs::remove_dir(path.parent().unwrap()).unwrap();
     }
 }

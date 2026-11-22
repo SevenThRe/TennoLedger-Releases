@@ -1,9 +1,16 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {progress,summary,candidates,recommend,previewWidths,copyProbability,type MasterySnapshot,type MasteryItem} from '../src/masteryModel.ts';
+import {knownCount,progress,summary,candidates,recommend,previewWidths,copyProbability,type MasterySnapshot,type MasteryItem} from '../src/masteryModel.ts';
 const item:MasteryItem={id:'frame',name:'Frame Prime',zh:'Frame',prime:true,category:'warframe',maxRank:30,xpPerRank:200,recipe:{parts:[{itemId:'blueprint',quantity:1}]}};
 const snapshot=():MasterySnapshot=>({masteryRank:35,credits:0,complete:false,counts:{},ranks:{},favorites:[],masteryAccount:{totalXp:3047038,ranksComplete:false}});
-test('screenshot XP and preview never exceed next rank',()=>{const p=progress(snapshot())!;assert.equal(p.current,59538);assert.equal(p.needed,147500);assert.equal(p.percent,40);assert.deepEqual(previewWidths(95,100,10,20),{fav:5,hover:0});assert.equal(progress({...snapshot(),masteryAccount:null}),null);});
+test('screenshot XP and preview never exceed next rank',()=>{const p=progress(snapshot())!;assert.equal(p.current,59538);assert.equal(p.needed,147500);assert.equal(p.remaining,87962);assert.equal(p.percent,40);assert.equal(p.approximate,false);assert.deepEqual(previewWidths(95,100,10,20),{fav:5,hover:0});assert.equal(progress({...snapshot(),masteryAccount:null}),null);});
+test('progress clamps remaining when ready for rank-up and falls back to coverage knownXp',()=>{
+ const overflow=progress({...snapshot(),masteryRank:2,masteryAccount:{totalXp:25000,ranksComplete:true}})!;
+ assert.equal(overflow.needed,12500);assert.equal(overflow.current,15000);assert.equal(overflow.remaining,0);assert.equal(overflow.percent,100);assert.equal(overflow.approximate,false);
+ const approx=progress({...snapshot(),masteryRank:2,masteryAccount:{totalXp:null,ranksComplete:true,starNormal:{current:58,max:168},coverage:{equipmentRecords:12,unknownEquipmentRecords:0,unknownMissionRecords:0,sourceSha256:'x',complete:false,knownXp:16500}}})!;
+ assert.equal(approx.current,6500);assert.equal(approx.needed,12500);assert.equal(approx.remaining,6000);assert.equal(approx.percent,52);assert.equal(approx.approximate,true);
+ assert.equal(progress({...snapshot(),masteryAccount:{totalXp:null,ranksComplete:true,coverage:{equipmentRecords:0,unknownEquipmentRecords:0,unknownMissionRecords:0,sourceSha256:'x',complete:false,knownXp:16500}}}),null);
+});
 test('counts completeness never implies rank completeness',()=>{const s=snapshot();s.complete=true;assert.equal(summary([item],s).content[0].known,false);assert.equal(summary([item],s).prime,null);assert.equal(candidates([item],s,{items:{},marketSlugs:{}},{}).length,0);s.masteryAccount!.ranksComplete=true;assert.equal(summary([item],s).content[0].current,0);});
 test('built prime component satisfies blueprint and unknown price is excluded',()=>{const s=snapshot();s.complete=true;s.masteryAccount!.ranksComplete=true;s.counts.built=1;const source={items:{frame:{parts:[{itemId:'blueprint',quantity:1,ownedItemId:'built',drops:[]}]}},marketSlugs:{}};let all=candidates([item],s,source,{});assert.equal(all[0].missing?.length,0);assert.equal(recommend(all,'normal',true).length,1);assert.equal(recommend(all,'platinum',true).length,0);s.counts.built=0;all=candidates([item],s,source,{blueprint:100});assert.equal(all[0].cost,100);assert.equal(recommend(all,'platinum',true).length,1);});
 test('relic estimate uses owned refinement counts; duplicate needs use a binomial tail',()=>{const s=snapshot();s.complete=true;s.masteryAccount!.ranksComplete=true;s.counts.relic=2;const source={items:{frame:{parts:[{itemId:'blueprint',quantity:1,drops:[{relicId:'relic',chance:.1}]}]}},marketSlugs:{}};assert.ok(Math.abs(candidates([item],s,source,{})[0].probability!-.19)<1e-10);source.items.frame.parts[0].quantity=2;assert.ok(Math.abs(candidates([item],s,source,{})[0].probability!-.01)<1e-10);});
@@ -35,4 +42,15 @@ test('platinum ratio ties follow reference satisfied component count then stable
  assert.deepEqual(recommend(all,'platinum',true).map(r=>r.item.id),['other','same','frame']);
  all[0].cost=50;
  assert.deepEqual(recommend(all,'platinum',true).map(r=>r.item.id),['frame','other','same']);
+});
+test('optional progression groups make knownCount and prime percentage resolved rather than null',()=>{
+ const optional={...snapshot(),complete:false,missingOwnedGroups:['MoaPets','Hoverboards'],masteryAccount:{totalXp:100,ranksComplete:true}};
+ assert.equal(knownCount(optional,'frame'),0);
+ assert.equal(summary([item],optional).prime,0);
+ const missingGroups={...snapshot(),complete:false,masteryAccount:{totalXp:100,ranksComplete:true}};
+ assert.equal(knownCount(missingGroups,'frame'),null);
+ assert.equal(summary([item],missingGroups).prime,null);
+ const nonOptional={...optional,missingOwnedGroups:['Recipes']};
+ assert.equal(knownCount(nonOptional,'frame'),null);
+ assert.equal(summary([item],nonOptional).prime,null);
 });

@@ -4,7 +4,7 @@ import {snapshotScope} from './accountScopeModel';
 import type {NavigationDetail} from './navigationModel';
 type ResourceNavigation=Extract<NavigationDetail,{page:'resources'}>;
 import type {ShardFocus} from './shardFocus';
-import {resourceDemand,type DemandCatalog} from './resourceDemand';
+import {isInventoryAvailable,resourceDemand,type DemandCatalog} from './resourceDemand';
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useCollectionSnapshot} from './useCollectionSnapshot';
@@ -45,7 +45,7 @@ export default function Resources({shardFocus,requestedView,onViewChange}:{shard
  const scroll=useRef<HTMLDivElement>(null);
  useEffect(()=>{setSearch('');setSelected(null);setLimit(80);scroll.current?.scrollTo(0,0);},[view]);
  useEffect(()=>{let live=true;setLoading(true);setError('');Promise.all(['/catalog.json','/resource-index.json'].map(async url=>{const r=await fetch(url);if(!r.ok)throw Error(`${url}: ${r.status}`);return r.json();})).then(([catalog,index])=>{if(!Array.isArray(catalog.items)||!Array.isArray(index.items)||!Array.isArray(index.ids)||!Array.isArray(index.goalIds)||!index.recipes)throw Error(L('资源目录格式无效','Invalid resource catalog'));if(live){setItems([...catalog.items,...index.items]);setIds(index.ids);setDemandCatalog(index);}}).catch(e=>{if(live)setError(String(e));}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;};},[catalogRetry]);
- const known=!!snapshot?.complete;
+ const known=isInventoryAvailable(snapshot);
  const quantity=(id:string)=>snapshot?.counts[id]??(known?0:null);
  const all=useMemo(()=>new Map(items.map(item=>[item.id,item])),[items]);
  const demand=useMemo(()=>demandCatalog?resourceDemand(demandCatalog,snapshot,all):null,[demandCatalog,snapshot,all]);

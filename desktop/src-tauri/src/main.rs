@@ -336,6 +336,7 @@ fn main() {
             let world=Arc::new(world::WorldService::new(dir.join("myframe.sqlite3")).map_err(std::io::Error::other)?);
             app.manage(Arc::clone(&world));
             world.start(app.handle().clone());
+            market::start_background_session_service(app.handle().clone());
             let args:Vec<String>=std::env::args().collect();
             if let Some(output)=args.iter().position(|a|a=="--notification-smoke-report").and_then(|i|args.get(i+1)).cloned(){
                 let app_handle=app.handle().clone();let service=Arc::clone(&world);
@@ -461,5 +462,5 @@ fn main() {
         ])
         .build(context)
         .expect("MyFrame desktop startup failed")
-        .run(|app,event|{if matches!(event,tauri::RunEvent::ExitRequested{..}|tauri::RunEvent::Exit){market_presence::shutdown();app.state::<Arc<overlays::Service>>().stop();app.state::<game_events::Watcher>().stop();app.state::<collector::Collector>().stop();app.state::<Arc<world::WorldService>>().stop();world_notify::cleanup(app);}});
+        .run(|app,event|{if matches!(event,tauri::RunEvent::ExitRequested{..}|tauri::RunEvent::Exit){market::stop_background_session_service();market_presence::shutdown();app.state::<Arc<overlays::Service>>().stop();app.state::<game_events::Watcher>().stop();app.state::<collector::Collector>().stop();app.state::<Arc<world::WorldService>>().stop();world_notify::cleanup(app);}});
 }

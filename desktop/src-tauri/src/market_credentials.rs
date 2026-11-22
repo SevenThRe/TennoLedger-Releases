@@ -1,6 +1,11 @@
 //! Only current-user DPAPI ciphertext is persisted; passwords never enter this store.
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
+
+static TEMP_SEQ: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -19,13 +24,26 @@ pub fn save(path: &Path, value: &SavedSession) -> Result<(), String> {
     let mut bytes = b"TLWM1".to_vec(); bytes.extend(cipher);
     let parent = path.parent().ok_or("登录存储位置无效")?;
     std::fs::create_dir_all(parent).map_err(|_| "无法创建安全登录存储")?;
-    let temporary = path.with_extension("dpapi.new");
-    std::fs::write(&temporary, bytes).map_err(|_| "无法写入加密登录记录")?;
-    if std::fs::rename(&temporary, path).is_err() {
-        let _ = std::fs::remove_file(&temporary);
-        return Err("无法更新加密登录记录".into());
+    let seq = TEMP_SEQ.fetch_add(1, Ordering::Relaxed);
+    let temporary = parent.join(format!("wm-session.{}.{seq}.tmp", std::process::id()));
+    {
+        let mut file = std::fs::File::create(&temporary).map_err(|_| "无法写入加密登录记录")?;
+        if file.write_all(&bytes).is_err() || file.sync_all().is_err() {
+            drop(file);
+            let _ = std::fs::remove_file(&temporary);
+            return Err("无法写入加密登录记录".into());
+        }
     }
-    Ok(())
+    for attempt in 0..6 {
+        if std::fs::rename(&temporary, path).is_ok() {
+            return Ok(());
+        }
+        if attempt < 5 {
+            std::thread::sleep(Duration::from_millis(40));
+        }
+    }
+    let _ = std::fs::remove_file(&temporary);
+    Err("无法更新加密登录记录".into())
 }
 pub fn load(path: &Path) -> Result<Option<SavedSession>, String> {
     let bytes = match std::fs::read(path) {
@@ -78,8 +96,14 @@ fn protect(_: &[u8], _: bool) -> Result<Vec<u8>, String> { Err("此平台尚未�
         }
         let directory=std::env::temp_dir().join(format!("tennoledger-credentials-{}-{}",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap()));
         let file=path(&directory);
+        save(&file,&SavedSession{token:"old-token".into(),platform:"ps4".into()}).unwrap();
         save(&file,&SavedSession{token:TOKEN.into(),platform:"pc".into()}).unwrap();
         save(&file,&SavedSession{token:TOKEN.into(),platform:"pc".into()}).unwrap();
+        let leftovers: Vec<_> = std::fs::read_dir(&directory).unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "leftover tmp files remained after save");
         assert!(!std::fs::read(&file).unwrap().windows(TOKEN.len()).any(|v|v==TOKEN.as_bytes()));
         let child=std::process::Command::new(std::env::current_exe().unwrap())
             .args(["--exact","market_credentials::tests::encrypted_login_survives_a_fresh_process_and_logout_removes_it"])

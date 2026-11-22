@@ -49,20 +49,26 @@ pub fn complete(value: &Value, account: &mut MasteryAccount) {
     // Plexus lives in owned harnesses, not reliably in XPInfo. Merge by type,
     // taking the maximum, so duplicate owned copies never grant double mastery.
     let mut plexus = BTreeSet::new();
-    if let Some(rows) = value["CrewShipHarnesses"].as_array() {
-        for row in rows {
-            if let (Some(id), Some(xp)) = (row["ItemType"].as_str(), n(&row["XP"])) {
-                plexus.insert(id.to_owned());
-                ledger
-                    .entry(id.into())
-                    .and_modify(|n| *n = (*n).max(xp))
-                    .or_insert(xp);
-            } else {
-                known = false;
+    match value.get("CrewShipHarnesses") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(rows)) => {
+            for row in rows {
+                let xp = match row.get("XP") {
+                    None | Some(Value::Null) => Some(0),
+                    Some(v) => n(v),
+                };
+                if let (Some(id), Some(xp)) = (row["ItemType"].as_str(), xp) {
+                    plexus.insert(id.to_owned());
+                    ledger
+                        .entry(id.into())
+                        .and_modify(|n| *n = (*n).max(xp))
+                        .or_insert(xp);
+                } else {
+                    known = false;
+                }
             }
         }
-    } else {
-        known = false;
+        Some(_) => known = false,
     }
     let mut equipment_xp = 0;
     for (id, xp) in &ledger {
@@ -283,4 +289,37 @@ mod tests {
         }
     }
 
+    #[test]
+    fn absent_crew_ship_harnesses_defaults_to_zero_plexus_xp() {
+        let mut a = account();
+        complete(&json!({"XPInfo":[],"Missions":[]}), &mut a);
+        assert_eq!(a.total_xp, Some(4500));
+    }
+
+    #[test]
+    fn malformed_crew_ship_harnesses_keeps_total_unknown() {
+        let mut a = account();
+        complete(&json!({"XPInfo":[],"Missions":[],"CrewShipHarnesses":{}}), &mut a);
+        assert!(a.total_xp.is_none());
+    }
+
+    #[test]
+    fn unleveled_crew_ship_harness_omitted_xp_defaults_to_zero() {
+        let mut a = account();
+        complete(
+            &json!({"XPInfo":[],"Missions":[],"CrewShipHarnesses":[{"ItemType":"/Lotus/Types/Game/CrewShip/RailJack/DefaultHarness"}]}),
+            &mut a,
+        );
+        assert_eq!(a.total_xp, Some(4500));
+    }
+
+    #[test]
+    fn malformed_crew_ship_harness_xp_keeps_total_unknown() {
+        let mut a = account();
+        complete(
+            &json!({"XPInfo":[],"Missions":[],"CrewShipHarnesses":[{"ItemType":"/Lotus/Types/Game/CrewShip/RailJack/DefaultHarness","XP":"bad"}]}),
+            &mut a,
+        );
+        assert!(a.total_xp.is_none());
+    }
 }

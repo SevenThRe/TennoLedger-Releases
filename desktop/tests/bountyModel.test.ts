@@ -6,9 +6,11 @@ import {
  BOUNTY_SYNDICATE_ORDER,
  bountyRotationProgress,
  bountyTierVisual,
+ buildBountyPriceIndex,
  buildCatalogRewardRows,
  cleanBountyTitle,
  cleanChallengeDesc,
+ collectBountyWarmupSlugs,
  createBountySubscription,
  defaultBountyPreferences,
  extractHubFeaturedRewards,
@@ -16,11 +18,16 @@ import {
  filterCatalogRewardRows,
  findActiveBountyMatches,
  findMatchingSubscription,
+ formatPlatinum,
+ formatPlatinumNumber,
  groupRewardsByRarity,
  matchesBountySubscription,
+ normalizeBountyGameRef,
  pickOverviewJobs,
  rarityLabel,
+ resolveBountyItemPrice,
  resolveBountyRewardIcon,
+ sortCatalogRewardRows,
  syndicateIconPath,
  syndicateLabel,
  tierLabel,
@@ -29,6 +36,7 @@ import {
  type BountyJob,
  type BountySyndicate,
 } from '../src/bountyModel.ts';
+import type {MarketRankingRow} from '../src/marketRankingModel.ts';
 
 const catalogPath=path.resolve(import.meta.dirname,'../public/bounty-catalog.json');
 const catalog=JSON.parse(fs.readFileSync(catalogPath,'utf-8')) as BountyCatalog;
@@ -350,4 +358,201 @@ test('visual tier badges, syndicate icons, reward artwork resolver, and concise 
   ],
  };
  assert.ok(extractHubFeaturedRewards(solarisBonds).items.some(i=>i.reward.zh.includes('债券')));
+});
+
+test('platinum price indexing, relic normalization, state resolution, sorting, tradable filter, and warmup deduplication',()=>{
+ const wmRow=(overrides:Partial<MarketRankingRow> & {slug:string;enName:string}):MarketRankingRow=>({
+  slug:overrides.slug,
+  gameRef:overrides.gameRef,
+  i18n:{en:{name:overrides.enName}},
+  unitPrice:overrides.unitPrice??null,
+  volume:null,
+  totalValue:null,
+  priceFetchedAt:overrides.priceFetchedAt??null,
+  stale:overrides.stale??false,
+  sampleCount:overrides.sampleCount??null,
+  lastError:overrides.lastError??null,
+ });
+
+ const rows:MarketRankingRow[]=[
+  wmRow({
+   slug:'augur_secrets',
+   gameRef:'/Lotus/Upgrades/Mods/Sets/Augur/WarframeAugurSecretsMod',
+   enName:'Augur Secrets',
+   unitPrice:18,
+   priceFetchedAt:'2026-11-22T06:00:00Z',
+   sampleCount:5,
+   stale:false,
+  }),
+  wmRow({
+   slug:'ayatan_amber_star',
+   gameRef:'/Lotus/Types/Items/FusionTreasures/OroFusexOrnamentB',
+   enName:'Ayatan Amber Star',
+   unitPrice:2.5,
+   priceFetchedAt:'2026-11-22T05:00:00Z',
+   stale:true,
+  }),
+  wmRow({
+   slug:'meso_d8_intact',
+   gameRef:'/Lotus/Types/Game/Projections/T2VoidProjectionVorunaPrimeC',
+   enName:'Meso D8 Relic',
+   unitPrice:null,
+   priceFetchedAt:'2026-11-22T06:00:00Z',
+   stale:false,
+  }),
+  wmRow({
+   slug:'charged_chamber',
+   gameRef:'/Lotus/Upgrades/Mods/Rifle/SniperReloadDamageMod',
+   enName:'Charged Chamber',
+   unitPrice:null,
+   priceFetchedAt:null,
+   stale:true,
+  }),
+  wmRow({
+   slug:'gladiator_vice',
+   gameRef:'/Lotus/Upgrades/Mods/Sets/Gladiator/MeleeGladiatorViceMod',
+   enName:'Gladiator Vice',
+   unitPrice:null,
+   lastError:'timeout',
+   stale:true,
+  }),
+  wmRow({
+   slug:'madurai_lens',
+   gameRef:'/Lotus/Upgrades/Focus/AttackLens',
+   enName:'Madurai Lens',
+   unitPrice:6,
+   priceFetchedAt:'2026-11-22T06:00:00Z',
+   stale:false,
+  }),
+ ];
+
+ const index=buildBountyPriceIndex(rows);
+
+ assert.equal(normalizeBountyGameRef('/Lotus/Types/Game/Projections/T2VoidProjectionVorunaPrimeCBronze'),'/Lotus/Types/Game/Projections/T2VoidProjectionVorunaPrimeC');
+ assert.equal(normalizeBountyGameRef('/Lotus/Upgrades/Mods/Rifle/SniperReloadDamageMod'),'/Lotus/Upgrades/Mods/Rifle/SniperReloadDamageMod');
+
+ // Exact priced match
+ const augur=resolveBountyItemPrice({itemId:'/Lotus/Upgrades/Mods/Sets/Augur/WarframeAugurSecretsMod',en:'Augur Secrets',quantity:1},index);
+ assert.equal(augur.slug,'augur_secrets');
+ assert.equal(augur.state,'priced');
+ assert.equal(augur.unitPrice,18);
+ assert.equal(augur.totalPrice,18);
+ assert.equal(augur.sampleCount,5);
+ assert.equal(augur.stale,false);
+
+ // Quantity multiplier + En name fallback on gameRef miss
+ const stars=resolveBountyItemPrice({itemId:'/Lotus/Custom/AmberStarAlias',en:'Ayatan Amber Star',quantity:2},index);
+ assert.equal(stars.slug,'ayatan_amber_star');
+ assert.equal(stars.state,'priced');
+ assert.equal(stars.unitPrice,2.5);
+ assert.equal(stars.totalPrice,5);
+ assert.equal(stars.stale,true);
+
+ // Relic Bronze suffix normalization + no-orders distinction
+ const relic=resolveBountyItemPrice({itemId:'/Lotus/Types/Game/Projections/T2VoidProjectionVorunaPrimeCBronze',en:'Meso D8 Intact',quantity:1},index);
+ assert.equal(relic.slug,'meso_d8_intact');
+ assert.equal(relic.state,'no-orders');
+ assert.equal(relic.unitPrice,null);
+
+ // Pending & Error states
+ assert.equal(resolveBountyItemPrice({itemId:'/Lotus/Upgrades/Mods/Rifle/SniperReloadDamageMod',en:'Charged Chamber',quantity:1},index).state,'pending');
+ assert.equal(resolveBountyItemPrice({itemId:'/Lotus/Upgrades/Mods/Sets/Gladiator/MeleeGladiatorViceMod',en:'Gladiator Vice',quantity:1},index).state,'error');
+
+ // Untradable exclusions
+ assert.equal(resolveBountyItemPrice({itemId:'/Lotus/Types/Items/MiscItems/SchismKey',en:'Aya',quantity:1},index).state,'untradable');
+ assert.equal(resolveBountyItemPrice({itemId:'@endo:600',en:'600 Endo',quantity:1},index).state,'untradable');
+ assert.equal(resolveBountyItemPrice({itemId:'@credits:4500',en:'4,500 Credits',quantity:1},index).state,'untradable');
+
+ // Platinum formatting
+ assert.equal(formatPlatinumNumber(18), '18');
+ assert.equal(formatPlatinum(18), '18p');
+ assert.equal(formatPlatinum(2.5), '2.5p');
+ assert.equal(formatPlatinum(2.01), '2p');
+
+ const makeExplorerRow=(key:string,itemId:string,en:string,activeNow:boolean,quantity=1)=>({
+  key,
+  syndicate:'CetusSyndicate',
+  syndicateZh:'希图斯',
+  syndicateEn:'Ostrons',
+  hubZh:'夜灵平野',
+  hubEn:'Plains of Eidolon',
+  tierKey:'tier5',
+  tierIndex:5,
+  tierLabelZh:'5级',
+  tierLabelEn:'Tier 5',
+  minLevel:40,
+  maxLevel:60,
+  rarity:'rare' as const,
+  itemId,
+  zh:en,
+  en,
+  quantity,
+  category:'mod',
+  chance:10,
+  finalChance:25,
+  rotations:['A' as const],
+  rotatesRewards:true,
+  activeNow,
+  activeJobIds:activeNow?['job-1']:[],
+ });
+
+ const sampleRows=[
+  makeExplorerRow('r-aya','/Lotus/Types/Items/MiscItems/SchismKey','Aya',true),
+  makeExplorerRow('r-pending','/Lotus/Upgrades/Mods/Rifle/SniperReloadDamageMod','Charged Chamber',false),
+  makeExplorerRow('r-lens','/Lotus/Upgrades/Focus/AttackLens','Madurai Lens',true),
+  makeExplorerRow('r-augur','/Lotus/Upgrades/Mods/Sets/Augur/WarframeAugurSecretsMod','Augur Secrets',false),
+  makeExplorerRow('r-noorders','/Lotus/Types/Game/Projections/T2VoidProjectionVorunaPrimeCBronze','Meso D8 Intact',true),
+  makeExplorerRow('r-endo','@endo:600','600 Endo',true),
+ ];
+
+ // tradableOnly filter drops Aya and Endo while keeping priced + unpriced tradables
+ const tradableFiltered=filterCatalogRewardRows(sampleRows,{
+  query:'',
+  syndicate:'all',
+  tierKey:'all',
+  rarity:'all',
+  availability:'all',
+  tradableOnly:true,
+ },index);
+ assert.deepEqual(tradableFiltered.map(r=>r.key),['r-pending','r-lens','r-augur','r-noorders']);
+
+ // Descending platinum sort: priced desc -> unpriced tradable (active first) -> untradable last
+ const sortedDesc=sortCatalogRewardRows(sampleRows,'platinum-desc',index);
+ assert.deepEqual(sortedDesc.map(r=>r.key),['r-augur','r-lens','r-noorders','r-pending','r-aya','r-endo']);
+
+ // Ascending platinum sort: lowest priced first, STILL keeps untradables strictly last
+ const sortedAsc=sortCatalogRewardRows(sampleRows,'platinum-asc',index);
+ assert.deepEqual(sortedAsc.map(r=>r.key),['r-lens','r-augur','r-noorders','r-pending','r-aya','r-endo']);
+
+ // Warmup collection skips fresh rows (augur_secrets, meso_d8_intact, madurai_lens) and untradables, preserves priority & deduplicates
+ const warmupSlugs=collectBountyWarmupSlugs([
+  {itemId:'/Lotus/Types/Items/MiscItems/SchismKey',en:'Aya'},
+  {itemId:'/Lotus/Upgrades/Mods/Sets/Augur/WarframeAugurSecretsMod',en:'Augur Secrets'}, // fresh -> skip
+  {itemId:'/Lotus/Custom/AmberStarAlias',en:'Ayatan Amber Star'}, // stale -> include
+  {itemId:'/Lotus/Upgrades/Mods/Rifle/SniperReloadDamageMod',en:'Charged Chamber'}, // unfetched -> include
+  {itemId:'/Lotus/Upgrades/Mods/Rifle/SniperReloadDamageMod',en:'Charged Chamber'}, // duplicate -> skip
+  {itemId:'/Lotus/Upgrades/Mods/Sets/Gladiator/MeleeGladiatorViceMod',en:'Gladiator Vice'}, // error/stale -> include if under limit
+ ],index,2);
+ assert.deepEqual(warmupSlugs,['ayatan_amber_star','charged_chamber']);
+});
+
+test('real bounty catalog matches expected tradable subset in wm-prices snapshot without matching untradables',()=>{
+ const wmPath=path.resolve(import.meta.dirname,'../public/wm-prices.json');
+ const wmData=JSON.parse(fs.readFileSync(wmPath,'utf-8')) as {rows:MarketRankingRow[]};
+ const index=buildBountyPriceIndex(wmData.rows);
+ const allRows=buildCatalogRewardRows(catalog,[],Date.now());
+ const uniqueItems=new Map<string,{itemId:string;en:string;quantity:number}>();
+ for(const row of allRows){
+  if(!uniqueItems.has(row.itemId)){
+   uniqueItems.set(row.itemId,{itemId:row.itemId,en:row.en,quantity:row.quantity});
+  }
+ }
+ let tradableCount=0;
+ for(const item of uniqueItems.values()){
+  if(resolveBountyItemPrice(item,index).state!=='untradable')tradableCount++;
+ }
+ assert.ok(tradableCount>=150,`Expected at least 150 tradable bounty items, got ${tradableCount}`);
+ assert.equal(resolveBountyItemPrice({itemId:'/Lotus/Types/Items/MiscItems/SchismKey',en:'Aya',quantity:1},index).state,'untradable');
+ assert.equal(resolveBountyItemPrice({itemId:'@endo:600',en:'600 Endo',quantity:1},index).state,'untradable');
+ assert.equal(resolveBountyItemPrice({itemId:'@credits:4500',en:'4,500 Credits',quantity:1},index).state,'untradable');
 });

@@ -196,6 +196,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "pendingRecipesKnown":snapshot.pending_recipes.is_some(),
                 "pendingRecipeKinds":snapshot.pending_recipes.as_ref().map(|rows|rows.len()),
                 "pendingRecipeJobs":snapshot.pending_recipes.as_ref().map(|rows|rows.values().sum::<u64>()),
+                "helminthKnown":snapshot.helminth.is_some(),
+                "archonShardsKnown":snapshot.archon_shards.is_some(),
+                "unrankedUnknownCount":snapshot.unranked_equipment_counts.as_ref().map(|m|m.values().filter(|v|v.is_none()).count()),
+                "masteryTotalXpKnown":snapshot.mastery_account.as_ref().and_then(|m|m.total_xp).is_some(),
+                "masteryUnknownEquipment":snapshot.mastery_account.as_ref().and_then(|m|m.coverage.as_ref()).map(|c|c.unknown_equipment_records),
+                "railjackKnown":snapshot.mastery_account.as_ref().and_then(|m|m.railjack.as_ref()).is_some(),
+                "duviriKnown":snapshot.mastery_account.as_ref().and_then(|m|m.duviri.as_ref()).is_some(),
                 "elapsedMs":start.elapsed().as_millis(),
                 "transport":client.transport(),
                 "sessionRetained":client.has_session()
@@ -411,5 +418,46 @@ mod tests {
         assert_eq!(acquisition_decision_code(&snapshot), "accept");
         let summary = summarize_player_profile(&snapshot, source, false, false);
         assert_eq!(summary["profileComplete"], true);
+    }
+
+    #[test]
+    fn early_game_sparse_payload_is_complete_and_known() {
+        let mut raw = complete_raw_payload();
+        let map = raw.as_object_mut().unwrap();
+        for group in ["MoaPets", "Hoverboards", "MechSuits", "OperatorAmps"] {
+            map.remove(group);
+        }
+        map.insert("Missions".into(), json!([]));
+        map.insert(
+            "CrewShipHarnesses".into(),
+            json!([{"ItemType": "/Lotus/Types/Game/CrewShip/RailJack/DefaultHarness"}]),
+        );
+        map.insert(
+            "Suits".into(),
+            json!([{"ItemType": "/Lotus/Powersuits/Excalibur/Excalibur", "ItemId": {"$oid": "6b006a3d5b09c517700373c6"}}]),
+        );
+        let cat = collection::catalog().unwrap();
+        let snapshot = inventory_data::from_value(
+            &raw,
+            &cat,
+            None,
+            "warframe-api-helper",
+            &chrono::Utc::now().to_rfc3339(),
+        )
+        .unwrap();
+        assert!(snapshot.complete);
+        assert!(snapshot.inventory_available());
+        assert!(snapshot.helminth.is_some());
+        assert!(snapshot.archon_shards.is_some());
+        assert!(snapshot.mastery_account.as_ref().and_then(|m| m.total_xp).is_some());
+        assert!(snapshot.mastery_account.as_ref().and_then(|m| m.railjack.as_ref()).is_some());
+        assert!(snapshot.mastery_account.as_ref().and_then(|m| m.duviri.as_ref()).is_some());
+        assert_eq!(
+            snapshot
+                .unranked_equipment_counts
+                .as_ref()
+                .map(|m| m.values().filter(|v| v.is_none()).count()),
+            Some(0)
+        );
     }
 }

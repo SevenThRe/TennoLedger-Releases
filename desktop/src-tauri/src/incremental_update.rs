@@ -112,6 +112,8 @@ fn verify(raw:&[u8],sig:&str,key:&str)->Result<Manifest,String>{
 #[tauri::command]pub fn incremental_install(app:tauri::AppHandle)->Result<(),String>{
  #[cfg(windows)] {
   use std::os::windows::process::CommandExt;
+  let data_dir=app.path().app_data_dir().map_err(|e|e.to_string())?;
+  crate::market::prepare_update(&crate::market_credentials::path(&data_dir))?;
   let service=app.state::<Service>();let guard=service.0.try_lock().map_err(|_|"更新操作正在进行")?;let p=guard.as_ref().filter(|p|p.downloaded).ok_or("更新文件尚未校验完成")?;no_links(&p.stage)?;
   let runner=p.stage.join("TennoLedger.Update.exe");fs::write(&runner,include_bytes!(concat!(env!("OUT_DIR"),"/TennoLedger.Update.exe"))).map_err(|e|e.to_string())?;
   fs::write(p.stage.join("state"),b"prepared").map_err(|e|e.to_string())?;

@@ -96,3 +96,23 @@ test('non-mastery sub-components are excluded from remaining once parent gear is
  assert.equal(afterOwned.goals.length,0);
  assert.equal(afterOwned.requirements.ore,undefined);
 });
+
+test('optional missing owned groups and non-catalog Foundry consumables preserve known demand',()=>{
+ const optional=snapshot();
+ optional.complete=false;
+ optional.missingOwnedGroups=['Hoverboards','MechSuits'];
+ const optionalDemand=resourceDemand(catalog,optional,items);
+ assert.equal(optionalDemand.favorites.inventoryKnown,true);
+ assert.equal(optionalDemand.remaining.inventoryKnown,true);
+
+ const nonOptional=snapshot();
+ nonOptional.complete=false;
+ nonOptional.missingOwnedGroups=['Recipes'];
+ assert.equal(resourceDemand(catalog,nonOptional,items).favorites.inventoryKnown,false);
+
+ const withConsumable=snapshot();
+ withConsumable.pendingRecipes={'/Lotus/Types/Recipes/Consumables/LargeTeamEnergyRestoreBlueprint':2};
+ const consumableDemand=resourceDemand(catalog,withConsumable,items);
+ assert.equal(consumableDemand.favorites.inventoryKnown,true);
+ assert.equal(consumableDemand.remaining.inventoryKnown,true);
+});

@@ -57,24 +57,51 @@ pub fn parse(suits: &Value) -> Option<Vec<ShardFrame>> {
             .or_else(|| suit["ItemId"].as_str())
             .filter(|s| !s.is_empty()).map(str::to_owned)
             .unwrap_or_else(|| format!("{}:{}", item_id, copy));
-        let slots = suit["ArchonCrystalUpgrades"].as_array().and_then(|rows| {
-            if rows.len() > 5 { return None; }
-            let mut slots = Vec::new();
-            for row in rows {
-                if row.is_null() { slots.push(None); continue; }
-                let object = row.as_object()?;
-                let text = |key: &str| -> Option<String> {
-                    match object.get(key) {
-                        None | Some(Value::Null) => Some(String::new()),
-                        Some(Value::String(s)) => Some(s.clone()),
-                        _ => None,
+        let slots = match suit.get("ArchonCrystalUpgrades") {
+            None | Some(Value::Null) => Some(vec![None; 5]),
+            Some(Value::Array(rows)) => {
+                if rows.len() > 5 {
+                    None
+                } else {
+                    let mut slots = Vec::new();
+                    let mut valid_rows = true;
+                    for row in rows {
+                        if row.is_null() {
+                            slots.push(None);
+                            continue;
+                        }
+                        let Some(object) = row.as_object() else {
+                            valid_rows = false;
+                            break;
+                        };
+                        let text = |key: &str| -> Option<String> {
+                            match object.get(key) {
+                                None | Some(Value::Null) => Some(String::new()),
+                                Some(Value::String(s)) => Some(s.clone()),
+                                _ => None,
+                            }
+                        };
+                        let (Some(color), Some(upgrade_type)) =
+                            (text("Color"), text("UpgradeType"))
+                        else {
+                            valid_rows = false;
+                            break;
+                        };
+                        slots.push(Some(ShardSlot {
+                            color,
+                            upgrade_type,
+                        }));
                     }
-                };
-                slots.push(Some(ShardSlot { color: text("Color")?, upgrade_type: text("UpgradeType")? }));
+                    if valid_rows {
+                        slots.resize_with(5, || None);
+                        Some(slots)
+                    } else {
+                        None
+                    }
+                }
             }
-            slots.resize_with(5, || None);
-            Some(slots)
-        });
+            Some(_) => None,
+        };
         frames.push(ShardFrame { item_id, instance_id, slots });
     }
     validate(&frames).ok()?;
@@ -105,8 +132,20 @@ mod tests {
         assert_eq!(frames[1].slots.as_ref().unwrap()[0].as_ref().unwrap().color, "ACC_RED_MYTHIC");
     }
     #[test]
-    fn missing_and_malformed_slots_stay_unknown() {
-        for field in [Value::Null, json!(false), json!([42]), json!([{"Color":42}]), json!([null,null,null,null,null,null])] {
+    fn absent_and_null_slots_default_to_five_empty_slots() {
+        let frames = parse(&json!([
+            {"ItemType":"/Lotus/A"},
+            {"ItemType":"/Lotus/B","ArchonCrystalUpgrades":null}
+        ])).unwrap();
+        assert_eq!(frames[0].slots.as_ref().unwrap().len(), 5);
+        assert!(frames[0].slots.as_ref().unwrap().iter().all(Option::is_none));
+        assert_eq!(frames[1].slots.as_ref().unwrap().len(), 5);
+        assert!(frames[1].slots.as_ref().unwrap().iter().all(Option::is_none));
+        assert!(equipped_types(&frames).unwrap().is_empty());
+    }
+    #[test]
+    fn malformed_slots_stay_unknown() {
+        for field in [json!(false), json!([42]), json!([{"Color":42}]), json!([null,null,null,null,null,null])] {
             let frames = parse(&json!([{"ItemType":"/Lotus/A","ArchonCrystalUpgrades":field}])).unwrap();
             assert!(frames[0].slots.is_none());
             assert!(equipped_types(&frames).is_none());

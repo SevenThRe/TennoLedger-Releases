@@ -10,6 +10,12 @@ export function resurgenceOffers(trader:ResurgenceTrader|undefined){
   ...offer,id:vendorId(offer.ItemType),section,key:`${section}:${index}:${offer.ItemType}`,
  })));
 }
+export function resurgenceItemIds(traders:readonly ResurgenceTrader[]|undefined,now:number):Set<string>|null{
+ if(!Array.isArray(traders))return null;
+ const trader=activeResurgence([...traders],now);
+ if(!trader)return null;
+ return new Set(resurgenceOffers(trader).map(offer=>offer.id));
+}
 export function rotationCountdown(expiry:number,now:number,en=false){
  if(!Number.isFinite(expiry)||!Number.isFinite(now))return '—';
  const minutes=Math.max(0,Math.floor((expiry-now)/60000)),hours=Math.floor(minutes/60),days=Math.floor(hours/24);

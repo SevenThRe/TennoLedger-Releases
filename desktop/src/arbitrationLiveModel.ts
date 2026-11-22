@@ -8,5 +8,8 @@ export function livePhase(run:ArbitrationRun,clock:number){
  const interval=run.intervals.at(-1);
  if(run.gameplayStart===null)return {phase:'preparing',index:null,seconds:null,breakSeconds:null} as const;
  if(!interval)return {phase:'running',index:null,seconds:Math.max(0,clock-run.gameplayStart),breakSeconds:null} as const;
+ if(interval.kind==='rotation'&&interval.complete&&interval.end!==null){
+  return {phase:'running',index:interval.index+1,seconds:Math.max(0,clock-interval.end),breakSeconds:null} as const;
+ }
  return {phase:interval.complete?'intermission':'running',index:interval.index,seconds:Math.max(0,(interval.end??clock)-interval.start),breakSeconds:interval.complete&&interval.end!==null?Math.max(0,clock-interval.end):null} as const;
 }

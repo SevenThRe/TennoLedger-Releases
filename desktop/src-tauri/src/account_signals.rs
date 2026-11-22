@@ -2,6 +2,12 @@
 use std::{fs::File,io::{Read,Seek,SeekFrom},path::Path,time::SystemTime};
 #[derive(Default)] pub struct Signals {pub refresh:bool,pub login:bool}
 #[derive(Default)] pub struct Tail {offset:u64,created:Option<SystemTime>,initialized:bool,pending:Vec<u8>,discard:bool}
+fn is_sys_info_event(line: &str, event_prefix: &str) -> bool {
+    let Some((prefix, rest)) = line.split_once(" Sys [Info]: ") else {
+        return false;
+    };
+    prefix.trim().bytes().all(|c| c.is_ascii_digit() || c == b'.') && rest.starts_with(event_prefix)
+}
 impl Tail {
     pub fn poll(&mut self,path:&Path)->Signals {
         let mut out=Signals::default();
@@ -22,7 +28,8 @@ impl Tail {
                 if !self.discard {
                     let line=String::from_utf8_lossy(&self.pending);
                     if line.contains("OnInventoryResults completed") {out.refresh=true;}
-                    if line.contains("MainMenu::LoginDone result=true") {out.login=true;out.refresh=true;}
+                    if line.contains("MainMenu::LoginDone result=true") || is_sys_info_event(&line,"Logged in ") {out.login=true;out.refresh=true;}
+                    if is_sys_info_event(&line,"Logged out") {out.login=true;}
                 }
                 self.pending.clear();self.discard=false;
             } else if !self.discard {
@@ -35,6 +42,17 @@ impl Tail {
     use super::*;
     #[test]fn fragmented_lines_and_login(){let mut t=Tail::default();let mut s=Signals::default();t.consume(b"Sys: OnInventoryRes",&mut s);assert!(!s.refresh);t.consume(b"ults completed in 87ms\n",&mut s);assert!(s.refresh);let mut s=Signals::default();t.consume(b"MainMenu::LoginDone result=true\n",&mut s);assert!(s.login);}
     #[test]fn oversized_records_cannot_trigger(){let mut t=Tail::default();let mut s=Signals::default();t.consume(&vec![b'x';65537],&mut s);t.consume(b"OnInventoryResults completed\n",&mut s);assert!(!s.refresh);t.consume(b"OnInventoryResults completed\n",&mut s);assert!(s.refresh);}
+    #[test]fn sys_login_and_logout_trigger_signals_while_chat_is_ignored(){
+        let mut t=Tail::default();
+        let mut s=Signals::default();
+        t.consume(b"22.621 Chat [Info]: Logged in FakeUser\n23.100 Chat [Info]: Sys [Info]: Logged in Spoof\n",&mut s);
+        assert!(!s.login);assert!(!s.refresh);
+        t.consume(b"24.500 Sys [Info]: Logged in RealTenno (account)\r\n",&mut s);
+        assert!(s.login);assert!(s.refresh);
+        let mut s=Signals::default();
+        t.consume(b"30.000 Sys [Info]: Logged out\n",&mut s);
+        assert!(s.login);assert!(!s.refresh);
+    }
 }
 
 // Only extract the public in-game display name; never retain the login record.

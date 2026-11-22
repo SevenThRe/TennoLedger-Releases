@@ -7,6 +7,7 @@ test('view and independent inventory/material filters survive serialization',()=
  assert.deepEqual(parseResourcePreferences(JSON.stringify(prefs)),prefs);
  assert.deepEqual(parseResourcePreferences(null),resourceDefaults);
  assert.equal(parseResourcePreferences('{"view":"shards"}').view,'shards');
+ assert.equal(parseResourcePreferences('{"view":"mining"}').view,'mining');
 });
 test('invalid fields use defaults and malformed storage is reported without accepting transient state',()=>{
  assert.throws(()=>parseResourcePreferences('{'));

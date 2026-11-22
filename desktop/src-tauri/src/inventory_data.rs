@@ -734,7 +734,15 @@ mod tests {
         let owned=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
         assert!(owned.complete);assert_eq!(crate::collection::count(&owned,board),Some(1));
         v["Hoverboards"]=json!({});assert!(from_value(&v,&cat,None,"warframe-api-helper",&stamp).is_err());
-        v.as_object_mut().unwrap().remove("Hoverboards");v.as_object_mut().unwrap().remove("MechSuits");
+        for group in ["MoaPets","Hoverboards","MechSuits","OperatorAmps","LevelKeys"] {
+            v.as_object_mut().unwrap().remove(group);
+        }
+        let prog=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
+        assert!(!prog.complete);
+        assert!(prog.inventory_available());
+        assert_eq!(crate::collection::count(&prog,"/Lotus/Powersuits/EntratiMech"),None);
+        assert_eq!(crate::acquisition::choose(None,&prog,false),crate::acquisition::Decision::Accept);
+        v.as_object_mut().unwrap().remove("Recipes");
         let broken=from_value(&v,&cat,None,"warframe-api-helper",&stamp).unwrap();
         assert!(!broken.inventory_available());assert_eq!(crate::acquisition::choose(None,&broken,false),crate::acquisition::Decision::Incomplete);
     }

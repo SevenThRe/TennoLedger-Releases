@@ -10,3 +10,7 @@ test('preparing, active interval and intermission have distinct clocks',()=>{
  assert.deepEqual(livePhase(run,150),{phase:'intermission',index:1,seconds:15,breakSeconds:35});
  assert.deepEqual(livePhase({...run,intervals:[{...run.intervals[0],end:null,complete:false}]},150),{phase:'running',index:1,seconds:50,breakSeconds:null});
 });
+test('completed rotation advances to next running rotation rather than staying in intermission',()=>{
+ const survival={...run,intervals:[{index:1,kind:'rotation',start:100,end:400,complete:true,drones:8}]} as ArbitrationRun;
+ assert.deepEqual(livePhase(survival,445),{phase:'running',index:2,seconds:45,breakSeconds:null});
+});

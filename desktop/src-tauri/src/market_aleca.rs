@@ -15,7 +15,7 @@ fn decode(body:&str,slugs:&[String],at:&str)->Result<Vec<Price>,String>{
 }
 fn read(slugs:Vec<String>,platform:&str)->Result<Vec<Price>,String>{
  valid_slugs(&slugs)?;if platform!="pc"{return Err("Aleca公开价格源仅确认PC，不套用于其他平台".into());}
- let cache=CACHE.get_or_init(||reqwest::blocking::Client::builder().timeout(Duration::from_secs(20)).redirect(reqwest::redirect::Policy::none()).no_proxy().user_agent("TennoLedger/0.1 public-price-reader").build().map(|client|Mutex::new(Cache{client,items:HashMap::new(),last:None})).map_err(|_|"公开价格TLS初始化失败".to_string())).as_ref().map_err(Clone::clone)?;
+ let cache=CACHE.get_or_init(||reqwest::blocking::Client::builder().timeout(Duration::from_secs(20)).redirect(reqwest::redirect::Policy::none()).user_agent("TennoLedger/0.1 public-price-reader").build().map(|client|Mutex::new(Cache{client,items:HashMap::new(),last:None})).map_err(|_|"公开价格TLS初始化失败".to_string())).as_ref().map_err(Clone::clone)?;
  let mut cache=cache.lock().map_err(|_|"公开价格队列锁错误")?;
  cache.items.retain(|_,(time,_)|time.elapsed()<Duration::from_secs(900));
  let mut missing:Vec<String>=slugs.iter().filter(|slug|!cache.items.contains_key(*slug)).cloned().collect();missing.sort();missing.dedup();

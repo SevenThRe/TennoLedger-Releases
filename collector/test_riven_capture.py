@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from riven_capture import CaptureCatalog, parse_capture, capture_events
+from riven_capture import CaptureCatalog, capture_events
 
 TORID = '/Lotus/Weapons/ClanTech/Bio/BioWeapon'
 AMPREX = '/Lotus/Weapons/Corpus/LongGuns/ChainLightningGun/ChainLightningRifle'

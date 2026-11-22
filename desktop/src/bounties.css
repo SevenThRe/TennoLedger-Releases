@@ -1,0 +1,295 @@
+.windowContent .app main.bountiesPage{padding:24px 10px 10px 18px;overflow:hidden;background:var(--color-bg-1,#10141f)}
+.bountyPageLayout{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:14px;height:100%;min-height:0}
+.bountyWorkspace{--bounty-common:#c8915a;--bounty-uncommon:#b9cadf;--bounty-rare:#e6c568;--bounty-accent:var(--color-tab-lighter,#b69cff);--bounty-muted:var(--color-navigation-hover,#b6c4df);display:flex;flex-direction:column;min-width:0;min-height:0;padding:14px 14px 0;border:1px solid var(--ui-line,#343a4b);border-radius:var(--ui-radius,16px);background:var(--color-bg-2,#191f30);color:var(--color-text,#eef0fa);font:13px/1.4 Roboto,'Microsoft YaHei',sans-serif}
+.bountyWorkspace h1,.bountyWorkspace h2,.bountyWorkspace h3,.bountyWorkspace p{margin:0}
+
+.bountyDot{display:inline-block;width:6px;height:6px;border-radius:50%;flex:none;background:#7d8aa6}
+.bountyDot.live{background:#57d98b;box-shadow:0 0 6px rgba(87,217,139,.6)}
+.bountyDot.hit{background:#e6c568;box-shadow:0 0 6px rgba(230,197,104,.75)}
+.bountyDot.warn{background:#f0b35c}
+.bountyDot.muted{background:#7d8aa6}
+
+.bountyTopBar{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap;padding:0 2px 10px;border-bottom:1px solid var(--ui-line,#2d3548);margin-bottom:10px;flex:none}
+.bountyTopLeft,.bountyTopRight{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.bountyTopLeft h1{font-size:20px;line-height:26px;font-weight:600}
+.bountyCycleStrip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:7px;border:1px solid var(--ui-line,#353c4f);background:var(--color-bg-1,#101522)}
+.bountyCycleTime{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--color-text)}
+.bountyCycleTime svg{width:13px;height:13px;color:var(--bounty-muted)}
+.bountyMiniProgress{display:inline-block;width:36px;height:4px;border-radius:3px;overflow:hidden;background:var(--ui-line,#363c4c)}
+.bountyMiniProgress>span{display:block;height:100%;background:var(--bounty-accent);border-radius:inherit}
+.bountyRotBadge,.bountyCountPill,.bountyHitPill,.bountyWarnPill,.bountyStatusBadge{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:600;background:var(--color-bg-3,#252f48);border:1px solid var(--ui-line,#3b455d);color:var(--color-text);white-space:nowrap}
+.bountyRotBadge.vault{background:#243c35;border-color:#447864;color:#a8e5c7}
+.bountyHitPill{background:color-mix(in srgb,var(--bounty-rare) 18%,var(--color-bg-1));border-color:color-mix(in srgb,var(--bounty-rare) 55%,transparent);color:#f7df94;font-family:inherit;cursor:pointer}
+.bountyHitPill:hover{filter:brightness(1.1)}
+.bountyWarnPill{background:rgba(130,92,38,.25);border-color:rgba(240,179,92,.45);color:#f4ce8c}
+.bountyStatusBadge{font-weight:500;padding:2px 7px}
+.bountyStatusBadge.live{background:rgba(52,105,73,.25);border-color:rgba(87,217,139,.4);color:#9eeac0}
+.bountyStatusBadge.hit{background:color-mix(in srgb,var(--bounty-rare) 18%,var(--color-bg-1));border-color:color-mix(in srgb,var(--bounty-rare) 50%,transparent);color:#f6dc8d}
+.bountyStatusBadge.muted,.bountyStatusBadge.wait{background:var(--color-bg-2,#161c2c);border-color:var(--ui-line);color:var(--bounty-muted)}
+
+.bountyViewTabs{display:inline-flex;gap:4px;background:var(--color-bg-1,#101522);padding:3px;border-radius:8px;border:1px solid var(--ui-line,#353c4f)}
+.bountyViewTabs button{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:6px;padding:4px 10px;background:transparent;color:var(--bounty-muted);font:inherit;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
+.bountyViewTabs button.selected{background:var(--color-tab-active,#5923cb);color:var(--color-text-bg,#fff)}
+.bountyViewTabs small{padding:1px 6px;border-radius:9px;font-size:10px;background:rgba(255,255,255,.12)}
+.bountyViewTabs small.hit{background:#e6c568;color:#141824;font-weight:700}
+
+.bountyDrawerToggle{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 9px;border-radius:7px;border:1px solid var(--ui-line,#3c455b);background:var(--color-bg-3,#252f48);color:var(--bounty-muted);cursor:pointer;flex:none}
+.bountyDrawerToggle:hover{color:#fff;background:var(--color-card-hover,#313c5c)}
+.bountyDrawerToggle.open{background:var(--color-tab-active,#5923cb);border-color:var(--bounty-accent);color:#fff}
+
+.bountyControlDrawer{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 10px;margin-bottom:10px;border-radius:8px;border:1px solid var(--ui-line,#353c4f);background:var(--color-bg-1,#101522);flex:none}
+.bountyControlDrawer label{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--bounty-muted);cursor:pointer;white-space:nowrap}
+.bountyTelemetry{margin-left:auto;font-size:11px;color:var(--bounty-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.bountyWorkspace input[type=checkbox][role=switch]{appearance:none;position:relative;flex:none;width:28px;height:15px;border:0;border-radius:10px;background:#343e5e;margin:0;cursor:pointer}
+.bountyWorkspace input[type=checkbox][role=switch]:before{content:'';position:absolute;left:2px;top:2px;width:11px;height:11px;border-radius:50%;background:#f6f5ff;transition:transform .15s ease}
+.bountyWorkspace input[type=checkbox][role=switch]:checked{background:#7027e8}
+.bountyWorkspace input[type=checkbox][role=switch]:checked:before{transform:translateX(13px)}
+.bountyWorkspace input[type=checkbox][role=switch]:disabled{opacity:.45;cursor:default}
+
+.bountyBtn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:30px;padding:4px 9px;border-radius:7px;border:1px solid var(--ui-line,#3c455b);background:var(--color-bg-3,#252f48);color:var(--color-text);font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
+.bountyBtn.sm{min-height:26px;padding:2px 8px;font-size:11px}
+.bountyBtn:hover:not(:disabled){background:var(--color-card-hover,#313c5c)}
+.bountyBtn.primary,.bountyBtn.active{background:var(--color-tab-active,#5923cb);border-color:var(--bounty-accent);color:#fff}
+.bountyBtn:disabled,.bountyIconBtn:disabled,.bountyLootTrackBtn:disabled,.bountyTrackPill:disabled,.bountyRarityTrackBtn:disabled,.bountyInlineLootChip:disabled{opacity:.45;cursor:default}
+.bountyIconBtn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border-radius:7px;border:1px solid var(--ui-line,#3c455b);background:var(--color-bg-3,#252f48);color:var(--bounty-muted);cursor:pointer;flex:none}
+.bountyIconBtn:hover:not(:disabled){color:#fff;background:var(--color-card-hover,#313c5c)}
+.bountyIconBtn.danger:hover:not(:disabled){color:#ff9d9d;border-color:#934646}
+
+.bountyScroll{flex:1;min-height:0;overflow:auto;padding:2px 4px 14px 2px;scrollbar-gutter:stable}
+
+.bountyRotationToolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.bountyRotationTabs{display:inline-flex;gap:4px;background:var(--color-bg-1,#101522);padding:3px;border-radius:8px;border:1px solid var(--ui-line)}
+.bountyRotationTabs button{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:6px;padding:4px 10px;background:transparent;color:var(--bounty-muted);font:inherit;font-size:12px;cursor:pointer}
+.bountyRotationTabs button.selected{background:var(--color-bg-3,#2b3554);color:#fff;font-weight:600}
+
+/* Overview Grid (当前一览) */
+.bountyOverviewWrap{display:flex;flex-direction:column;gap:10px}
+.bountyOverviewWrap>.bountyRotationToolbar{margin-bottom:0}
+
+.bountyNarmerBar{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:8px 11px;border-radius:10px;border:1px solid rgba(230,197,104,.26);background:linear-gradient(90deg,rgba(230,197,104,.1),rgba(16,21,34,.92) 45%)}
+.bountyNarmerTitle{display:inline-flex;align-items:center;gap:7px;padding:2px 4px;border:0;background:none;color:var(--color-text);font:inherit;cursor:pointer;flex:none}
+.bountyNarmerTitle:hover{color:#fff}
+.bountyNarmerTitle img{width:18px;height:18px;object-fit:contain}
+.bountyNarmerTitle strong{font-size:13px;font-weight:600}
+.bountyNarmerChips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+
+.bountyOverviewGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:stretch}
+.bountyHubCard{--hub-accent:var(--bounty-accent);display:flex;flex-direction:column;gap:8px;padding:11px 12px;border-radius:11px;border:1px solid rgba(88,104,142,.26);border-top:2px solid color-mix(in srgb,var(--hub-accent) 52%,transparent);background:linear-gradient(180deg,rgba(20,27,43,.92),rgba(13,18,30,.96));min-width:0}
+.bountyHubCard[data-hub="CetusSyndicate"]{--hub-accent:#7bd47f}
+.bountyHubCard[data-hub="SolarisSyndicate"]{--hub-accent:#63c7f5}
+.bountyHubCard[data-hub="EntratiSyndicate"]{--hub-accent:#5cd6ad}
+.bountyHubCard[data-hub="ZarimanSyndicate"]{--hub-accent:#98b8ff}
+.bountyHubCard[data-hub="EntratiLabSyndicate"]{--hub-accent:#e0b660}
+.bountyHubCard[data-hub="HexSyndicate"]{--hub-accent:#8cd96b}
+
+.bountyHubCardHead{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.bountyHubTrigger{display:inline-flex;align-items:center;gap:7px;min-width:0;padding:0;border:0;background:none;color:var(--color-text);font:inherit;cursor:pointer;text-align:left}
+.bountyHubTrigger:hover h2{color:#fff}
+.bountyHubTrigger:hover .bountyChevron{transform:translateX(2px);color:#fff}
+.bountyHubEmblem{width:22px;height:22px;object-fit:contain;flex:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
+.bountyHubTrigger h2{font-size:14px;font-weight:600;line-height:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bountyChevron{font-size:15px;line-height:1;color:var(--bounty-muted);transition:transform .12s ease}
+.bountyHubHeadRight{display:inline-flex;align-items:center;gap:5px;flex:none}
+
+.bountyFeaturedBlock{display:flex;flex-direction:column;gap:5px}
+.bountyFeaturedLabel{font-size:11px;font-weight:600;color:#ebbf68;letter-spacing:.02em}
+.bountyChipGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 8px}
+
+.bountyInlineLootChip{display:inline-flex;align-items:center;gap:6px;min-width:0;padding:3px 6px;border-radius:6px;border:1px solid transparent;background:rgba(255,255,255,.025);color:var(--color-text);font:inherit;font-size:12px;text-align:left;cursor:pointer;transition:background .12s ease,border-color .12s ease}
+.bountyInlineLootChip:hover:not(:disabled){background:rgba(255,255,255,.07);border-color:rgba(155,175,220,.25)}
+.bountyInlineLootChip.tracked{background:color-mix(in srgb,var(--bounty-accent) 18%,rgba(16,21,34,.85));border-color:color-mix(in srgb,var(--bounty-accent) 62%,transparent);color:#fff}
+.bountyInlineLootChip.hit{background:color-mix(in srgb,var(--bounty-rare) 18%,rgba(16,21,34,.9));border-color:color-mix(in srgb,var(--bounty-rare) 65%,transparent);color:#f9e39e}
+.bountyInlineLootChip>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+
+.bountyMiniJobList{display:flex;flex-direction:column;gap:6px;margin-top:auto}
+.bountyMiniJob{display:flex;flex-direction:column;gap:4px;width:100%;padding:7px 4px 2px;border:0;border-top:1px solid rgba(255,255,255,.06);background:transparent;color:var(--color-text);font:inherit;text-align:left;cursor:pointer;min-width:0;border-radius:4px;transition:background .12s ease}
+.bountyMiniJob:hover{background:rgba(255,255,255,.04)}
+.bountyMiniJob.hit{border-top-color:color-mix(in srgb,var(--bounty-rare) 45%,transparent)}
+.bountyMiniJobTop{display:flex;align-items:center;gap:6px;min-width:0}
+.bountyTierPill{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:99px;font-size:11px;font-weight:600;background:rgba(70,184,125,.14);color:#8be5b3;border:1px solid rgba(70,184,125,.3);flex:none}
+.bountyMiniJobTitle{font-size:12px;font-weight:600;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+.bountyLvPill{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.02em;flex:none;margin-left:auto}
+.bountyLvPill.sp{background:#5d34ba;color:#efeaff}
+.bountyLvPill.narmer{background:#2d4a7a;color:#dce9ff}
+.bountyLvPill.std{background:#243554;color:#bfd3f5}
+
+.bountyMiniJobMeta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0;padding-left:2px}
+.bountyMissionBadge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#8cb8f5;flex:none}
+.bountyMissionBadge svg{color:#79aaf0}
+.bountyChallengeName{font-size:11px;color:#d6e0f5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.bountyAllyTag{font-size:10px;padding:0 5px;border-radius:4px;background:rgba(78,194,161,.14);color:#9de2cc;border:1px solid rgba(78,194,161,.3);flex:none}
+
+.bountyObjBranch{position:relative;padding-left:15px;font-size:11px;line-height:15px;color:#93a9d1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bountyObjBranch::before{content:'';position:absolute;left:5px;top:0;width:7px;height:8px;border-left:1px solid rgba(147,169,209,.45);border-bottom:1px solid rgba(147,169,209,.45);border-bottom-left-radius:2px}
+
+/* Drill-down Nav */
+.bountyDrillNav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+.bountyBackBtn{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:7px;border:1px solid var(--ui-line,#3c455b);background:var(--color-bg-1,#101522);color:var(--color-text);font:inherit;font-size:12px;font-weight:600;cursor:pointer;flex:none}
+.bountyBackBtn:hover{background:var(--color-card-hover,#232b42);border-color:var(--bounty-accent)}
+.bountyMiniHubStrip{display:flex;align-items:center;gap:5px;flex-wrap:wrap;flex:1;min-width:0}
+.bountyMiniHubBtn{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 8px;border-radius:7px;border:1px solid var(--ui-line,#333b4e);background:var(--color-bg-1,#101522);color:var(--bounty-muted);font:inherit;font-size:11px;cursor:pointer}
+.bountyMiniHubBtn:hover{background:var(--color-card-hover,#232b42);color:#fff}
+.bountyMiniHubBtn.selected{background:var(--color-bg-3,#242c44);border-color:var(--bounty-accent);color:#fff;font-weight:600}
+.bountyMiniHubBtn.hasHit:not(.selected){border-color:color-mix(in srgb,var(--bounty-rare) 55%,var(--ui-line))}
+.bountyMiniHubBtn img{width:16px;height:16px;object-fit:contain}
+.bountyMiniHubBtn small{padding:0 4px;border-radius:6px;font-size:10px;background:#e6c568;color:#141824;font-weight:700}
+
+/* Master-Detail Tier Board */
+.bountyBoard{display:grid;grid-template-columns:238px minmax(0,1fr);gap:11px;align-items:start}
+.bountyTierRail{display:flex;flex-direction:column;gap:6px;min-width:0}
+.bountyTierItem{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:9px;border:1px solid var(--ui-line,#31394c);background:var(--color-bg-1,#101522);color:var(--color-text);text-align:left;font:inherit;cursor:pointer;min-width:0;transition:background .12s ease,border-color .12s ease}
+.bountyTierItem:hover{background:var(--color-card-hover,#1e263b)}
+.bountyTierItem.selected{background:var(--color-bg-3,#222b44);border-color:var(--bounty-accent);box-shadow:inset 3px 0 0 var(--bounty-accent)}
+.bountyTierItem.matched{border-color:color-mix(in srgb,var(--bounty-rare) 58%,var(--ui-line))}
+.bountyTierItem.matched.selected{box-shadow:inset 3px 0 0 var(--bounty-rare)}
+
+.bountyTierMedal{--medal:#7a93c7;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;flex:none;font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:#f7f9ff;background:color-mix(in srgb,var(--medal) 18%,#111624);border:1px solid color-mix(in srgb,var(--medal) 55%,#2b3347)}
+.bountyTierMedal img{width:20px;height:20px;object-fit:contain}
+.bountyTierMedal.t1{--medal:#46b87d}
+.bountyTierMedal.t2{--medal:#4cb3e8}
+.bountyTierMedal.t3{--medal:#987dff}
+.bountyTierMedal.t4{--medal:#e3a046}
+.bountyTierMedal.t5{--medal:#e0666c}
+.bountyTierMedal.sp{--medal:#d95d82}
+.bountyTierMedal.narmer{--medal:#e6c568}
+.bountyTierMedal.vault{--medal:#4ec2a1}
+.bountyTierMedal.lich{--medal:#d96be6}
+.bountyTierMedal.event{--medal:#84b5ff}
+
+.bountyTierInfo{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.bountyTierTop{display:flex;align-items:center;gap:6px;min-width:0}
+.bountyTierTop strong{font-size:12px;font-weight:600;white-space:nowrap}
+.bountyLevel{font-size:11px;color:var(--bounty-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bountyTierStateDot{margin-left:auto;width:7px;height:7px;border-radius:50%;flex:none}
+.bountyTierStateDot.hit{background:#e6c568;box-shadow:0 0 6px rgba(230,197,104,.75)}
+.bountyTierStateDot.tracked{background:var(--bounty-accent)}
+.bountyTierName{font-size:11px;color:var(--bounty-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bountyTierFoot{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:2px}
+.bountyTierStanding{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#b8cbeb;font-variant-numeric:tabular-nums}
+.bountyTierStanding img{width:12px;height:12px;object-fit:contain;opacity:.88}
+.bountyMiniLoot{display:inline-flex;align-items:center;gap:3px;margin-left:auto}
+
+.bountyLootThumb{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;padding:3px;border-radius:7px;flex:none;overflow:hidden;background:var(--color-bg-2,#161c2c);border:1px solid var(--ui-line,#364056)}
+.bountyLootThumb.rare{border-color:color-mix(in srgb,var(--bounty-rare) 58%,transparent);background:color-mix(in srgb,var(--bounty-rare) 10%,var(--color-bg-2,#161c2c))}
+.bountyLootThumb.uncommon{border-color:color-mix(in srgb,var(--bounty-uncommon) 50%,transparent);background:color-mix(in srgb,var(--bounty-uncommon) 9%,var(--color-bg-2,#161c2c))}
+.bountyLootThumb.common{border-color:color-mix(in srgb,var(--bounty-common) 45%,transparent);background:color-mix(in srgb,var(--bounty-common) 9%,var(--color-bg-2,#161c2c))}
+.bountyLootThumb.sm{width:32px;height:32px;padding:2px;border-radius:6px}
+.bountyLootThumb.xs{width:19px;height:19px;padding:1px;border-radius:4px}
+.bountyLootThumb img{width:100%;height:100%;object-fit:contain;display:block}
+.bountyLootThumb img.modCard{object-fit:cover;object-position:50% 18%;border-radius:4px}
+
+.bountyDetailPane{display:flex;flex-direction:column;gap:10px;padding:13px 14px;border-radius:10px;border:1px solid var(--ui-line,#353d50);background:var(--color-bg-1,#101522);min-width:0}
+.bountyDetailPane.matched{border-color:color-mix(in srgb,var(--bounty-rare) 65%,transparent);box-shadow:0 0 0 1px color-mix(in srgb,var(--bounty-rare) 25%,transparent)}
+.bountyDetailHeader{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.bountyDetailTitleWrap{min-width:0;flex:1}
+.bountyDetailTitleWrap h2{font-size:16px;font-weight:600;line-height:21px}
+.bountyDetailMeta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px}
+.bountyTagChip{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 6px;border-radius:4px;background:var(--color-bg-2,#191f30);border:1px solid var(--ui-line);color:#c7d3eb}
+.bountyTagChip.ally{color:#b3e3d1;border-color:#3a6a58}
+.bountyTagChip.challenge{color:#e7cf98;border-color:#695833;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bountyTrackPill{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:6px;border:1px solid var(--ui-line);background:var(--color-bg-2);color:var(--bounty-muted);font:inherit;font-size:11px;cursor:pointer;white-space:nowrap;flex:none}
+.bountyTrackPill svg{width:13px;height:13px}
+.bountyTrackPill:hover:not(:disabled){color:#fff;border-color:var(--bounty-accent)}
+.bountyTrackPill.active{background:color-mix(in srgb,var(--bounty-accent) 26%,var(--color-bg-2));border-color:var(--bounty-accent);color:#fff}
+
+.bountyStageStrip{display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:7px;background:rgba(255,255,255,.025)}
+.bountyStageTotal{display:inline-flex;align-items:center;gap:5px;flex:none;font-size:12px;font-variant-numeric:tabular-nums;color:#dce7ff}
+.bountyStageTotal img{width:14px;height:14px;object-fit:contain}
+.bountyStageTicks{display:flex;align-items:center;gap:4px;flex:1;min-width:0}
+.bountyStageTick{height:6px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,.07)}
+.bountyStageTick>span{display:block;height:100%;background:var(--bounty-accent);border-radius:inherit}
+
+.bountyRarityGroups{display:flex;flex-direction:column;gap:4px}
+.bountyRaritySection{padding:8px 0 4px;border-top:1px solid rgba(255,255,255,.06)}
+.bountyRaritySection:first-child{border-top:0;padding-top:2px}
+.bountyRarityHead{display:flex;align-items:center;gap:6px;margin-bottom:7px;font-size:12px}
+.bountyRarityDot{width:8px;height:8px;border-radius:50%;flex:none}
+.bountyRarityDot.rare{background:var(--bounty-rare)}
+.bountyRarityDot.uncommon{background:var(--bounty-uncommon)}
+.bountyRarityDot.common{background:var(--bounty-common)}
+.bountyRarityCount{font-size:11px;color:var(--bounty-muted);font-variant-numeric:tabular-nums}
+.bountyRarityTrackBtn{margin-left:auto;padding:2px 8px;border-radius:5px;border:1px solid var(--ui-line);background:transparent;color:var(--bounty-muted);font:inherit;font-size:11px;cursor:pointer}
+.bountyRarityTrackBtn:hover:not(:disabled){color:#fff;border-color:var(--bounty-accent)}
+.bountyRarityTrackBtn.active{background:color-mix(in srgb,var(--bounty-accent) 24%,transparent);border-color:var(--bounty-accent);color:#fff}
+
+.bountyLootGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.bountyLootTile{display:flex;align-items:center;gap:8px;padding:6px 7px;border-radius:7px;border:1px solid rgba(255,255,255,.05);background:rgba(255,255,255,.028);min-width:0}
+.bountyLootTile.tracked{border-color:color-mix(in srgb,var(--bounty-accent) 62%,transparent);background:color-mix(in srgb,var(--bounty-accent) 14%,rgba(16,21,34,.85))}
+.bountyLootTile.hit{border-color:color-mix(in srgb,var(--bounty-rare) 72%,transparent);background:color-mix(in srgb,var(--bounty-rare) 15%,rgba(16,21,34,.9))}
+.bountyLootInfo{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+.bountyLootName{display:block;font-size:12px;font-weight:500;line-height:15px;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bountyChanceBar{height:3px;width:100%;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden}
+.bountyChanceBar>span{display:block;height:100%;border-radius:inherit}
+.bountyChanceBar>span.rare{background:var(--bounty-rare)}
+.bountyChanceBar>span.uncommon{background:var(--bounty-uncommon)}
+.bountyChanceBar>span.common{background:var(--bounty-common)}
+.bountyLootMeta{display:block;font-size:10px;line-height:13px;color:var(--bounty-muted);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bountyLootTrackBtn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:0;border-radius:6px;border:1px solid var(--ui-line);background:var(--color-bg-3,#252f48);color:var(--bounty-muted);cursor:pointer;flex:none}
+.bountyLootTrackBtn svg{width:13px;height:13px}
+.bountyLootTrackBtn:hover:not(:disabled){color:#fff;border-color:var(--bounty-accent)}
+.bountyLootTrackBtn.active{background:var(--color-tab-active,#5923cb);border-color:var(--bounty-accent);color:#fff}
+.bountyLootTrackBtn.hit{background:#e6c568;border-color:#f7df94;color:#141824}
+
+/* Tracker View */
+.bountyTrackerStack{display:flex;flex-direction:column;gap:10px}
+.bountyTrackedPanel,.bountyExplorerPanel{padding:12px;border-radius:10px;border:1px solid var(--ui-line,#353d50);background:var(--color-bg-1,#101522);min-width:0}
+.bountySectionHead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.bountySectionHead h2{font-size:14px;font-weight:600}
+
+.bountyAccordion{border-radius:10px;border:1px solid var(--ui-line,#353d50);background:var(--color-bg-1,#101522);overflow:hidden}
+.bountyAccordion>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;font-size:13px;font-weight:600;cursor:pointer;list-style:none}
+.bountyAccordion>summary::-webkit-details-marker{display:none}
+.bountyAccordion>summary::before{content:'▸';font-size:11px;color:var(--bounty-muted);margin-right:6px}
+.bountyAccordion[open]>summary::before{content:'▾'}
+.bountyAccordion>summary>span:first-child{margin-right:auto}
+.bountyAccordionBody{padding:0 12px 12px}
+
+.bountySubGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.bountySubCard{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;border:1px solid var(--ui-line);background:var(--color-bg-2,#161c2c);min-width:0}
+.bountySubCard.hit{border-color:color-mix(in srgb,var(--bounty-rare) 60%,transparent);background:color-mix(in srgb,var(--bounty-rare) 8%,var(--color-bg-2))}
+.bountySubCard.paused{opacity:.62}
+.bountySubBody{min-width:0;flex:1}
+.bountySubTop{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bountySubTop strong{font-size:12px;font-weight:600}
+.bountySubBody small{display:block;font-size:11px;color:var(--bounty-muted);margin-top:2px;overflow-wrap:anywhere}
+.bountySubActions{display:flex;align-items:center;gap:7px;flex:none;margin-left:auto}
+
+.bountyExplorerFilters{display:flex;flex-direction:column;gap:7px;margin-bottom:10px}
+.bountySearchBox{display:flex;align-items:center;gap:8px;padding:3px 9px;min-height:34px;border-radius:8px;border:1px solid var(--ui-line);background:var(--color-bg-2,#191f30)}
+.bountySearchBox input{flex:1;min-width:0;border:0;outline:none;background:transparent;color:var(--color-text);font:inherit;font-size:12px}
+.bountyFilterRow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.bountyFilterRow .themeSelectTrigger{width:100%;height:32px;padding:0 9px;border-radius:7px;background:var(--color-bg-2,#191f30);border:1px solid var(--ui-line);font-size:12px}
+.bountyQuickRuleBar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:6px 9px;border-radius:8px;background:var(--color-bg-2,#191f30);border:1px solid var(--ui-line);font-size:12px}
+
+.bountyExplorerList{display:flex;flex-direction:column;gap:6px}
+.bountyExplorerRow{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;border:1px solid var(--ui-line,#2f374b);background:var(--color-bg-2,#161c2c)}
+.bountyExplorerRow.tracked{border-color:color-mix(in srgb,var(--bounty-accent) 55%,var(--ui-line))}
+.bountyRarityPill{padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600;flex:none}
+.bountyRarityPill.rare{background:color-mix(in srgb,var(--bounty-rare) 20%,transparent);color:#f6dc8d;border:1px solid color-mix(in srgb,var(--bounty-rare) 50%,transparent)}
+.bountyRarityPill.uncommon{background:color-mix(in srgb,var(--bounty-uncommon) 18%,transparent);color:#dce7f5;border:1px solid color-mix(in srgb,var(--bounty-uncommon) 45%,transparent)}
+.bountyRarityPill.common{background:color-mix(in srgb,var(--bounty-common) 18%,transparent);color:#eab989;border:1px solid color-mix(in srgb,var(--bounty-common) 45%,transparent)}
+.bountyExplorerBody{flex:1;min-width:0}
+.bountyExplorerTop{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bountyExplorerTop strong{font-size:12px;font-weight:600}
+.bountyExplorerBody small{display:block;font-size:11px;color:var(--bounty-muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.bountyRotTags{display:inline-flex;gap:4px}
+.bountyRotTags span,.bountyFixedTag{font-size:10px;padding:1px 5px;border-radius:4px;background:var(--color-bg-3,#252f48);color:var(--bounty-muted)}
+.bountyRotTags span.live{background:#346949;color:#e5f9eb;font-weight:600}
+.bountyExplorerActions{display:flex;align-items:center;gap:7px;flex:none}
+.bountyShowMoreBtn{margin-top:4px;padding:7px 12px;border-radius:7px;border:1px solid var(--ui-line);background:var(--color-bg-2);color:var(--color-text);font:inherit;font-size:12px;cursor:pointer}
+
+.bountyNoticeHistory{display:flex;flex-direction:column;gap:7px}
+.bountyNoticeHistory article{padding:8px 9px;border-radius:8px;border:1px solid var(--ui-line);background:var(--color-bg-2)}
+.bountyNoticeHistory article>div{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:2px}
+.bountyNoticeHistory strong{font-size:12px;font-weight:600}
+.bountyNoticeHistory time{font-size:10px;color:var(--bounty-muted);white-space:nowrap}
+.bountyNoticeHistory p{font-size:11px;color:#d6e0f5}
+.bountyNoticeHistory small{display:block;margin-top:3px;font-size:11px;color:#e6bc7c}
+
+.bountyEmpty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:28px 16px;text-align:center;color:var(--bounty-muted)}
+.bountyEmpty svg{width:24px;height:24px}
+
+@media(max-width:1560px){.bountyFilterRow{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1180px){.bountyBoard{grid-template-columns:1fr}.bountyTierRail{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}}
+@media(max-width:980px){.bountyOverviewGrid,.bountyLootGrid{grid-template-columns:1fr}}

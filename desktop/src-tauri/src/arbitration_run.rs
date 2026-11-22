@@ -33,6 +33,17 @@ static MIGRATION: LazyLock<Regex> = LazyLock::new(|| {
     re(r"(?i)(?:\bhost migration\b|\bHostMigration\b|\b(?:Start|Begin|Finalize)HostMigration\b)")
 });
 
+fn is_host_migration(msg: &str) -> bool {
+    if msg.contains("Host migration init timer")
+        || msg.contains("gHostMigration")
+        || msg.contains("FinalizeHostMigration, have data for 0 agent(s)")
+        || msg.contains("WaveDefend.lua:")
+    {
+        return false;
+    }
+    MIGRATION.is_match(msg)
+}
+
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Interval {
@@ -430,6 +441,15 @@ impl Parser {
         } else if msg.contains("Starting session on CLIENT") || msg.contains("Client loading") {
             self.host = Some(false);
         }
+        if self.active.as_ref().is_some_and(|r| {
+            r.status == "recording"
+                && (r.start_observed || r.gameplay_start.is_some())
+                && (msg.contains("Level=/Lotus/Levels/Proc/PlayerShip/")
+                    || msg.contains("EIDOLONMP: Going back to hub"))
+        }) {
+            self.interrupt("已返回飞船或中继站");
+            return;
+        }
         let Some(r) = &mut self.active else {
             return;
         };
@@ -470,11 +490,17 @@ impl Parser {
             }
         }
         r.is_host = self.host;
+        if msg.contains("LoopDefend.lua:")
+            && (self.mission_type.is_empty() || self.mission_type == "Defense")
+        {
+            self.mission_type = "Mirror Defense".into();
+            r.mission_type = self.mission_type.clone();
+        }
         if msg.contains("OnStateStarted, mission type=") {
             r.start_observed = true;
         }
         if (r.start_observed || !r.intervals.is_empty() || r.drone_spawns > 0)
-            && MIGRATION.is_match(msg)
+            && is_host_migration(msg)
         {
             r.gap("房主迁移，统计可能不完整");
             r.event(t, "migration", "房主迁移");
@@ -520,6 +546,8 @@ impl Parser {
             }
         }
         if msg.contains("WaveDefend.lua: _SleepBetweenWaves(")
+            || msg.contains("LoopDefend.lua: _SleepBetweenRounds(")
+            || msg.contains("LoopDefend.lua: Mission continue.")
             || msg.contains("Received request to open continue mission screen.")
         {
             r.complete_wave(t);
@@ -532,16 +560,30 @@ impl Parser {
                 .contains(&r.mission_type.as_str())
                 && msg.contains("Created /Lotus/Interface/DefenseReward.swf"));
         if reward && self.last_reward.is_none_or(|p| t - p > 30.) {
+            let interval_start = self
+                .last_reward
+                .unwrap_or_else(|| r.gameplay_start.unwrap_or(r.start_log_seconds));
             self.last_reward = Some(t);
             let index = r.intervals.iter().filter(|w| w.kind == "rotation").count() as u32 + 1;
+            let interval_drones = r
+                .drone_times
+                .iter()
+                .filter(|&&dt| {
+                    if index == 1 {
+                        dt >= interval_start && dt <= t
+                    } else {
+                        dt > interval_start && dt <= t
+                    }
+                })
+                .count() as u32;
             if r.intervals.len() < 10000 {
                 r.intervals.push(Interval {
                     index,
                     kind: "rotation".into(),
-                    start: r.gameplay_start.unwrap_or(r.start_log_seconds),
+                    start: interval_start,
                     end: Some(t),
                     complete: true,
-                    drones: 0,
+                    drones: interval_drones,
                 });
             }
             r.event(t, "reward", "完成奖励轮次");
@@ -569,7 +611,7 @@ impl Parser {
                 r.drone_spawns += 1;
                 r.drone_times.push(t);
                 r.drone_telemetry = true;
-                if let Some(w) = r.intervals.last_mut() {
+                if let Some(w) = r.intervals.last_mut().filter(|w| !w.complete) {
                     w.drones += 1;
                 }
                 self.last_activity = t;
@@ -778,5 +820,55 @@ mod tests {
         p.line("270 Script [Info]: WaveDefend.lua: Defense wave: 8");
         assert!(p.active.is_none());
         assert_eq!(p.finished.len(), 1);
+    }
+    #[test]
+    fn normal_defense_migration_init_lines_do_not_create_gap() {
+        let mut p = parser();
+        p.feed(START.as_bytes());
+        p.line("223.456 Script [Info]: WaveDefend.lua: WaveDefense: Host migration init timer restarted: 0 seconds elapsed.");
+        p.line("224.000 Script [Info]: WaveDefend.lua: Spawning defense avatar after migration");
+        p.line("224.100 Game [Info]: FinalizeHostMigration, have data for 0 agent(s)");
+        p.line("224.200 AI [Info]: SetLockDown 1 cooldown 180 gHostMigration 1");
+        p.line("245.000 Script [Info]: WaveDefend.lua: Defense wave: 2");
+        p.line("260.000 Script [Info]: WaveDefend.lua: Defense wave: 3");
+        p.line("275.000 Script [Info]: WaveDefend.lua: _SleepBetweenWaves(3)");
+        p.line("280.000 Sys [Info]: EOM missionLocationUnlocked=1");
+        p.eof();
+        let r = &p.finished[0];
+        assert!(!r.has_gap);
+        assert_eq!(r.reward_cycles, Some(1));
+        assert!(r.timeline.iter().all(|e| e.kind != "migration"));
+    }
+    #[test]
+    fn survival_rotations_track_per_rotation_start_and_drones() {
+        let mut p = parser();
+        p.line("10 Script [Info]: ThemedSquadOverlay.lua: Mission name: Stickney (火卫一) - 仲裁");
+        p.line("11 Script [Info]: Host loading SettlementNode3_EliteAlert");
+        p.line("12 Game [Info]: OnStateStarted, mission type=MT_SURVIVAL");
+        p.line("15 Script [Info]: Survival: Starting survival");
+        p.line("100 AI [Info]: OnAgentCreated /Npc/CorpusEliteShieldDroneAgent1 Live 3 Spawned 1");
+        p.line("200 AI [Info]: OnAgentCreated /Npc/CorpusEliteShieldDroneAgent2 Live 3 Spawned 2");
+        p.line("315 Script [Info]: Survival: Gave reward tier A");
+        p.line("450 AI [Info]: OnAgentCreated /Npc/CorpusEliteShieldDroneAgent3 Live 3 Spawned 3");
+        p.line("615 Script [Info]: Survival: Gave reward tier B");
+        p.line("700 AI [Info]: OnAgentCreated /Npc/CorpusEliteShieldDroneAgent4 Live 3 Spawned 4");
+        let r = p.active.as_ref().unwrap();
+        assert_eq!(r.intervals.len(), 2);
+        assert_eq!(r.intervals[0].start, 15.0);
+        assert_eq!(r.intervals[0].end, Some(315.0));
+        assert_eq!(r.intervals[0].drones, 2);
+        assert_eq!(r.intervals[1].start, 315.0);
+        assert_eq!(r.intervals[1].end, Some(615.0));
+        assert_eq!(r.intervals[1].drones, 1);
+    }
+    #[test]
+    fn orbiter_return_stops_stuck_recording() {
+        let mut p = parser();
+        p.feed(START.as_bytes());
+        assert!(p.active.is_some());
+        p.line("260 Sys [Info]: Level=/Lotus/Levels/Proc/PlayerShip/PlayerShip");
+        assert!(p.active.is_none());
+        assert_eq!(p.finished.len(), 1);
+        assert_eq!(p.finished[0].status, "interrupted");
     }
 }

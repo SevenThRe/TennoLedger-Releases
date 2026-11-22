@@ -25,6 +25,13 @@ fn summary_candidate(parser:&Parser)->Option<Run>{
     if parser.active.as_ref().is_some_and(|r|r.status=="recording"){return None;}
     parser.active.clone().or_else(||parser.finished.last().cloned())
 }
+fn can_save_arbitration_runs(
+    expected_binding: &(String, u64),
+    current_binding: Option<&(String, u64)>,
+    account_boundary: bool,
+) -> bool {
+    !account_boundary && current_binding == Some(expected_binding)
+}
 struct Runtime {
     parser: Parser,
     latest: Option<Run>,
@@ -41,6 +48,13 @@ pub struct Status {
     pub error: Option<String>,
     pub current: Option<Run>,
     pub auto_open: bool,
+    pub live_window_visible: bool,
+}
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LiveWindowWake {
+    was_hidden: bool,
+    prefer_mini: bool,
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,6 +65,50 @@ pub struct ImportProgress {
     pub added: usize,
     pub duplicates: usize,
 }
+fn active_tail_after_login(slice: &[u8]) -> &[u8] {
+    let mut cut = 0usize;
+    let mut pos = 0usize;
+    while pos < slice.len() {
+        let line_end = slice[pos..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map_or(slice.len(), |n| pos + n + 1);
+        let line = String::from_utf8_lossy(&slice[pos..line_end]);
+        if line.contains("LoginDone result=true")
+            || line.contains(" Sys [Info]: Logged in ")
+            || line.contains(" Sys [Info]: Logged out")
+        {
+            cut = line_end;
+        }
+        pos = line_end;
+    }
+    &slice[cut..]
+}
+
+fn feed_time_origin(parser: &mut Parser, header: &[u8]) {
+    // Bootstrap time anchor only. Old missions and credentials are not replayed into a new account.
+    for line in String::from_utf8_lossy(header)
+        .lines()
+        .filter(|s| s.contains("Current time:") && s.contains("[UTC:"))
+    {
+        parser.line(line);
+    }
+}
+
+fn feed_bootstrap(parser: &mut Parser, header: &[u8], bootstrap: &[u8]) -> bool {
+    feed_time_origin(parser, header);
+    if bootstrap.is_empty() {
+        return false;
+    }
+    parser.feed(bootstrap);
+    parser.finished.clear();
+    if !parser.active.as_ref().is_some_and(|r| r.status == "recording") {
+        parser.active = None;
+        return false;
+    }
+    true
+}
+
 #[derive(Default)]
 pub struct Tail {
     offset: u64,
@@ -59,7 +117,10 @@ pub struct Tail {
     prefix: Vec<u8>,
 }
 impl Tail {
-    pub fn poll(&mut self, path: &Path) -> Result<(bool, Vec<u8>, Vec<u8>), String> {
+    pub fn poll_with_bootstrap(
+        &mut self,
+        path: &Path,
+    ) -> Result<(bool, Vec<u8>, Vec<u8>, Vec<u8>), String> {
         let mut file = File::open(path).map_err(|_| "未找到 Warframe EE.log")?;
         let meta = file.metadata().map_err(|_| "无法读取日志状态")?;
         let prefix_len = if self.prefix.is_empty() {
@@ -74,13 +135,36 @@ impl Tail {
                 || meta.len() < self.offset
                 || first != self.prefix);
         let mut header = vec![];
+        let mut bootstrap = vec![];
         if !self.initialized || reset {
             file.seek(SeekFrom::Start(0)).map_err(|_| "读取日志失败")?;
             file.by_ref()
                 .take(65536)
                 .read_to_end(&mut header)
                 .map_err(|_| "读取日志失败")?;
-            self.offset = if self.initialized { 0 } else { meta.len() };
+            if !self.initialized {
+                const BOOTSTRAP_LIMIT: u64 = 4 * 1024 * 1024;
+                let start = meta.len().saturating_sub(BOOTSTRAP_LIMIT);
+                file.seek(SeekFrom::Start(start))
+                    .map_err(|_| "读取日志失败")?;
+                let mut tail_buf = vec![];
+                file.by_ref()
+                    .take(BOOTSTRAP_LIMIT)
+                    .read_to_end(&mut tail_buf)
+                    .map_err(|_| "读取日志失败")?;
+                let aligned = if start > 0 {
+                    tail_buf
+                        .iter()
+                        .position(|&b| b == b'\n')
+                        .map_or(&tail_buf[tail_buf.len()..], |i| &tail_buf[i + 1..])
+                } else {
+                    &tail_buf[..]
+                };
+                bootstrap = active_tail_after_login(aligned).to_vec();
+                self.offset = meta.len();
+            } else {
+                self.offset = 0;
+            }
             self.initialized = true;
         }
         self.created = meta.created().ok();
@@ -92,6 +176,11 @@ impl Tail {
             .read_to_end(&mut bytes)
             .map_err(|_| "读取日志失败")?;
         self.offset += bytes.len() as u64;
+        Ok((reset, header, bootstrap, bytes))
+    }
+
+    pub fn poll(&mut self, path: &Path) -> Result<(bool, Vec<u8>, Vec<u8>), String> {
+        let (reset, header, _bootstrap, bytes) = self.poll_with_bootstrap(path)?;
         Ok((reset, header, bytes))
     }
 }
@@ -113,6 +202,8 @@ impl Capture {
                 .join("Warframe/EE.log");
             let mut tail = Tail::default();
             let mut last_save = Instant::now();
+            let mut dirty = false;
+            let mut last_auto_opened_id: Option<String> = None;
             let mut previous_status = String::new();
             loop {
                 std::thread::sleep(Duration::from_millis(500));
@@ -125,39 +216,52 @@ impl Capture {
                 let mut changed = false;
                 if rt.binding != binding {
                     rt.parser.interrupt("采集关闭或账户切换");
-                    if let Some((scope, _)) = &rt.binding {
-                        let state = app.state::<AppState>();
-                        if let Ok(db) = state.0.lock() {
-                            for r in &rt.parser.finished {
-                                if let Err(e) = history::save(&db, scope, r) {
-                                    rt.error = Some(e);
-                                    break;
+                    if !rt.parser.account_boundary {
+                        if let Some((scope, _)) = &rt.binding {
+                            let state = app.state::<AppState>();
+                            if let Ok(db) = state.0.lock() {
+                                for r in &rt.parser.finished {
+                                    if let Err(e) = history::save(&db, scope, r) {
+                                        rt.error = Some(e);
+                                        break;
+                                    }
                                 }
-                            }
-                        };
+                            };
+                        }
                     }
                     rt.parser = Parser::new("live-ee-log", &UtcNow::key());
-                    rt.latest=None;
+                    rt.latest = None;
                     rt.binding = binding.clone();
                     tail = Tail::default();
+                    dirty = false;
+                    last_auto_opened_id = None;
                     changed = true;
                 }
-                let Some((scope, _)) = binding else {
+                let Some((scope, epoch)) = binding else {
                     rt.code = "waiting-account".into();
+                    rt.error = None;
+                    let state = format!("{}:{:?}", rt.code, rt.error);
+                    if state != previous_status {
+                        previous_status = state;
+                        let _ = app.emit("arbitration-updated", ());
+                    }
                     continue;
                 };
-                match tail.poll(&path) {
-                    Ok((reset, header, bytes)) => {
+                match tail.poll_with_bootstrap(&path) {
+                    Ok((reset, header, bootstrap, bytes)) => {
                         if reset {
                             rt.parser.reset("日志被截断或轮换");
+                            dirty = true;
+                            last_auto_opened_id = None;
                             changed = true;
                         }
-                        // Bootstrap time anchor only. Old missions and credentials are not replayed into a new account.
-                        for line in String::from_utf8_lossy(&header)
-                            .lines()
-                            .filter(|s| s.contains("Current time:") && s.contains("[UTC:"))
-                        {
-                            rt.parser.line(line);
+                        if !bootstrap.is_empty() {
+                            if feed_bootstrap(&mut rt.parser, &header, &bootstrap) {
+                                changed = true;
+                                dirty = true;
+                            }
+                        } else {
+                            feed_time_origin(&mut rt.parser, &header);
                         }
                         let before = rt
                             .parser
@@ -177,39 +281,90 @@ impl Capture {
                             .as_ref()
                             .map(|r| (r.id.clone(), r.status.clone()));
                         changed |= before != after;
-                        if changed
-                            || last_save.elapsed() > Duration::from_secs(2)
-                            || !rt.parser.finished.is_empty()
+                        if !bytes.is_empty()
+                            && (rt.parser.active.is_some()
+                                || !rt.parser.finished.is_empty()
+                                || changed)
                         {
-                            let state = app.state::<AppState>();
-                            let result = (|| {
-                                let db = state.0.lock().map_err(|_| "数据库锁错误")?;
-                                for r in &rt.parser.finished {
-                                    history::save(&db, &scope, r)?;
-                                }
-                                if let Some(r) = &rt.parser.active {
-                                    history::save(&db, &scope, r)?;
-                                }
-                                Ok::<_, String>(())
-                            })();
-                            match result {
-                                Ok(()) => {
-                                    if rt.parser.active.as_ref().is_some_and(|r|r.status=="recording"){rt.latest=None;}
-                                    else if let Some(ended)=summary_candidate(&rt.parser){rt.latest=Some(ended);}
-                                    rt.parser.finished.clear();
-                                    rt.error = None;
-                                    last_save = Instant::now();
-                                    let _ = app.emit("arbitration-updated", ());
-                                }
-                                Err(e) => {
-                                    rt.error = Some(e);
-                                    rt.code = "storage-error".into();
+                            dirty = true;
+                        }
+                        if changed
+                            || !rt.parser.finished.is_empty()
+                            || (dirty
+                                && rt.parser.active.is_some()
+                                && last_save.elapsed() > Duration::from_secs(2))
+                        {
+                            let expected_binding = (scope.clone(), epoch);
+                            let collector = app.state::<crate::collector::Collector>();
+                            if !can_save_arbitration_runs(
+                                &expected_binding,
+                                collector.arbitration_binding().as_ref(),
+                                rt.parser.account_boundary,
+                            ) {
+                                rt.parser = Parser::new("live-ee-log", &UtcNow::key());
+                                rt.latest = None;
+                                rt.binding = None;
+                                rt.code = "waiting-account".into();
+                                dirty = false;
+                                last_auto_opened_id = None;
+                            } else {
+                                let result = collector.with_arbitration_binding(
+                                    &app,
+                                    &expected_binding,
+                                    |db| {
+                                        for r in &rt.parser.finished {
+                                            history::save(db, &scope, r)?;
+                                        }
+                                        if let Some(r) = &rt.parser.active {
+                                            history::save(db, &scope, r)?;
+                                        }
+                                        Ok::<_, String>(())
+                                    },
+                                );
+                                match result {
+                                    Ok(Some(())) => {
+                                        if rt
+                                            .parser
+                                            .active
+                                            .as_ref()
+                                            .is_some_and(|r| r.status == "recording")
+                                        {
+                                            rt.latest = None;
+                                        } else if let Some(ended) = summary_candidate(&rt.parser) {
+                                            rt.latest = Some(ended);
+                                        }
+                                        rt.parser.finished.clear();
+                                        rt.error = None;
+                                        dirty = false;
+                                        last_save = Instant::now();
+                                        let _ = app.emit("arbitration-updated", ());
+                                    }
+                                    Ok(None) => {
+                                        rt.parser = Parser::new("live-ee-log", &UtcNow::key());
+                                        rt.latest = None;
+                                        rt.binding = None;
+                                        rt.code = "waiting-account".into();
+                                        dirty = false;
+                                        last_auto_opened_id = None;
+                                    }
+                                    Err(e) => {
+                                        rt.error = Some(e);
+                                        rt.code = "storage-error".into();
+                                    }
                                 }
                             }
                         }
-                        if changed
-                            && rt.error.is_none()
-                            && (rt.parser.active.is_some() || rt.latest.is_some())
+                        let auto_open_id = if rt.error.is_none() {
+                            rt.parser
+                                .active
+                                .as_ref()
+                                .filter(|r| r.status == "recording")
+                                .map(|r| r.id.clone())
+                        } else {
+                            None
+                        };
+                        if let Some(run_id) =
+                            auto_open_id.filter(|id| last_auto_opened_id.as_ref() != Some(id))
                         {
                             let state = app.state::<AppState>();
                             let auto = state
@@ -218,9 +373,15 @@ impl Capture {
                                 .ok()
                                 .and_then(|db| auto_open(&db).ok())
                                 .unwrap_or(true);
+                            last_auto_opened_id = Some(run_id);
+                            let state_sig = format!("{}:{:?}", rt.code, rt.error);
+                            if state_sig != previous_status {
+                                previous_status = state_sig;
+                                let _ = app.emit("arbitration-updated", ());
+                            }
                             if auto {
                                 drop(rt);
-                                let _ = open_live(&app);
+                                let _ = open_live(&app, false, false);
                                 continue;
                             }
                         }
@@ -261,9 +422,29 @@ fn auto_open(db: &crate::store::Store) -> Result<bool, String> {
         .map_err(|e| e.to_string())?;
     Ok(value.as_deref() != Some("false"))
 }
-fn open_live(app: &tauri::AppHandle) -> Result<(), String> {
+fn is_live_window_visible(app: &tauri::AppHandle) -> bool {
+    app.get_webview_window("arbitration-live")
+        .is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(false))
+}
+fn open_live(app: &tauri::AppHandle, focus: bool, prefer_mini: bool) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("arbitration-live") {
+        let minimized = w.is_minimized().unwrap_or(false);
+        let was_hidden = minimized || !w.is_visible().unwrap_or(false);
+        if minimized {
+            let _ = w.unminimize();
+        }
         w.show().map_err(|e| e.to_string())?;
+        if focus {
+            let _ = w.set_focus();
+        }
+        let _ = w.emit(
+            "arbitration-live-wake",
+            LiveWindowWake {
+                was_hidden,
+                prefer_mini,
+            },
+        );
+        let _ = app.emit("arbitration-updated", ());
         return Ok(());
     }
     tauri::WebviewWindowBuilder::new(
@@ -272,24 +453,40 @@ fn open_live(app: &tauri::AppHandle) -> Result<(), String> {
         tauri::WebviewUrl::App("index.html?arbitrationLive=1&mini=1".into()),
     )
     .title("TennoLedger · 实时仲裁")
-    .inner_size(380., 320.)
-    .min_inner_size(320., 48.)
+    .inner_size(380., 276.)
+    .min_inner_size(320., 46.)
     .always_on_top(true)
     .decorations(false)
-    .focused(false)
+    .focused(focus)
     .build()
     .map_err(|e| e.to_string())?;
+    let _ = app.emit("arbitration-updated", ());
+    Ok(())
+}
+fn hide_live(app: &tauri::AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("arbitration-live") {
+        w.hide().map_err(|e| e.to_string())?;
+    }
+    let _ = app.emit("arbitration-updated", ());
     Ok(())
 }
 #[tauri::command]
-pub fn arbitration_open_live(app: tauri::AppHandle) -> Result<(), String> {
-    open_live(&app)
+pub async fn arbitration_open_live(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || open_live(&app, true, true))
+        .await
+        .map_err(|e| e.to_string())?
 }
 #[tauri::command]
-pub fn arbitration_open_report(
+pub async fn arbitration_hide_live(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || hide_live(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+pub async fn arbitration_open_report(
     expected_scope: String,
     id: String,
-    state: tauri::State<AppState>,
+    state: tauri::State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     {
@@ -297,30 +494,40 @@ pub fn arbitration_open_report(
         db.require_expected_scope(Some(&expected_scope))?;
         history::get(&db, &expected_scope, &id)?.ok_or("仲裁记录不存在")?;
     }
-    let label = format!("arbitration-report-{id}");
-    if let Some(w) = app.get_webview_window(&label) {
-        w.show().map_err(|e| e.to_string())?;
-        return Ok(());
-    }
-    tauri::WebviewWindowBuilder::new(
-        &app,
-        label,
-        tauri::WebviewUrl::App(format!("index.html?arbitrationLive=1&report={id}").into()),
-    )
-    .title("TennoLedger · 仲裁报告")
-    .inner_size(1024., 720.)
-    .min_inner_size(700., 500.)
-    .decorations(false)
-    .build()
-    .map_err(|e| e.to_string())?;
-    Ok(())
+    tauri::async_runtime::spawn_blocking(move || {
+        let label = format!("arbitration-report-{id}");
+        if let Some(w) = app.get_webview_window(&label) {
+            if w.is_minimized().unwrap_or(false) {
+                let _ = w.unminimize();
+            }
+            w.show().map_err(|e| e.to_string())?;
+            let _ = w.set_focus();
+            return Ok(());
+        }
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            label,
+            tauri::WebviewUrl::App(format!("index.html?arbitrationLive=1&report={id}").into()),
+        )
+        .title("TennoLedger · 仲裁报告")
+        .inner_size(1024., 720.)
+        .min_inner_size(700., 500.)
+        .decorations(false)
+        .build()
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 pub fn arbitration_capture_status(
     expected_scope: String,
+    app: tauri::AppHandle,
     state: tauri::State<AppState>,
     capture: tauri::State<Arc<Capture>>,
 ) -> Result<Status, String> {
+    let live_window_visible = is_live_window_visible(&app);
     let rt = capture.0.lock().map_err(|_| "采集锁错误")?;
     let db = state.0.lock().map_err(|_| "数据库锁错误")?;
     db.require_expected_scope(Some(&expected_scope))?;
@@ -329,24 +536,33 @@ pub fn arbitration_capture_status(
         .as_ref()
         .is_some_and(|(scope, _)| scope == &expected_scope)
     {
-        rt.parser.active.clone().or_else(||rt.latest.clone())
+        rt.parser.active.clone().or_else(|| rt.latest.clone())
     } else {
         None
     };
     Ok(Status {
         code: rt.code.clone(),
         error: rt.error.clone(),
-        current: current.map(|mut r|{r.retained_log.clear();r.positions.clear();r}),
+        current: current.map(|mut r| {
+            r.retained_log.clear();
+            r.positions.clear();
+            r
+        }),
         auto_open: auto_open(&db)?,
+        live_window_visible,
     })
 }
 #[tauri::command]
 pub fn arbitration_set_auto_live(
     enabled: bool,
     state: tauri::State<AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
-    let db = state.0.lock().map_err(|_| "数据库锁错误")?;
-    db.db.execute("INSERT INTO settings(key,value) VALUES('arbitration_auto_live',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[if enabled{"true"}else{"false"}]).map_err(|e|e.to_string())?;
+    {
+        let db = state.0.lock().map_err(|_| "数据库锁错误")?;
+        db.db.execute("INSERT INTO settings(key,value) VALUES('arbitration_auto_live',?1) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[if enabled{"true"}else{"false"}]).map_err(|e|e.to_string())?;
+    }
+    let _ = app.emit("arbitration-updated", ());
     Ok(())
 }
 #[tauri::command]
@@ -588,7 +804,7 @@ mod tests {
         let mut parser=Parser::new("offline-replay","tyana-sanitized-20261025");
         parser.feed(include_bytes!("../../tests/fixtures/arbitration-tyana.txt"));parser.eof();
         assert_eq!(parser.finished.len(),1);
-        let run=&parser.finished[0];assert_eq!(run.node_id,"SolNode450");assert_eq!(run.drone_spawns,2108);assert_eq!(run.reward_cycles,Some(6));
+        let run=&parser.finished[0];assert_eq!(run.node_id,"SolNode450");assert_eq!(run.mission_type,"Mirror Defense");assert_eq!(run.waves_completed,20);assert_eq!(run.drone_spawns,2108);assert_eq!(run.reward_cycles,Some(10));
         let scope=crate::account_scope::from_value(&serde_json::json!({"AccountId":"0123456789abcdef01234567"})).unwrap().unwrap();
         let db=crate::store::Store::open(Path::new(":memory:")).unwrap();
         history::save(&db,&scope,run).unwrap();history::save(&db,&scope,run).unwrap();
@@ -672,5 +888,65 @@ mod tests {
         assert_eq!(run.duration(), Some(10.));
         drop(db);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+    #[test]
+    fn arbitration_save_guard_rejects_epoch_mismatch_and_account_boundary() {
+        let expected = ("acct-v1-a".to_string(), 3u64);
+        assert!(can_save_arbitration_runs(&expected, Some(&expected), false));
+        assert!(!can_save_arbitration_runs(&expected, Some(&expected), true));
+        assert!(!can_save_arbitration_runs(&expected, Some(&("acct-v1-a".into(), 4)), false));
+        assert!(!can_save_arbitration_runs(&expected, Some(&("acct-v1-b".into(), 3)), false));
+        assert!(!can_save_arbitration_runs(&expected, None, false));
+    }
+    #[test]
+    fn bootstrap_recovers_only_active_run_after_latest_login_boundary() {
+        let path = std::env::temp_dir().join(format!("myframe-arby-boot-{}.log", UtcNow::key()));
+        let log = concat!(
+            "0.021 Sys [Diag]: Current time: Sat Oct 24 23:09:14 2026 [UTC: Sat Oct 24 15:09:14 2026]\n",
+            "10.0 Script [Info]: ThemedSquadOverlay.lua: Mission name: OldRun (Earth) - Arbitration\n",
+            "11.0 Script [Info]: Host loading SolNode1_EliteAlert\n",
+            "12.0 Game [Info]: OnStateStarted, mission type=MT_DEFENSE\n",
+            "20.0 Script [Info]: MainMenu::LoginDone result=true\n",
+            "30.0 Script [Info]: ThemedSquadOverlay.lua: Mission name: FinishedAfterLogin (Mars) - Arbitration\n",
+            "31.0 Script [Info]: Host loading SolNode2_EliteAlert\n",
+            "32.0 Game [Info]: OnStateStarted, mission type=MT_DEFENSE\n",
+            "40.0 Script [Info]: TopMenu.lua: Abort:\n",
+            "50.0 Script [Info]: ThemedSquadOverlay.lua: Mission name: Hyf (火卫二) - 仲裁\n",
+            "51.0 Script [Info]: Host loading SolNode707_EliteAlert\n",
+            "52.0 Game [Info]: OnStateStarted, mission type=MT_DEFENSE\n",
+            "55.0 Script [Info]: WaveDefend.lua: Defense wave: 1\n",
+            "70.0 Script [Info]: WaveDefend.lua: _SleepBetweenWaves(3)\n",
+            "73.0 Script [Info]: WaveDefend.lua: Defense wave: 2\n",
+        );
+        std::fs::write(&path, log).unwrap();
+        let mut tail = Tail::default();
+        let (reset, header, bootstrap, bytes) = tail.poll_with_bootstrap(&path).unwrap();
+        assert!(!reset);
+        assert!(bytes.is_empty());
+        let mut parser = Parser::new("live-ee-log", "boot-test");
+        assert!(feed_bootstrap(&mut parser, &header, &bootstrap));
+        assert!(parser.finished.is_empty());
+        assert!(!parser.account_boundary);
+        let run = parser.active.as_ref().unwrap();
+        assert_eq!(run.status, "recording");
+        assert_eq!(run.node_id, "SolNode707");
+        assert_eq!(run.mission_type, "Defense");
+        assert_eq!(run.gameplay_start, Some(55.0));
+        assert_eq!(run.waves_completed, 1);
+        std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn status_serializes_live_window_visibility_camel_case() {
+        let status = Status {
+            code: "watching".into(),
+            error: None,
+            current: None,
+            auto_open: true,
+            live_window_visible: true,
+        };
+        let value = serde_json::to_value(&status).unwrap();
+        assert_eq!(value["code"], "watching");
+        assert_eq!(value["autoOpen"], true);
+        assert_eq!(value["liveWindowVisible"], true);
     }
 }

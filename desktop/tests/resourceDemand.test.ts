@@ -68,3 +68,31 @@ test('Forma adapter queues resolve even when absent from the crafting tree',()=>
  const s=snapshot();s.pendingRecipes={[aura]:1,[umbra]:1};s.favorites=[];
  assert.equal(resourceDemand(c,s,new Map()).favorites.inventoryKnown,true);
 });
+
+test('non-mastery sub-components are excluded from remaining once parent gear is mastered or owned',()=>{
+ const frame='/Lotus/Powersuits/TestFrame',chassis='/Lotus/Types/Recipes/TestChassisComponent';
+ const c:DemandCatalog={
+  ids:['ore'],
+  blueprintIds:[],
+  goalIds:[frame,chassis],
+  recipes:{
+   [frame]:{output:1,parts:[{itemId:chassis,quantity:1},{itemId:'ore',quantity:3}]},
+   [chassis]:{output:1,parts:[{itemId:'ore',quantity:7}]},
+  },
+ };
+ const frameItems=new Map([[frame,{name:'Test Frame',maxRank:30}],[chassis,{name:'Test Chassis',maxRank:0}]]);
+ const unowned=snapshot();unowned.counts={};unowned.ranks={};unowned.favorites=[];
+ const unownedDemand=resourceDemand(c,unowned,frameItems).remaining;
+ assert.equal(unownedDemand.goals.some(g=>g.itemId===chassis),true);
+ assert.ok((unownedDemand.requirements.ore?.needed??0)>=10);
+
+ const masteredSold=snapshot();masteredSold.counts={};masteredSold.ranks={[frame]:30};masteredSold.favorites=[];
+ const afterMastery=resourceDemand(c,masteredSold,frameItems).remaining;
+ assert.equal(afterMastery.goals.length,0);
+ assert.equal(afterMastery.requirements.ore,undefined);
+
+ const ownedUnmastered=snapshot();ownedUnmastered.counts={[frame]:1};ownedUnmastered.ranks={};ownedUnmastered.favorites=[];
+ const afterOwned=resourceDemand(c,ownedUnmastered,frameItems).remaining;
+ assert.equal(afterOwned.goals.length,0);
+ assert.equal(afterOwned.requirements.ore,undefined);
+});

@@ -208,7 +208,7 @@ pub fn deliver_configured(app:&tauri::AppHandle,notice:&Notice,settings:&Deliver
  if matches!(notice.kind.as_str(),"conversation"|"riven-monitor")&&scope.is_none(){return Err("账户已切换，已取消旧账户提醒".into());}
  configured_channels(notice,settings,game_foreground(),endpoint,test,
   |outgoing,sound|native_with_sound(app,outgoing,sound,notice_icon(notice)),
-  |endpoint,body|reqwest::blocking::Client::builder().no_proxy().timeout(std::time::Duration::from_secs(8)).redirect(reqwest::redirect::Policy::none()).build().map_err(|_|String::new()).and_then(|client|client.post(endpoint).json(&serde_json::json!({"content":body,"allowed_mentions":configured_mentions(settings,notice)})).send().map_err(|_|String::new()).and_then(|response|if response.status().is_success(){Ok(())}else{Err(String::new())})),
+  |endpoint,body|reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(8)).redirect(reqwest::redirect::Policy::none()).build().map_err(|_|String::new()).and_then(|client|client.post(endpoint).json(&serde_json::json!({"content":body,"allowed_mentions":configured_mentions(settings,notice)})).send().map_err(|_|String::new()).and_then(|response|if response.status().is_success(){Ok(())}else{Err(String::new())})),
   |outgoing|{let mut errors=vec![];if app.emit("world-notification",outgoing).is_err(){errors.push("应用内通知发送失败");}
    if !test{if let (Some(scope),Some(overlays))=(scope.as_deref(),app.try_state::<std::sync::Arc<crate::overlays::Service>>()){
     let payload=serde_json::json!({"accountScope":scope,"capturedAt":outgoing.created_at,"id":outgoing.id,"noticeKind":outgoing.kind,"title":outgoing.title,"body":outgoing.body});

@@ -551,7 +551,7 @@ impl Client {
     }
     pub fn refresh(
         &mut self,
-        exe: &Path,
+        exe: Option<&Path>,
         pid: u32,
         cancelled: impl Fn() -> bool,
     ) -> Result<Value, String> {
@@ -579,22 +579,37 @@ impl Client {
                 }
             }
         }
-        if !exe.is_file() {
-            return Err("helper-start-failed".into());
-        }
-        let exe = fs::canonicalize(exe).map_err(|_| "helper-start-failed")?;
-        let _verified = verified_file(&exe)?;
         let mut transport = "helper-bootstrap";
-        let (mut value, mut session) =
-            match execute_session(Command::new(exe), Duration::from_secs(120), &cancelled) {
-                Ok(result) => result,
-                Err(code) if code == "helper-session-unavailable" => {
-                    transport = "compatibility-bootstrap";
-                    let (value, session) = compatibility_session(pid, &cancelled)?;
-                    (value, Some(session))
+        let helper_attempt: Result<(Value, Option<Session>), String> = match exe {
+            Some(path) => (|| -> Result<(Value, Option<Session>), String> {
+                if !path.is_file() {
+                    return Err("helper-start-failed".into());
                 }
-                Err(code) => return Err(code),
-            };
+                let canonical = fs::canonicalize(path).map_err(|_| "helper-start-failed")?;
+                let _verified = verified_file(&canonical)?;
+                let (value, session) =
+                    execute_session(Command::new(canonical), Duration::from_secs(120), &cancelled)?;
+                if !valid_core(&value) {
+                    return Err("helper-invalid-inventory:core-structure".into());
+                }
+                Ok((value, session))
+            })(),
+            None => Err("helper-session-unavailable".into()),
+        };
+        let (mut value, mut session) = match helper_attempt {
+            Ok(result) => result,
+            Err(code) if should_fallback_to_compatibility(&code) => {
+                transport = "compatibility-bootstrap";
+                let (value, session) = compatibility_session(pid, &cancelled)?;
+                (value, Some(session))
+            }
+            Err(code) => {
+                if code == "helper-cancelled" {
+                    self.reset();
+                }
+                return Err(code);
+            }
+        };
         if cancelled() {
             self.reset();
             return Err("helper-cancelled".into());
@@ -610,27 +625,49 @@ impl Client {
         Ok(value)
     }
 }
-fn compatibility_session(
-    pid: u32,
+fn should_fallback_to_compatibility(code: &str) -> bool {
+    matches!(
+        code,
+        "helper-session-unavailable"
+            | "helper-start-failed"
+            | "helper-failed"
+            | "helper-timeout"
+            | "helper-integrity-error"
+            | "helper-network-failed"
+    ) || code.starts_with("helper-invalid-inventory:")
+}
+fn probe_candidates_with<T>(
+    candidates: &[&[u8]],
+    timeout: Duration,
     cancelled: impl Fn() -> bool,
-) -> Result<(Value, Session), String> {
-    let candidates = session_scan::scan(pid, &cancelled)?;
-    let deadline = Instant::now() + Duration::from_secs(40);
-    for candidate in candidates.into_iter().take(3) {
+    mut try_fetch: impl FnMut(&Session) -> Result<T, String>,
+) -> Result<(T, Session), String> {
+    let deadline = Instant::now() + timeout;
+    for candidate in candidates.iter().copied().take(8) {
         if cancelled() {
             return Err("helper-cancelled".into());
         }
         if Instant::now() >= deadline {
             break;
         }
-        let session = Session(candidate.bytes().to_vec());
-        match fetch(&session, &cancelled) {
+        let session = Session(candidate.to_vec());
+        match try_fetch(&session) {
             Ok(value) => return Ok((value, session)),
             Err(code) if code == "helper-auth-failed" => {}
             Err(code) => return Err(code),
         }
     }
     Err("helper-session-unavailable".into())
+}
+fn compatibility_session(
+    pid: u32,
+    cancelled: impl Fn() -> bool,
+) -> Result<(Value, Session), String> {
+    let candidates = session_scan::scan(pid, &cancelled)?;
+    let refs: Vec<&[u8]> = candidates.iter().map(|c| c.bytes()).collect();
+    probe_candidates_with(&refs, Duration::from_secs(40), &cancelled, |session| {
+        fetch(session, &cancelled)
+    })
 }
 pub fn recover_compatibility(pid: u32, cancelled: impl Fn() -> bool) -> Result<Value, String> {
     Client::new().recover_compatibility(pid, cancelled)
@@ -668,7 +705,6 @@ fn fetch_endpoint(session: &Session, vendor: Option<&str>, cancelled: impl Fn() 
         .ok_or("helper-auth-failed")?;
     let client = reqwest::blocking::Client::builder()
         .https_only(true)
-        .no_proxy()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(20))
@@ -722,7 +758,7 @@ fn fetch_endpoint(session: &Session, vendor: Option<&str>, cancelled: impl Fn() 
 }
 pub fn run(exe: &Path, cancelled: impl Fn() -> bool) -> Result<Value, String> {
     let pid = game_pid().ok_or("game-not-running")?;
-    Client::new().refresh(exe, pid, cancelled)
+    Client::new().refresh(Some(exe), pid, cancelled)
 }
 #[cfg(test)]
 mod tests {
@@ -889,8 +925,61 @@ mod tests {
         let mut c = Client::new();
         c.pid = Some(1);
         c.session = session_line(b"?accountId=0123456789abcdef01234567&nonce=1");
-        assert!(c.refresh(Path::new("missing"), 2, || true).is_err());
+        assert!(c.refresh(Some(Path::new("missing")), 2, || true).is_err());
         assert!(c.session.is_none());
         assert!(c.pid.is_none());
+    }
+    #[test]
+    fn fallback_policy_covers_all_recoverable_helper_errors_and_propagates_fatal_ones() {
+        for recoverable in [
+            "helper-session-unavailable",
+            "helper-start-failed",
+            "helper-failed",
+            "helper-timeout",
+            "helper-integrity-error",
+            "helper-network-failed",
+            "helper-invalid-inventory:output-missing",
+            "helper-invalid-inventory:helper-exit-6",
+            "helper-invalid-inventory:core-structure",
+        ] {
+            assert!(
+                should_fallback_to_compatibility(recoverable),
+                "expected fallback for {recoverable}"
+            );
+        }
+        for fatal in ["helper-cancelled", "access-denied", "game-not-running"] {
+            assert!(
+                !should_fallback_to_compatibility(fatal),
+                "must not fallback for {fatal}"
+            );
+        }
+    }
+    #[test]
+    fn compatibility_probing_checks_beyond_three_candidates_up_to_eight() {
+        let candidates: Vec<&[u8]> = vec![
+            b"?accountId=0123456789abcdef01234567&nonce=1",
+            b"?accountId=0123456789abcdef01234567&nonce=2",
+            b"?accountId=0123456789abcdef01234567&nonce=3",
+            b"?accountId=0123456789abcdef01234567&nonce=4",
+            b"?accountId=0123456789abcdef01234567&nonce=5",
+        ];
+        let mut tried = 0usize;
+        let (val, session) = probe_candidates_with(
+            &candidates,
+            Duration::from_secs(5),
+            || false,
+            |s| {
+                tried += 1;
+                if s.0.ends_with(b"&nonce=5") {
+                    Ok(serde_json::json!({"ok": true}))
+                } else {
+                    Err("helper-auth-failed".into())
+                }
+            },
+        )
+        .expect("5th candidate should be reached and succeed");
+        assert_eq!(tried, 5);
+        assert_eq!(val["ok"], true);
+        assert!(session.0.ends_with(b"&nonce=5"));
     }
 }

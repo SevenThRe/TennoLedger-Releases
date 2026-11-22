@@ -53,7 +53,7 @@ mod inventory_data;
 mod riven_inventory;
 mod account_mastery;
 use std::sync::{Arc,Mutex};
-use tauri::Manager;
+use tauri::{Emitter,Manager};
 struct AppState(Mutex<store::Store>);
 #[tauri::command]
 fn world_status(state:tauri::State<Arc<world::WorldService>>,store:tauri::State<AppState>)->Result<world::Status,String>{let scope=store.0.lock().map_err(|_|"数据库锁错误")?.active_scope()?;Ok(state.status_for_scope(&scope))}
@@ -72,6 +72,13 @@ async fn world_test_notification(app:tauri::AppHandle,state:tauri::State<'_,Arc<
         std::thread::sleep(std::time::Duration::from_secs(5));
         service.test_notification(&app)
     }).await.map_err(|_|"测试提醒任务失败".to_string())?
+}
+#[tauri::command]
+async fn world_test_bounty_notification(app:tauri::AppHandle,state:tauri::State<'_,Arc<world::WorldService>>)->Result<world::Notice,String>{
+    let service=Arc::clone(state.inner());
+    tauri::async_runtime::spawn_blocking(move||{
+        service.test_bounty_notification(&app)
+    }).await.map_err(|_|"赏金测试提醒任务失败".to_string())?
 }
 #[tauri::command]
 fn crafting_readiness(
@@ -283,6 +290,21 @@ fn main() {
             // windows too. Closing an arbitration/overlay window stays local.
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
                 window.app_handle().exit(0);
+            } else if window.label() == "arbitration-live" {
+                match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        api.prevent_close();
+                        let _ = window.hide();
+                        let _ = window.app_handle().emit("arbitration-updated", ());
+                    }
+                    tauri::WindowEvent::Destroyed => {
+                        let _ = window.app_handle().emit("arbitration-updated", ());
+                    }
+                    tauri::WindowEvent::Resized(size) if size.width == 0 && size.height == 0 => {
+                        let _ = window.app_handle().emit("arbitration-updated", ());
+                    }
+                    _ => {}
+                }
             }
         })
         .setup(move |app| {
@@ -345,6 +367,7 @@ fn main() {
             menu_scale::warframe_set_menu_scale,
             menu_scale::warframe_detect_menu_scale,
             arbitration_capture::arbitration_open_live,
+            arbitration_capture::arbitration_hide_live,
             arbitration_capture::arbitration_open_report,
             arbitration_capture::arbitration_capture_status,
             arbitration_capture::arbitration_set_auto_live,
@@ -369,6 +392,7 @@ fn main() {
             world_status,
             world_set_subscriptions,
             world_test_notification,
+            world_test_bounty_notification,
             world_notify_riven,
             world_notify::world_notification_trace,
             open_wiki,

@@ -20,12 +20,18 @@ pub struct Status {
 }
 #[derive(Clone)]
 struct CaptureBinding { scope:String, epoch:u64, started_at:String }
-struct Runtime { refresh_requested:bool, child: Option<Child>, helper_active:bool, generation: u64, account_generation:u64, scope_epoch:u64, live_scope:Option<String>, captures:BTreeMap<String,CaptureBinding>, last_live_read: Option<std::time::Instant>, status: Status }
+struct Runtime { refresh_requested:bool, manual_refresh_requested:bool, child: Option<Child>, helper_active:bool, generation: u64, account_generation:u64, scope_epoch:u64, live_scope:Option<String>, captures:BTreeMap<String,CaptureBinding>, last_live_read: Option<std::time::Instant>, status: Status }
 impl Runtime {
  fn reject(&mut self,reason:&str)->bool{self.status.scan_code=format!("helper-invalid-inventory:{reason}");false}
  fn token(&self)->(u64,u64){(self.generation,self.account_generation)}
  fn request_current(&self,token:(u64,u64))->bool{self.status.enabled&&self.token()==token}
- fn invalidate_account(&mut self){self.account_generation+=1;self.scope_epoch+=1;self.live_scope=None;self.captures.clear();self.last_live_read=None;self.status.last_read_at=None;self.status.last_inventory_at=None;self.status.inventory_source=None;self.status.last_relic=None;self.status.observed_items=0;self.status.account_code="waiting-data".into();self.status.scan_code="waiting-data".into();self.refresh_requested=true;}
+ fn cancel_helper_fetch(&mut self)->bool{
+  self.helper_active=false;
+  if !self.status.enabled&&self.status.scan_code!="stopped"{self.status.scan_code="stopped".into();return true;}
+  if self.status.scan_code=="helper-fetching"{self.status.scan_code=if self.status.enabled{"waiting-data"}else{"stopped"}.into();return true;}
+  false
+ }
+ fn invalidate_account(&mut self){self.account_generation+=1;self.scope_epoch+=1;self.live_scope=None;self.captures.clear();self.last_live_read=None;self.status.last_read_at=None;self.status.last_inventory_at=None;self.status.inventory_source=None;self.status.last_relic=None;self.status.observed_items=0;self.status.account_code="waiting-data".into();self.status.scan_code="waiting-data".into();self.refresh_requested=true;self.manual_refresh_requested=true;}
  fn capture_start(&mut self,id:&str,started:&str,active:&str){
   if id.is_empty()||id.len()>80||!id.bytes().all(|c|c.is_ascii_alphanumeric()||b":-_".contains(&c)){return;}
   let Ok(time)=chrono::DateTime::parse_from_rfc3339(started) else{return;};
@@ -41,7 +47,7 @@ impl Runtime {
 #[derive(Clone)]
 pub struct Collector(Arc<Mutex<Runtime>>);
 impl Default for Collector {
-    fn default() -> Self { Self(Arc::new(Mutex::new(Runtime { refresh_requested:false, child: None, helper_active:false, generation: 0, account_generation:0,scope_epoch:0,live_scope:None,captures:BTreeMap::new(),last_live_read:None, status: Status {enabled:false,running:false,code:"stopped".into(),account_code:"waiting-data".into(),inventory_source:None,scan_code:"waiting-data".into(),last_read_at:None,scan:serde_json::json!({}),last_inventory_at:None,observed_items:0,last_relic:None} }))) }
+    fn default() -> Self { Self(Arc::new(Mutex::new(Runtime { refresh_requested:false, manual_refresh_requested:false, child: None, helper_active:false, generation: 0, account_generation:0,scope_epoch:0,live_scope:None,captures:BTreeMap::new(),last_live_read:None, status: Status {enabled:false,running:false,code:"stopped".into(),account_code:"waiting-data".into(),inventory_source:None,scan_code:"waiting-data".into(),last_read_at:None,scan:serde_json::json!({}),last_inventory_at:None,observed_items:0,last_relic:None} }))) }
 }
 #[derive(Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -51,6 +57,46 @@ struct Observation { item_id: String, quantity: u64 }
 struct InventoryEvent { schema_version: u32, captured_at: String, observations: Vec<Observation> }
 
 // Preserve only the name, never stale balances, and never borrow across account scopes.
+fn login_invalidated(
+    before: Option<&crate::player_identity::LoginIdentity>,
+    after: Option<&crate::player_identity::LoginIdentity>,
+) -> bool {
+    match (before, after) {
+        (None, Some(_)) | (None, None) => false,
+        (Some(a), Some(b)) => a != b,
+        (Some(_), None) => true,
+    }
+}
+fn next_refresh_delay(accepted: bool, scan_code: &str) -> std::time::Duration {
+    std::time::Duration::from_secs(if accepted {
+        120
+    } else if scan_code == "helper-session-unavailable" {
+        10
+    } else {
+        15
+    })
+}
+fn should_emit_collection_updated(
+    switched: bool,
+    decision: crate::acquisition::Decision,
+) -> bool {
+    switched || decision != crate::acquisition::Decision::Unchanged
+}
+fn should_latch_cache_stamp(applied: bool, current: bool, scan_code: &str) -> bool {
+    if applied {
+        return true;
+    }
+    if !current {
+        return false;
+    }
+    !matches!(
+        scan_code,
+        "helper-invalid-inventory:storage-lock"
+            | "helper-invalid-inventory:storage-active-scope"
+            | "helper-invalid-inventory:storage-load"
+            | "helper-invalid-inventory:storage-save"
+    )
+}
 fn retain_known_player_name(old:Option<&collection::Snapshot>,snapshot:&mut collection::Snapshot){
     let Some(old)=old.filter(|old|snapshot.account_scope.is_some()&&old.account_scope==snapshot.account_scope) else{return;};
     let Some(name)=old.player_profile.as_ref().and_then(|profile|profile.name.as_ref()).filter(|name|!name.trim().is_empty()) else{return;};
@@ -76,6 +122,24 @@ fn merge_inventory(old: Option<collection::Snapshot>, input: &str, catalog: &col
 }
 impl Collector {
     pub fn arbitration_binding(&self)->Option<(String,u64)>{let r=self.0.lock().ok()?;if !r.status.enabled{return None;}r.live_scope.clone().map(|scope|(scope,r.scope_epoch))}
+    pub fn with_arbitration_binding<T>(
+        &self,
+        app: &tauri::AppHandle,
+        expected: &(String, u64),
+        action: impl FnOnce(&crate::store::Store) -> Result<T, String>,
+    ) -> Result<Option<T>, String> {
+        // Lock Collector.0 -> AppState.0 in the same order as select_account and apply_account.
+        let r = self.0.lock().map_err(|_| "采集状态锁错误")?;
+        if !r.status.enabled
+            || r.live_scope.as_deref() != Some(expected.0.as_str())
+            || r.scope_epoch != expected.1
+        {
+            return Ok(None);
+        }
+        let state = app.state::<AppState>();
+        let db = state.0.lock().map_err(|_| "数据库锁错误")?;
+        action(&db).map(Some)
+    }
     pub fn select_account(&self,app:&tauri::AppHandle,scope:&str,expected:Option<&str>)->Result<Option<collection::Snapshot>,String>{
         // Same lock order as apply_account: selection and helper invalidation are atomic.
         let mut r=self.0.lock().map_err(|_|"采集状态锁错误")?;
@@ -111,11 +175,14 @@ impl Collector {
                     if let Ok(meta)=std::fs::metadata(&path) {
                         if let Ok(stamp)=meta.modified() {
                             if cache_stamp!=Some(stamp) {
-                                cache_stamp=Some(stamp);
                                 let token=this.0.lock().unwrap_or_else(|e|e.into_inner()).token();
                                 if let Ok(value)=crate::inventory_data::read_cache(&path) {
                                     let time:chrono::DateTime<chrono::Utc>=stamp.into();
-                                    this.apply_account(&app,&catalog,&value,"alecaframe-cache",&time.to_rfc3339(),token);
+                                    let applied=this.apply_account(&app,&catalog,&value,"alecaframe-cache",&time.to_rfc3339(),token);
+                                    let r=this.0.lock().unwrap_or_else(|e|e.into_inner());
+                                    if should_latch_cache_stamp(applied,r.request_current(token),&r.status.scan_code) {
+                                        cache_stamp=Some(stamp);
+                                    }
                                 }
                             }
                         }
@@ -125,8 +192,10 @@ impl Collector {
                 if pid!=previous_pid {helper.reset();signals=Default::default();due=std::time::Instant::now();previous_pid=pid;}
                 let event=signals.poll(&log_path);
                 if event.login {helper.reset();this.0.lock().unwrap_or_else(|e|e.into_inner()).invalidate_account();}
-                let requested={let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());std::mem::take(&mut r.refresh_requested)};
-                if event.refresh || requested {
+                let (requested,manual_requested)={let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());(std::mem::take(&mut r.refresh_requested),std::mem::take(&mut r.manual_refresh_requested))};
+                if manual_requested {
+                    due=std::time::Instant::now();
+                } else if event.refresh || requested {
                     let mut trigger=std::time::Instant::now()+std::time::Duration::from_secs(2);
                     if let Some(last)=last_attempt {trigger=trigger.max(last+std::time::Duration::from_secs(15));}
                     due=due.min(trigger);
@@ -143,8 +212,9 @@ impl Collector {
                 let generation={let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());r.helper_active=true;r.status.scan_code="helper-fetching".into();r.status.scan=serde_json::json!({"provider":"warframe-api-helper","pid":pid,"refreshSeconds":120});let _=app.emit("collector-updated",&r.status);r.token()};
                 let cancelled=||{let r=this.0.lock().unwrap_or_else(|e|e.into_inner());!r.request_current(generation)};
                 let login_before=crate::player_identity::read(&log_path);
-                let result=crate::helper_inventory::resolve_executable().ok_or_else(||"helper-missing".to_string()).and_then(|exe|helper.refresh(&exe,pid.unwrap(),cancelled));
-                if cancelled(){this.0.lock().unwrap_or_else(|e|e.into_inner()).helper_active=false;continue;}
+                let exe=crate::helper_inventory::resolve_executable();
+                let result=helper.refresh(exe.as_deref(),pid.unwrap(),cancelled);
+                if cancelled(){let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());if r.cancel_helper_fetch(){let _=app.emit("collector-updated",&r.status);}continue;}
                 let accepted=match result {
                     Ok(mut value)=>{
                         let now=chrono::Utc::now().to_rfc3339();
@@ -165,22 +235,22 @@ impl Collector {
                             for key in ["InventoryJSON","InventoryJson"] {if value[key].is_object(){value=value[key].take();break;}if let Some(text)=value[key].as_str(){if let Ok(inner)=serde_json::from_str::<serde_json::Value>(text){value=inner;}break;}}
                             if let Some(account)=verified_account{value["AccountId"]=account;}
                             let login_after=crate::player_identity::read(&log_path);
-                            if login_before!=login_after {this.0.lock().unwrap_or_else(|e|e.into_inner()).reject("login-changed-during-read")}else{
+                            if login_invalidated(login_before.as_ref(),login_after.as_ref()) {this.0.lock().unwrap_or_else(|e|e.into_inner()).reject("login-changed-during-read")}else{
                                 if let Some(identity)=login_after {if value["DisplayName"].as_str().is_none_or(|name|name.trim().is_empty()){value["DisplayName"]=serde_json::Value::String(identity.name);}}
                                 value["MyFrameVendors"]=serde_json::to_value(vendors).unwrap_or_default();
                                 this.apply_account(&app,&catalog,&value,"warframe-api-helper",&now,generation)
                             }
                         }
                     },
-                    Err(ref code)=>{let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());r.status.scan_code=code.clone();false}
+                    Err(ref code)=>{let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());if r.request_current(generation){r.status.scan_code=code.clone();}false}
                 };
                 let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());
                 r.helper_active=false;
-                if !r.request_current(generation){continue;}
+                if !r.request_current(generation){if r.cancel_helper_fetch(){let _=app.emit("collector-updated",&r.status);}continue;}
                 if accepted {r.status.scan_code="helper-current".into();} else if r.status.scan_code=="helper-fetching" {r.status.scan_code="helper-invalid-inventory:account-not-accepted".into();}
                 r.status.account_code=if accepted{"synced"}else if r.status.inventory_source.as_deref()==Some("alecaframe-cache"){"cached"}else if r.status.inventory_source.is_some(){"saved"}else{&r.status.scan_code}.into();
                 crate::diagnostics::inventory_result(&r.status.scan_code,r.status.scan["attemptInventoryComplete"].as_bool(),last_attempt.map(|t|t.elapsed().as_millis() as u64).unwrap_or(0));
-                due=std::time::Instant::now()+std::time::Duration::from_secs(if accepted{120}else{60});
+                due=std::time::Instant::now()+next_refresh_delay(accepted,&r.status.scan_code);
                 let _=app.emit("collector-updated",&r.status);
             }
         });
@@ -230,7 +300,7 @@ impl Collector {
         if live {runtime.live_scope=snapshot.account_scope.clone();runtime.last_live_read=Some(std::time::Instant::now());runtime.status.last_read_at=Some(chrono::Utc::now().to_rfc3339());}
         runtime.status.account_code=if live{"synced"}else{"cached"}.into();
         runtime.status.inventory_source=Some(source.into());runtime.status.last_inventory_at=Some(snapshot.captured_at);runtime.status.observed_items=snapshot.counts.len();
-        if decision!=crate::acquisition::Decision::Unchanged {let _=app.emit("collection-updated",());}
+        if should_emit_collection_updated(switched,decision) {let _=app.emit("collection-updated",());}
         let _=app.emit("collector-updated",&runtime.status);true
     }
     pub fn status(&self)->Status { self.0.lock().unwrap_or_else(|e|e.into_inner()).status.clone() }
@@ -238,7 +308,7 @@ impl Collector {
         let mut r=self.0.lock().unwrap_or_else(|e|e.into_inner());
         r.generation+=1;r.last_live_read=None;r.live_scope=None;r.captures.clear();r.scope_epoch+=1;
         if let Some(mut child)=r.child.take() { let _=child.kill(); let _=child.wait(); }
-        r.status.enabled=false;r.status.running=false;r.status.code="stopped".into();
+        r.status.enabled=false;r.status.running=false;r.status.code="stopped".into();r.status.scan_code="stopped".into();
         drop(r);
         // Give the cancelled helper thread time to kill/wait and remove raw output.
         let until=std::time::Instant::now()+std::time::Duration::from_secs(2);
@@ -248,22 +318,39 @@ impl Collector {
         }
     }
     pub fn start(&self, app:&tauri::AppHandle)->Result<(),String> {
-        self.stop();
-        let catalog_path=app.path().app_data_dir().map_err(|e|e.to_string())?.join("collector-catalog.json");
-        std::fs::write(&catalog_path,include_bytes!("../../public/catalog.json")).map_err(|e|e.to_string())?;
-        let riven_catalog_path=catalog_path.with_file_name("riven-capture-catalog.json");std::fs::write(&riven_catalog_path,include_bytes!("../../public/riven-capture-catalog.json")).map_err(|e|e.to_string())?;
-        let exe=std::env::current_exe().map_err(|e|e.to_string())?;
-        let sidecar=exe.parent().ok_or("missing-exe-directory")?.join("collector/myframe-collector.exe");
+        {
+            let mut r=self.0.lock().unwrap_or_else(|e|e.into_inner());
+            if let Some(mut child)=r.child.take() {
+                let _=child.kill();
+                let _=child.wait();
+                r.generation+=1;
+            }
+            if !r.status.enabled {
+                r.status.enabled=true;
+                r.refresh_requested=true;
+                r.manual_refresh_requested=true;
+            }
+            if r.status.scan_code=="stopped" {
+                r.status.scan_code="waiting-data".into();
+            }
+            r.status.running=false;
+            r.status.code="starting".into();
+        }
+        let catalog_path=app.path().app_data_dir().map_err(|e|{self.fail("worker-start-failed");e.to_string()})?.join("collector-catalog.json");
+        std::fs::write(&catalog_path,include_bytes!("../../public/catalog.json")).map_err(|e|{self.fail("worker-start-failed");e.to_string()})?;
+        let riven_catalog_path=catalog_path.with_file_name("riven-capture-catalog.json");std::fs::write(&riven_catalog_path,include_bytes!("../../public/riven-capture-catalog.json")).map_err(|e|{self.fail("worker-start-failed");e.to_string()})?;
+        let exe=std::env::current_exe().map_err(|e|{self.fail("worker-start-failed");e.to_string()})?;
+        let sidecar=exe.parent().ok_or_else(||{self.fail("worker-start-failed");"missing-exe-directory".to_string()})?.join("collector/myframe-collector.exe");
         let mut cmd=if sidecar.is_file() { Command::new(sidecar) } else {
             let manifest=PathBuf::from(env!("CARGO_MANIFEST_DIR"));
             if !cfg!(debug_assertions) || !exe.starts_with(manifest.join("target")) { self.fail("worker-missing");return Err("worker-missing".into()); }
             let mut c=Command::new(manifest.join("../../.venv/Scripts/python.exe"));
             c.arg(manifest.join("../../collector/auto.py"));c
         };
-        cmd.arg("--menu-scale-config").arg(crate::menu_scale::path(app)?).arg("--catalog").arg(catalog_path).arg("--riven-catalog").arg(riven_catalog_path).arg("--parent-pid").arg(std::process::id().to_string()).stdout(Stdio::piped()).stderr(Stdio::null()).stdin(Stdio::null());
+        cmd.arg("--menu-scale-config").arg(crate::menu_scale::path(app).inspect_err(|_|self.fail("worker-start-failed"))?).arg("--catalog").arg(catalog_path).arg("--riven-catalog").arg(riven_catalog_path).arg("--parent-pid").arg(std::process::id().to_string()).stdout(Stdio::piped()).stderr(Stdio::null()).stdin(Stdio::null());
         #[cfg(windows)] { use std::os::windows::process::CommandExt; cmd.creation_flags(0x08000000); }
         let mut child=cmd.spawn().map_err(|_|{self.fail("worker-start-failed");"worker-start-failed".to_string()})?;
-        let stdout=child.stdout.take().ok_or("missing-worker-output")?;
+        let stdout=child.stdout.take().ok_or_else(||{self.fail("worker-start-failed");"missing-worker-output".to_string()})?;
         let generation={let mut r=self.0.lock().unwrap_or_else(|e|e.into_inner());r.status.enabled=true;r.status.running=true;r.status.code="starting".into();r.child=Some(child);r.generation};
         let this=self.clone();let handle=app.clone();
         std::thread::spawn(move||{
@@ -356,7 +443,17 @@ pub fn collector_status(state:tauri::State<Collector>)->Status {state.status()}
 #[tauri::command]
 pub fn collector_set_enabled(enabled:bool,state:tauri::State<Collector>,app:tauri::AppHandle)->Result<Status,String>{
     app.state::<AppState>().0.lock().map_err(|_|"database-lock")?.set_auto_collect(enabled)?;
-    if enabled {let _=state.start(&app);} else {state.stop();}
+    if enabled {
+        let already_running={
+            let mut r=state.0.lock().unwrap_or_else(|e|e.into_inner());
+            let was_enabled=r.status.enabled;
+            r.status.enabled=true;
+            if r.status.scan_code=="stopped"{r.status.scan_code="waiting-data".into();}
+            if !was_enabled{r.refresh_requested=true;r.manual_refresh_requested=true;}
+            was_enabled&&r.status.running&&r.child.is_some()
+        };
+        if !already_running {let _=state.start(&app);}
+    } else {state.stop();}
     let status=state.status();let _=app.emit("collector-updated",&status);Ok(status)
 }
 
@@ -364,7 +461,7 @@ pub fn collector_set_enabled(enabled:bool,state:tauri::State<Collector>,app:taur
 pub fn collector_request_refresh(state:tauri::State<Collector>)->bool {
  let mut r=state.0.lock().unwrap_or_else(|e|e.into_inner());
  if !r.status.enabled{return false;}
- r.refresh_requested=true;true
+ r.refresh_requested=true;r.manual_refresh_requested=true;true
 }
 
 #[cfg(test)] mod tests {
@@ -397,6 +494,55 @@ pub fn collector_request_refresh(state:tauri::State<Collector>)->bool {
         retain_known_player_name(Some(&old),&mut fresh);assert_eq!(fresh.player_profile.as_ref().unwrap().name.as_deref(),Some("Actual.Name"));assert_eq!(fresh.player_profile.as_ref().unwrap().platinum,None);
         fresh.player_profile.as_mut().unwrap().name=Some("Renamed.Name".into());retain_known_player_name(Some(&old),&mut fresh);assert_eq!(fresh.player_profile.as_ref().unwrap().name.as_deref(),Some("Renamed.Name"));
         for scope in [None,Some("account-B".into())]{let mut other=collection::Snapshot::default();other.account_scope=scope;retain_known_player_name(Some(&old),&mut other);assert!(other.player_profile.is_none());}
+    }
+
+    #[test]
+    fn login_invalidation_allows_initial_log_flush_and_catches_switches_or_logout() {
+        let dir = std::env::temp_dir().join(format!(
+            "myframe-login-inv-{}-{}",
+            std::process::id(),
+            chrono::Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p_a = dir.join("a.log");
+        let p_b = dir.join("b.log");
+        std::fs::write(&p_a, b"1 Sys [Info]: Logged in TennoA (account)\n").unwrap();
+        std::fs::write(&p_b, b"2 Sys [Info]: Logged in TennoB (account)\n").unwrap();
+        let id_a = crate::player_identity::read(&p_a).unwrap();
+        let id_b = crate::player_identity::read(&p_b).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(!login_invalidated(None, None));
+        assert!(!login_invalidated(None, Some(&id_a)));
+        assert!(!login_invalidated(Some(&id_a), Some(&id_a)));
+        assert!(login_invalidated(Some(&id_a), Some(&id_b)));
+        assert!(login_invalidated(Some(&id_a), None));
+    }
+
+    #[test]
+    fn stop_resets_stuck_helper_fetching_and_backoff_is_snappy() {
+        let collector = Collector::default();
+        {
+            let mut r = collector.0.lock().unwrap();
+            r.status.enabled = true;
+            r.status.scan_code = "helper-fetching".into();
+        }
+        collector.stop();
+        assert_eq!(collector.status().scan_code, "stopped");
+        assert_eq!(next_refresh_delay(true, "helper-current").as_secs(), 120);
+        assert_eq!(next_refresh_delay(false, "helper-session-unavailable").as_secs(), 10);
+        assert_eq!(next_refresh_delay(false, "helper-network-failed").as_secs(), 15);
+    }
+
+    #[test]
+    fn account_switch_emits_collection_updated_even_when_unchanged_and_transient_cache_errors_do_not_latch() {
+        assert!(should_emit_collection_updated(true, crate::acquisition::Decision::Unchanged));
+        assert!(!should_emit_collection_updated(false, crate::acquisition::Decision::Unchanged));
+        assert!(should_emit_collection_updated(false, crate::acquisition::Decision::Accept));
+        assert!(should_latch_cache_stamp(true, true, "helper-current"));
+        assert!(!should_latch_cache_stamp(false, false, "waiting-data"));
+        assert!(!should_latch_cache_stamp(false, true, "helper-invalid-inventory:storage-lock"));
+        assert!(should_latch_cache_stamp(false, true, "helper-invalid-inventory:identity-selection-blocked"));
     }
 
 }

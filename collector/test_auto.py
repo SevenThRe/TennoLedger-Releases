@@ -50,7 +50,7 @@ class AutoTests(unittest.TestCase):
                 capture.emit('trade-candidate',capturedAt='later',candidate={})
                 capture.emit('relic',capturedAt='later',cards=[])
             with self.assertRaises(RuntimeError):
-                with CaptureRecord() as failed:
+                with CaptureRecord():
                     raise RuntimeError('synthetic')
         self.assertEqual([kind for kind,_ in events],['capture-start','trade-candidate','relic','capture-end','capture-start','capture-end'])
         first=events[0][1]['captureId']

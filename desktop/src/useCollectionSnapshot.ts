@@ -7,7 +7,7 @@ import {useAccounts} from './AccountProvider';
 import {rivenInventoryRefresh as latestRefresh} from './rivenInventoryRefresh';
 import type {StandingSnapshot} from './standingModel';
 import type {VendorSnapshot} from './vendorModel';
-export type LiveCollection={unrankedEquipmentCounts?:Record<string,number|null>|null;accountScope?:string|null;archonShardFrames?:ShardFrame[]|null;pendingRecipes?:Record<string,number>|null;masteryAccount?:{ranksComplete?:boolean}|null;standing?:StandingSnapshot|null;vendors?:VendorSnapshot[]|null;favorites?:string[];ranks?:Record<string,number>;helminth?:string[]|null;capturedAt:string;complete:boolean;counts:Record<string,number>;incarnon?:string[]|null;credits?:number|null;playerProfile?:{platinum?:number|null;endo?:number|null;ducats?:number|null}};
+export type LiveCollection={masteryRank?:number|null;unrankedEquipmentCounts?:Record<string,number|null>|null;accountScope?:string|null;archonShardFrames?:ShardFrame[]|null;pendingRecipes?:Record<string,number>|null;masteryAccount?:{ranksComplete?:boolean;totalXp?:number|null}|null;standing?:StandingSnapshot|null;vendors?:VendorSnapshot[]|null;favorites?:string[];ranks?:Record<string,number>;helminth?:string[]|null;capturedAt:string;complete:boolean;counts:Record<string,number>;incarnon?:string[]|null;credits?:number|null;playerProfile?:{platinum?:number|null;endo?:number|null;ducats?:number|null}};
 export function useCollectionSnapshot(){
  const {scope}=useAccounts();const [current,setCurrent]=useState<{scope:string;snapshot:LiveCollection|null}>(()=>({scope,snapshot:null}));const setSnapshot=(snapshot:LiveCollection|null)=>setCurrent({scope,snapshot});
  useEffect(()=>{

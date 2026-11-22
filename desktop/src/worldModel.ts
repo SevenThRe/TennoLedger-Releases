@@ -1,3 +1,6 @@
+import type {BountyPreferences,BountySyndicate} from './bountyModel.ts';
+import {defaultBountyPreferences} from './bountyModel.ts';
+export type {BountyPreferences,BountySyndicate};
 export type WorldEvent={id:string;kind:string;nodeId:string;node:string;planet:string;missionType:string;faction:string;tier?:string|null;steelPath:boolean;voidStorm?:boolean;activation:string;expiry:string;rewards:string[];rating?:string|null;predicted:boolean};
 export type Cycle={id:string;name:string;state:string;nextState:string;expiry:string};
 export type FissureRule={id:string;type:string;mode:string;location:string;steelPath:string};
@@ -18,21 +21,22 @@ export function rewardDisplayName(reward:Pick<WorldReward,'id'|'name'|'category'
  if(parents.length&&(reward.category==='weapon'||item?.category==='component')){const parent=[...new Set(parents.map(p=>en?p.name:p.zh||p.name))].slice(0,3).filter(p=>!name.toLowerCase().includes(p.toLowerCase()));if(parent.length)return parent.join(' / ')+' '+name;}
  return name;
 }
-export type Subscriptions={fissureEnabled:boolean;fissureAll?:boolean;fissureRules:FissureRule[];alertEnabled:boolean;alertRewards:string[];arbitrationEnabled:boolean;arbitrationTiers:string[];arbitrationNodes:string[];arbitrationPreferences?:import('./arbitrationModel').ArbitrationPreferences|null;cycleStates:string[];timerLeadMinutes?:number;rewardPreferences?:RewardPreferences;delivery?:DeliverySettings};
+export type Subscriptions={fissureEnabled:boolean;fissureAll?:boolean;fissureRules:FissureRule[];alertEnabled:boolean;alertRewards:string[];arbitrationEnabled:boolean;arbitrationTiers:string[];arbitrationNodes:string[];arbitrationPreferences?:import('./arbitrationModel').ArbitrationPreferences|null;cycleStates:string[];timerLeadMinutes?:number;rewardPreferences?:RewardPreferences;bountyPreferences?:BountyPreferences;delivery?:DeliverySettings};
 export type WorldNotice={id:string;title:string;body:string;createdAt:string;kind:string;deliveryError?:string|null;systemState?:string|null};
 export function noticeForScope(notice:WorldNotice,scope:string){for(const prefix of ['riven-monitor:','conversation:'])if(notice.id.startsWith(prefix))return notice.id.slice(prefix.length).split(':')[0]===scope;return true;}
 export type CircuitSchedule={Activation:{$date:{$numberLong:string}};Expiry:{$date:{$numberLong:string}};CategoryChoices:{Category:string;Choices:string[]}[]};
 export type VoidTrader={Activation:{$date:{$numberLong:string}};Expiry:{$date:{$numberLong:string}};Node:string;Manifest?:{ItemType:string;PrimePrice:number;RegularPrice:number}[]};
-export type WorldStatus={rewardMissions?:RewardMission[];primeVaultTraders?:import("./resurgenceModel").ResurgenceTrader[];voidTraders?:VoidTrader[];circuit?:CircuitSchedule[];updatedAt:string|null;error:string|null;stale:boolean;fissures:WorldEvent[];alerts:WorldEvent[];arbitrations:WorldEvent[];cycles:Cycle[];subscriptions:Subscriptions;notifications:WorldNotice[];sources:{id:string;url:string;fetchedAt:string|null;error:string|null}[]};
-export const defaultSubscriptions=():Subscriptions=>({fissureEnabled:false,fissureRules:[],alertEnabled:false,alertRewards:[],arbitrationEnabled:false,arbitrationTiers:['S','A'],arbitrationNodes:[],cycleStates:[],timerLeadMinutes:3,rewardPreferences:defaultRewardPreferences(),delivery:defaultDelivery()});
-export const emptyWorld=():WorldStatus=>({updatedAt:null,error:null,stale:true,fissures:[],alerts:[],arbitrations:[],cycles:[],subscriptions:defaultSubscriptions(),notifications:[],sources:[]});
+export type WorldStatus={bounties?:BountySyndicate[];rewardMissions?:RewardMission[];primeVaultTraders?:import("./resurgenceModel").ResurgenceTrader[];voidTraders?:VoidTrader[];circuit?:CircuitSchedule[];updatedAt:string|null;error:string|null;stale:boolean;fissures:WorldEvent[];alerts:WorldEvent[];arbitrations:WorldEvent[];cycles:Cycle[];subscriptions:Subscriptions;notifications:WorldNotice[];sources:{id:string;url:string;fetchedAt:string|null;error:string|null}[]};
+export const defaultSubscriptions=():Subscriptions=>({fissureEnabled:false,fissureRules:[],alertEnabled:false,alertRewards:[],arbitrationEnabled:false,arbitrationTiers:['S','A'],arbitrationNodes:[],cycleStates:[],timerLeadMinutes:3,rewardPreferences:defaultRewardPreferences(),bountyPreferences:defaultBountyPreferences(),delivery:defaultDelivery()});
+export const emptyWorld=():WorldStatus=>({updatedAt:null,error:null,stale:true,fissures:[],alerts:[],arbitrations:[],cycles:[],bounties:[],subscriptions:defaultSubscriptions(),notifications:[],sources:[]});
 /** Explicit development fixtures work on any page; production can never enable them. */
-export function worldPreviewEnabled(dev:boolean,search:string){const params=new URLSearchParams(search);return dev&&(params.get('worldFixture')==='1'||['world','modules','arbitrations','stats'].includes(params.get('qa')??''));}
+export function worldPreviewEnabled(dev:boolean,search:string){const params=new URLSearchParams(search);return dev&&(params.get('worldFixture')==='1'||['world','modules','arbitrations','bounties','stats'].includes(params.get('qa')??''));}
 export function previewWorldStatus(source:WorldStatus,now=Date.now()):WorldStatus{
  const result=structuredClone(source),at=Date.parse(source.updatedAt??'');if(!Number.isFinite(at)||!Number.isFinite(now))return result;const delta=now-at;
  const shift=(value:string)=>{const time=Date.parse(value);return Number.isFinite(time)?new Date(time+delta).toISOString():value;};
  for(const list of [result.fissures,result.alerts,result.arbitrations])for(const row of list){row.activation=shift(row.activation);row.expiry=shift(row.expiry);}
  for(const row of result.cycles)row.expiry=shift(row.expiry);
+ for(const syn of result.bounties??[]){syn.activation=shift(syn.activation);syn.expiry=shift(syn.expiry);for(const job of syn.jobs){job.activation=shift(job.activation);job.expiry=shift(job.expiry);}}
  for(const row of result.rewardMissions??[]){row.activation=shift(row.activation);if(row.expiry)row.expiry=shift(row.expiry);}
  for(const list of [result.voidTraders??[],result.primeVaultTraders??[],result.circuit??[]])for(const row of list)for(const field of ['Activation','Expiry'] as const){const value=row[field]?.$date;if(value){const old=Number(value.$numberLong);if(Number.isFinite(old))value.$numberLong=String(old+delta);}}
  result.updatedAt=new Date(now).toISOString();return result;

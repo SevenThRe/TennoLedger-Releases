@@ -8,7 +8,7 @@ fn main()->Result<(),String>{
     let result=(||{
         let service=world::WorldService::new(path.clone())?;
         let status=service.refresh_once()?;
-        let result=serde_json::json!({"stale":status.stale,"updatedAt":status.updated_at,"fissures":status.fissures.len(),"alerts":status.alerts.len(),"arbitrations":status.arbitrations.len(),"highValue":status.arbitrations.iter().filter(|e|matches!(e.rating.as_deref(),Some("S"|"A"))).count(),"cycles":status.cycles.len(),"sources":status.sources});
+        let result=serde_json::json!({"stale":status.stale,"updatedAt":status.updated_at,"fissures":status.fissures.len(),"alerts":status.alerts.len(),"arbitrations":status.arbitrations.len(),"highValue":status.arbitrations.iter().filter(|e|matches!(e.rating.as_deref(),Some("S"|"A"))).count(),"cycles":status.cycles.len(),"bounties":status.bounties.len(),"sources":status.sources});
         let output=std::path::PathBuf::from(output);
         if let Some(parent)=output.parent(){std::fs::create_dir_all(parent).map_err(|e|e.to_string())?;}
         std::fs::write(output,serde_json::to_vec_pretty(&status).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;

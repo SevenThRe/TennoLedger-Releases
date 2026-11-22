@@ -1,3 +1,5 @@
+#[path="world_bounties.rs"]
+pub mod bounties;
 #[path="world_rewards.rs"]
 pub mod rewards;
 #[path="arbitration.rs"]
@@ -20,6 +22,7 @@ use std::{
 use tauri::{Emitter,Manager};
 const WORLD_URL: &str = "https://api.warframe.com/cdn/worldState.php";
 const ARBY_URL: &str = "https://browse.wf/arbys.txt";
+const BOUNTY_CYCLE_URL: &str = "https://oracle.browse.wf/bounty-cycle";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Event {
@@ -74,6 +77,8 @@ pub struct Settings {
     pub cycle_states: Vec<String>,
     pub timer_lead_minutes: u32,
     pub reward_preferences: rewards::Preferences,
+    #[serde(default)]
+    pub bounty_preferences: bounties::BountyPreferences,
     pub delivery: crate::world_notify::DeliverySettings,
 }
 impl Default for Settings {
@@ -91,6 +96,7 @@ impl Default for Settings {
             cycle_states: vec![],
             timer_lead_minutes: 3,
             reward_preferences: Default::default(),
+            bounty_preferences: Default::default(),
             delivery: Default::default(),
         }
     }
@@ -127,6 +133,8 @@ pub struct Status {
     pub arbitrations: Vec<Event>,
     pub cycles: Vec<Cycle>,
     #[serde(default)]
+    pub bounties: Vec<bounties::BountySyndicate>,
+    #[serde(default)]
     pub reward_missions: Vec<rewards::RewardMission>,
     #[serde(default)]
     pub circuit: Vec<Value>,
@@ -148,6 +156,7 @@ impl Default for Status {
             alerts: vec![],
             arbitrations: vec![],
             cycles: vec![],
+            bounties: vec![],
             reward_missions: vec![],
             circuit: vec![],
             void_traders: vec![],
@@ -164,6 +173,12 @@ impl Default for Status {
                 Source {
                     id: "arbitration-schedule".into(),
                     url: ARBY_URL.into(),
+                    fetched_at: None,
+                    error: None,
+                },
+                Source {
+                    id: "bounty-cycle".into(),
+                    url: BOUNTY_CYCLE_URL.into(),
                     fetched_at: None,
                     error: None,
                 },
@@ -193,6 +208,7 @@ pub struct WorldService {
     stop: AtomicBool,
     running: AtomicBool,
     last_test: Mutex<Option<std::time::Instant>>,
+    last_bounty_test: Mutex<Option<std::time::Instant>>,
 }
 impl WorldService {
     pub fn new(path: PathBuf) -> Result<Self, String> {
@@ -227,6 +243,7 @@ impl WorldService {
             stop: AtomicBool::new(false),
             running: AtomicBool::new(false),
             last_test: Mutex::new(None),
+            last_bounty_test: Mutex::new(None),
         })
     }
     pub fn try_notice_status(&self)->Option<Status>{self.status.try_lock().ok().map(|status|status.clone())}
@@ -303,11 +320,19 @@ impl WorldService {
     pub fn deliver_notice(&self,app:&tauri::AppHandle,notice:&Notice)->Result<(),String>{
         let settings=self.status().subscriptions.delivery;
         let endpoint=db(&self.path).ok().and_then(|c|preference(&c,"webhook_protected")).and_then(|cipher|crate::world_notify::reveal_webhook(&cipher).ok());
-        crate::world_notify::deliver_configured(app,notice,&settings,endpoint.as_deref(),notice.kind=="test")
+        crate::world_notify::deliver_configured(app,notice,&settings,endpoint.as_deref(),notice.kind=="test"||notice.id.starts_with("bounty-test-"))
     }
     pub fn test_notification(&self, app: &tauri::AppHandle) -> Result<Notice, String> {
         let settings=self.status().subscriptions.delivery;
         self.test_notification_with(|notice|crate::world_notify::deliver_configured(app,notice,&settings,None,true))
+    }
+    pub fn test_bounty_notification(&self, app: &tauri::AppHandle) -> Result<Notice, String> {
+        let subs = self.status().subscriptions;
+        let mut settings = subs.delivery;
+        settings.sound_enabled = settings.sound_enabled && subs.bounty_preferences.sound_enabled;
+        self.test_bounty_notification_with(|notice| {
+            crate::world_notify::deliver_configured(app, notice, &settings, None, true)
+        })
     }
     pub fn notification_failure(&self, id: &str, error: String) -> Result<Notice, String> {
         let mut shared = self.status.lock().map_err(|_| "世界状态锁失败")?;
@@ -371,6 +396,47 @@ impl WorldService {
         shared.notifications.truncate(100);
         Ok(notice)
     }
+    fn test_bounty_notification_with(
+        &self,
+        deliver: impl FnOnce(&Notice) -> Result<(), String>,
+    ) -> Result<Notice, String> {
+        let mut last = self.last_bounty_test.lock().map_err(|_| "赏金测试提醒锁失败")?;
+        if last.is_some_and(|at| at.elapsed() < Duration::from_secs(2)) {
+            return Err("请稍后再测试赏金提醒".into());
+        }
+        *last = Some(std::time::Instant::now());
+        drop(last);
+        let now = Utc::now();
+        let mut notice = Notice {
+            id: format!(
+                "bounty-test-{}-{}",
+                std::process::id(),
+                now.timestamp_nanos_opt().unwrap_or(now.timestamp_micros())
+            ),
+            title: "赏金提醒测试 · 夜灵平野 2级赏金".into(),
+            body: "命中【银奖励】蓄力装填 · 表 A · 间谍捕手（Lv 10-30）".into(),
+            created_at: now.to_rfc3339(),
+            kind: "bounty".into(),
+            delivery_error: None,
+            system_state: None,
+        };
+        let mut shared = self.status.lock().map_err(|_| "世界状态锁失败")?;
+        let c = db(&self.path)?;
+        notice.system_state = Some(crate::world_notify::policy_state(&shared.subscriptions.delivery));
+        notice.delivery_error = deliver(&notice).err();
+        c.execute(
+            "INSERT INTO world_notices VALUES(?,?)",
+            params![
+                notice.id,
+                serde_json::to_string(&notice).map_err(|e| e.to_string())?
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+        c.execute("DELETE FROM world_notices WHERE rowid NOT IN (SELECT rowid FROM world_notices ORDER BY rowid DESC LIMIT 100)", []).map_err(|e|e.to_string())?;
+        shared.notifications.insert(0, notice.clone());
+        shared.notifications.truncate(100);
+        Ok(notice)
+    }
     pub fn start(self: &Arc<Self>, app: tauri::AppHandle) {
         if self.running.swap(true, Ordering::SeqCst) {
             return;
@@ -400,7 +466,6 @@ impl WorldService {
         let now = Utc::now().timestamp();
         let client = Client::builder()
             .user_agent("MyFrame/0.1.0 public-world-state")
-            .no_proxy()
             .timeout(Duration::from_secs(15))
             .redirect(reqwest::redirect::Policy::none())
             .build()
@@ -409,6 +474,7 @@ impl WorldService {
         let mut circuit = None;
         let mut void_traders = None;
         let mut prime_vault_traders = None;
+        let mut raw_world: Option<Value> = None;
         let response = fetch(&client, WORLD_URL, 4 * 1024 * 1024)
             .and_then(|body| {
                 serde_json::from_str::<Value>(&body).map_err(|_| "官方世界状态JSON无效".to_string())
@@ -423,10 +489,11 @@ impl WorldService {
                 prime_vault_traders = Some(raw["PrimeVaultTraders"].as_array().cloned().unwrap_or_default());
                 void_traders = Some(raw["VoidTraders"].as_array().cloned().unwrap_or_default());
                 circuit = Some(raw["EndlessXpSchedule"].as_array().cloned().unwrap_or_default());
+                raw_world = Some(raw);
                 Ok(parsed)
             });
         let mut current = self.status();
-        if current.sources.len() != 2 {
+        if current.sources.len() != 3 {
             current.sources = Status::default().sources;
         }
         let mut connection = db(&self.path)?;
@@ -435,6 +502,62 @@ impl WorldService {
         if let Some(schedule) = circuit { current.circuit = schedule; }
         if let Some(traders) = void_traders { current.void_traders = traders; }
         if let Some(traders) = prime_vault_traders { current.prime_vault_traders = traders; }
+        let cached_cycle: Option<(String, i64)> = connection
+            .query_row(
+                "SELECT payload,fetched_at FROM world_cache WHERE key='bounty-cycle'",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .ok();
+        let mut cycle_json: Option<Value> = cached_cycle
+            .as_ref()
+            .and_then(|(body, _)| serde_json::from_str::<Value>(body).ok());
+        if let Some((_, at)) = &cached_cycle {
+            current.sources[2].fetched_at = Some(iso(*at));
+        }
+        let last_cycle_attempt = connection
+            .query_row(
+                "SELECT fetched_at FROM world_cache WHERE key='bounty-cycle-attempt'",
+                [],
+                |r| r.get::<_, i64>(0),
+            )
+            .ok()
+            .unwrap_or(0);
+        let cycle_expired = cycle_json
+            .as_ref()
+            .and_then(|v| v["expiry"].as_i64())
+            .is_none_or(|ms| ms / 1000 <= now);
+        let cycle_stale = cached_cycle.as_ref().is_none_or(|(_, at)| now - at >= 1800);
+        if (cycle_json.is_none() || cycle_expired || cycle_stale) && now - last_cycle_attempt >= 300 {
+            connection
+                .execute(
+                    "INSERT OR REPLACE INTO world_cache VALUES('bounty-cycle-attempt','',?)",
+                    [now],
+                )
+                .map_err(|e| e.to_string())?;
+            match fetch(&client, BOUNTY_CYCLE_URL, 1024 * 1024) {
+                Ok(body) => match serde_json::from_str::<Value>(&body) {
+                    Ok(parsed) if parsed["bounties"].is_object() => {
+                        cycle_json = Some(parsed);
+                        connection
+                            .execute(
+                                "INSERT OR REPLACE INTO world_cache VALUES('bounty-cycle',?,?)",
+                                params![body, now],
+                            )
+                            .map_err(|e| e.to_string())?;
+                        current.sources[2].fetched_at = Some(iso(now));
+                        current.sources[2].error = None;
+                    }
+                    _ => {
+                        current.sources[2].error = Some("现代赏金轮换数据格式无效".into());
+                    }
+                },
+                Err(error) => current.sources[2].error = Some(error),
+            }
+        }
+        if let Some(ref raw) = raw_world {
+            current.bounties = bounties::parse(raw, cycle_json.as_ref(), &nodes(), now);
+        }
         let cached: Option<(String, i64)> = connection
             .query_row(
                 "SELECT payload,fetched_at FROM world_cache WHERE key='arbitration'",
@@ -510,7 +633,12 @@ impl WorldService {
         for mut notice in notices {
             notice.system_state = app.map(|_| crate::world_notify::policy_state(&current.subscriptions.delivery));
             notice.delivery_error =
-                app.and_then(|app|{let endpoint=preference(&connection,"webhook_protected").and_then(|cipher|crate::world_notify::reveal_webhook(&cipher).ok());crate::world_notify::deliver_configured(app,&notice,&current.subscriptions.delivery,endpoint.as_deref(),false).err()});
+                app.and_then(|app|{
+                    let endpoint=preference(&connection,"webhook_protected").and_then(|cipher|crate::world_notify::reveal_webhook(&cipher).ok());
+                    let mut effective=current.subscriptions.delivery.clone();
+                    if notice.kind=="bounty"{effective.sound_enabled=effective.sound_enabled&&current.subscriptions.bounty_preferences.sound_enabled;}
+                    crate::world_notify::deliver_configured(app,&notice,&effective,endpoint.as_deref(),false).err()
+                });
             connection
                 .execute(
                     "INSERT OR REPLACE INTO world_notices VALUES(?,?)",
@@ -589,6 +717,7 @@ fn allowed(value: &str, values: &[&str]) -> bool {
 }
 pub fn validate_settings(s: &Settings) -> Result<(), String> {
     crate::world_notify::validate_delivery(&s.delivery)?;
+    bounties::validate(&s.bounty_preferences)?;
     if s.reward_preferences.weapon_parts.len()>256||s.reward_preferences.weapon_parts.iter().any(|id|!id.starts_with("/Lotus/Types/Recipes/Weapons/")||id.len()>512){return Err("奖励订阅无效".into());}
     if s.timer_lead_minutes > 60 {
         return Err("世界周期提前提醒必须为 0 到 60 分钟".into());
@@ -1026,9 +1155,23 @@ pub fn overlay_notice_allowed(kind:&str,id:&str,status:&Status)->bool {
     match kind {
         "fissure"=>status.fissures.iter().any(|e|e.id==id && subscribed(e,&status.subscriptions)),
         "alert"=>status.alerts.iter().any(|e|e.id==id && subscribed(e,&status.subscriptions)),
-        "arbitration"=>status.subscriptions.arbitration_enabled && status.arbitrations.iter().any(|e|id.contains(&e.id) && subscribed(e,&status.subscriptions)),
+        "arbitration" => status.arbitrations.iter().any(|e| {
+            let id_matches = id == e.id
+                || id == format!("{}:start", e.id)
+                || id == format!("{}:advance", e.id);
+            if !id_matches {
+                return false;
+            }
+            let one_time = status
+                .subscriptions
+                .arbitration_preferences
+                .as_ref()
+                .is_some_and(|p| p.reminder_ids.contains(&e.id));
+            one_time || subscribed(e, &status.subscriptions)
+        }),
         "cycle"=>id.strip_prefix("cycle:").and_then(|s|{let mut parts=s.split(':');Some(format!("{}:{}",parts.next()?,parts.next()?))}).is_some_and(|key|status.subscriptions.cycle_states.contains(&key)),
         "reward"=>status.reward_missions.iter().any(|mission|mission.rewards.iter().any(|reward|id==format!("reward:{}:{}",mission.id,reward.id) && rewards::selected(reward,&status.subscriptions.reward_preferences))),
+        "bounty"=>status.subscriptions.bounty_preferences.enabled && id.strip_prefix("bounty:").and_then(|rest|rest.split(':').next()).is_some_and(|sub_id|status.subscriptions.bounty_preferences.subscriptions.iter().any(|s|s.enabled&&s.id==sub_id)),
         "conversation"=>status.subscriptions.delivery.conversation_enabled && !status.subscriptions.delivery.conversation_template.is_empty(),
         "riven-monitor"=>id.starts_with("riven-monitor:"),
         _=>false,
@@ -1204,6 +1347,25 @@ fn observe(
             }
         }
         initialized.insert("cycle".into());
+    }
+    if !status.stale {
+        for (seen_key, notice, should_emit) in
+            bounties::due_notices(&status.bounties, &status.subscriptions.bounty_preferences, now)
+        {
+            let known = tx
+                .query_row("SELECT 1 FROM world_seen WHERE id=?", [&seen_key], |r| {
+                    r.get::<_, i32>(0)
+                })
+                .is_ok();
+            if should_emit && !known {
+                notices.push(notice);
+            }
+            tx.execute(
+                "INSERT OR REPLACE INTO world_seen VALUES(?,?)",
+                params![seen_key, now],
+            )
+            .map_err(|e| e.to_string())?;
+        }
     }
     for notice in &notices {
         tx.execute(
@@ -1687,5 +1849,142 @@ mod tests {
     }
 
     #[test]fn reward_notifications_identify_special_blueprints_and_weapon_part_parent(){assert_eq!(reward_name("/Lotus/Types/Recipes/Components/OrokinCatalystBlueprint"),"奥罗金催化剂蓝图");let name=reward_name("/Lotus/Types/Recipes/Weapons/WeaponParts/DeraVandalBarrel");assert!(name.contains("德拉"));assert!(name.contains("枪管"));}
+
+    #[test]
+    fn bounty_rotation_alerts_fire_once_across_restart_and_settings_persist() {
+        let path = std::env::temp_dir().join(format!(
+            "myframe-bounty-settings-{}-{}.sqlite3",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let sub = bounties::BountySubscription {
+            id: "sub-1".into(),
+            enabled: true,
+            syndicate: "CetusSyndicate".into(),
+            tier_key: "tier2".into(),
+            rarity: "uncommon".into(),
+            item_id: Some("/Lotus/Upgrades/Mods/Rifle/SniperReloadDamageMod".into()),
+            item_name_zh: Some("蓄力装填".into()),
+            item_name_en: Some("Charged Chamber".into()),
+            mission_type: None,
+            challenge_id: None,
+            created_at: iso(NOW - 5000),
+        };
+        {
+            let service = WorldService::new(path.clone()).unwrap();
+            let mut settings = Settings::default();
+            settings.bounty_preferences.subscriptions.push(sub.clone());
+            service.set_subscriptions(settings).unwrap();
+            let notice = service.test_bounty_notification_with(|_| Ok(())).unwrap();
+            assert_eq!(notice.kind, "bounty");
+            assert!(notice.title.contains("赏金"));
+        }
+        let restored = WorldService::new(path.clone()).unwrap().status();
+        assert_eq!(restored.subscriptions.bounty_preferences.subscriptions.len(), 1);
+        assert_eq!(restored.subscriptions.bounty_preferences.subscriptions[0].id, "sub-1");
+
+        let raw: Value = serde_json::from_str(include_str!("../../tests/fixtures/world-api.json")).unwrap();
+        let mut s = status();
+        s.fissures.clear();
+        s.alerts.clear();
+        s.arbitrations.clear();
+        s.cycles.clear();
+        s.bounties = bounties::parse(&raw, None, &nodes(), NOW);
+        s.subscriptions.bounty_preferences.subscriptions.push(sub);
+
+        let mut c = database();
+        let mut initialized = BTreeSet::new();
+        let first = observe(&mut c, &s, NOW, &mut initialized).unwrap();
+        assert_eq!(first.len(), 1);
+        assert_eq!(first[0].kind, "bounty");
+        assert!(overlay_notice_allowed("bounty", &first[0].id, &s));
+
+        initialized.clear();
+        assert!(observe(&mut c, &s, NOW + 5, &mut initialized).unwrap().is_empty());
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    #[ignore]
+    fn live_world_bounty_probe() {
+        let path = std::env::temp_dir().join(format!(
+            "myframe-live-probe-{}-{}.sqlite3",
+            std::process::id(),
+            Utc::now().timestamp_nanos_opt().unwrap()
+        ));
+        let service = WorldService::new(path.clone()).unwrap();
+        let status = service.refresh_once().unwrap();
+        assert!(!status.stale, "official worldState should be fresh: {:?}", status.error);
+        assert_eq!(status.bounties.len(), 6, "expected all 6 bounty hubs");
+        for syn in &status.bounties {
+            assert!(!syn.jobs.is_empty(), "hub {} has no jobs", syn.tag);
+            assert!(
+                syn.jobs.iter().any(|j| !j.rewards.is_empty()),
+                "hub {} jobs missing rewards",
+                syn.tag
+            );
+        }
+        let summary: Vec<_> = status
+            .bounties
+            .iter()
+            .map(|syn| {
+                serde_json::json!({
+                    "tag": syn.tag,
+                    "hub": syn.hub_zh,
+                    "rotation": syn.rotation,
+                    "vaultRotation": syn.vault_rotation,
+                    "jobs": syn.jobs.len(),
+                    "sampleJob": syn.jobs.first().map(|j| format!("{} ({} rewards)", j.title_zh, j.rewards.len())),
+                })
+            })
+            .collect();
+        println!("LIVE_BOUNTY_PROBE={}", serde_json::to_string_pretty(&summary).unwrap());
+        if let Ok(out) = std::env::var("WORLD_PROBE_OUT") {
+            let out_path = std::path::PathBuf::from(out);
+            if let Some(parent) = out_path.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(&out_path, serde_json::to_vec_pretty(&status).unwrap()).unwrap();
+        }
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+        }
+    }
+
+    #[test]
+    fn overlay_notice_allows_one_time_arbitration_reminders_and_rejects_prefix_match() {
+        let mut s = status();
+        s.arbitrations = parse_schedule(&format!("{},SolNode25", NOW + 600), NOW).unwrap();
+        let event_id = s.arbitrations[0].id.clone();
+        s.subscriptions.arbitration_enabled = false;
+        let mut prefs = arbitration::Preferences::default();
+        prefs.reminder_ids.push(event_id.clone());
+        s.subscriptions.arbitration_preferences = Some(prefs.clone());
+
+        assert!(overlay_notice_allowed(
+            "arbitration",
+            &format!("{event_id}:advance"),
+            &s
+        ));
+        assert!(overlay_notice_allowed(
+            "arbitration",
+            &format!("{event_id}:start"),
+            &s
+        ));
+        assert!(!overlay_notice_allowed(
+            "arbitration",
+            &format!("arbitration:{}:SolNode2:advance", NOW + 600),
+            &s
+        ));
+
+        prefs.reminder_ids.clear();
+        s.subscriptions.arbitration_preferences = Some(prefs);
+        assert!(!overlay_notice_allowed(
+            "arbitration",
+            &format!("{event_id}:start"),
+            &s
+        ));
+    }
 
 }

@@ -9,8 +9,25 @@ export function resourceDemand(catalog:DemandCatalog,snapshot:DemandSnapshot|nul
  // Reference defaults to buying/farming resource ingredients, not recursively crafting them.
  const resources=new Set((catalog.resourceIds??catalog.ids).filter(id=>!craftResources.has(id)));
  const goals=[...catalog.goalIds].sort((a,b)=>(items.get(a)?.name??a).localeCompare(items.get(b)?.name??b)||a.localeCompare(b));
+ const goalSet=new Set(goals);
+ const parentsByPart=new Map<string,string[]>();
+ for(const gid of goals){
+  for(const part of catalog.recipes[gid]?.parts??[]){
+   if(!part.reusable&&goalSet.has(part.itemId)&&part.itemId!==gid){
+    const parents=parentsByPart.get(part.itemId)??[];parents.push(gid);parentsByPart.set(part.itemId,parents);
+   }
+  }
+ }
+ const isGoalSatisfied=(id:string)=>(stock[id]>0)||((items.get(id)?.maxRank??0)>0&&(snapshot?.ranks?.[id]??0)>=(items.get(id)?.maxRank??0));
  const baseKnown=!!snapshot?.complete&&prepared.known&&snapshot.credits!=null;
  const favorites=planResources(goals.filter(id=>snapshot?.favorites?.includes(id)).map(itemId=>({itemId,quantity:1})),catalog.recipes,stock,prepared.outputs,baseKnown&&Array.isArray(snapshot?.favorites),resources);
- const remaining=planResources(goals.filter(id=>!(stock[id]>0)&&!((items.get(id)?.maxRank??0)>0&&(snapshot?.ranks?.[id]??0)>=(items.get(id)?.maxRank??0))).map(itemId=>({itemId,quantity:1})),catalog.recipes,stock,prepared.outputs,baseKnown&&snapshot?.masteryAccount?.ranksComplete===true,resources);
+ const remaining=planResources(goals.filter(id=>{
+  if(isGoalSatisfied(id))return false;
+  if(!((items.get(id)?.maxRank??0)>0)){
+   const parents=parentsByPart.get(id);
+   if(parents?.length&&parents.every(isGoalSatisfied))return false;
+  }
+  return true;
+ }).map(itemId=>({itemId,quantity:1})),catalog.recipes,stock,prepared.outputs,baseKnown&&snapshot?.masteryAccount?.ranksComplete===true,resources);
  return {favorites,remaining};
 }

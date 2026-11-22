@@ -153,9 +153,32 @@ pub struct Snapshot {
     #[serde(default)]
     pub incarnon: Option<BTreeSet<String>>,
 }
+/// Owned inventory arrays Warframe's API omits until the account acquires an item in that group.
+pub const OPTIONAL_PROGRESSION_OWNED_GROUPS: &[&str] = &[
+    "Sentinels",
+    "SentinelWeapons",
+    "SpaceSuits",
+    "SpaceGuns",
+    "SpaceMelee",
+    "KubrowPets",
+    "MoaPets",
+    "Hoverboards",
+    "MechSuits",
+    "SpecialItems",
+    "OperatorAmps",
+    "CrewShipHarnesses",
+    "LevelKeys",
+    "FlavourItems",
+    "WeaponSkins",
+];
 impl Snapshot {
     pub fn inventory_available(&self) -> bool {
-        self.complete || self.missing_owned_groups == ["Hoverboards"]
+        self.complete
+            || (!self.missing_owned_groups.is_empty()
+                && self
+                    .missing_owned_groups
+                    .iter()
+                    .all(|g| OPTIONAL_PROGRESSION_OWNED_GROUPS.contains(&g.as_str())))
     }
 }
 pub fn catalog() -> Result<Catalog, String> {

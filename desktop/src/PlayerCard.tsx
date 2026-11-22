@@ -1,4 +1,5 @@
 import {requestGameSync} from './collectorSync';
+import {collectorScanStatus} from './collectorStatusModel';
 import {createPortal} from 'react-dom';
 import {ChevronRightIcon,InfoCircledIcon,ArrowRightIcon} from '@radix-ui/react-icons';
 import {useCollector} from './Collector';
@@ -38,11 +39,12 @@ const [syncing,setSyncing]=useState(false),[syncError,setSyncError]=useState('')
 const paused=native&&!status.enabled&&status.code!=='preview';
 async function enableSync(){if(syncing)return;setSyncing(true);setSyncError('');try{await requestGameSync(invoke);}catch(e){setSyncError(String(e));}finally{setSyncing(false);}}
 const fresh=freshAccount(status,now,Date.now()),demo=masteryQA&&!native,fetching=status.scanCode==='helper-fetching';
+const scanDiag=collectorScanStatus(status.scanCode,en,fresh);
 const hasData=!!s,state=fresh||demo?'current':hasData?'cached':'unavailable';
 const label=paused?(en?'Sync paused':'同步已暂停'):fresh||demo?(en?'Data up to date':'数据已更新'):hasData?(en?'Using old data':'使用旧数据'):(en?'No game data':'无游戏数据');
 const lastUpdated=status.lastReadAt??status.lastInventoryAt??(s as (MasterySnapshot&{capturedAt?:string})|null)?.capturedAt;
 const date=lastUpdated&&Number.isFinite(Date.parse(lastUpdated))?new Date(lastUpdated).toLocaleString(i18n.language,{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
-const detail=demo?(en?'Browser QA fixture; this is not a live account.':'浏览器 QA 资料，并非实时账户数据。'):fresh?(en?'The latest game data was read successfully.':'最近一次游戏数据读取成功。'):fetching?(en?'Reading game data. Last confirmed values remain visible.':'正在读取游戏数据，当前保留上次确认的数值。'):(en?'These values may be from an earlier snapshot. Check the player summary for sync details.':'当前可能显示历史快照，可在玩家摘要查看同步详情。');
+const detail=demo?(en?'Browser QA fixture; this is not a live account.':'浏览器 QA 资料，并非实时账户数据。'):fresh?(en?'The latest game data was read successfully.':'最近一次游戏数据读取成功。'):fetching?(en?'Reading game data. Last confirmed values remain visible.':'正在读取游戏数据，当前保留上次确认的数值。'):`${scanDiag.status} · ${scanDiag.hint}`;
 const name=p?.name?.trim()||(en?'Name unavailable':'昵称未读取');
 const StatusIcon=()=> <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{state==='cached'?<><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5"/><circle cx="12" cy="17.5" r="1" fill="currentColor" stroke="none"/></>:<><circle cx="12" cy="12" r="9"/>{state==='current'?<path d="m8 12 3 3 5-6"/>:<path d="M12 7v6m0 4v.5"/>}</>}</svg>;
 const cancel=()=>{if(timer.current){clearTimeout(timer.current);timer.current=null;}};
@@ -59,7 +61,10 @@ return <div ref={anchor} className={'playerCard accountCard '+state+(hasData?' h
   {hasData&&<><div className="accountPrime"><div><span>{en?'Prime collection':'Prime 收藏进度'}</span><b>{prime==null?'—':`${prime}%`}</b></div><div className="accountPrimeTrack" role="progressbar" aria-label={en?'Prime collection':'Prime 收藏进度'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={prime??undefined}><span style={{width:`${Math.max(0,Math.min(100,prime??0))}%`}}/></div></div>
   <div className="accountAssets">{[['platinum.png',p?.platinum,en?'Platinum':'白金'],['credits.png',s?.credits,en?'Credits':'现金'],['ducats.png',p?.ducats,en?'Ducats':'杜卡德'],['endo.png',p?.endo,en?'Endo':'内融核心']].map(([img,n,currency])=><div className="accountAsset" key={String(img)}><img src={'/reference/ui/'+img} alt=""/><div><span>{String(currency)}</span><strong>{img==='platinum.png'||img==='ducats.png'?(n??'—'):fmt(n as number|null|undefined)}</strong></div></div>)}</div>
   </>}
-  <div className={'accountSync '+state}><div className="accountSyncHeading"><StatusIcon/><strong>{label}</strong></div>{state!=='current'&&<p>{paused?(en?'Automatic sync is disabled.':'自动同步尚未启用。'):fetching?(en?'Reading game data.':'正在读取游戏数据。'):hasData?(en?'The game data was loaded from a previous session.':'游戏数据来自先前会话。'):(en?'Start playing Warframe to load your account data.':'开始游玩 Warframe 以读取账户数据。')}</p>}<div className="accountSyncTime">{en?'Last update:':'最后更新：'} <time dateTime={lastUpdated??undefined}>{date}</time></div>{state==='current'?<button type="button" className="accountSyncInfo" title={detail} aria-label={en?'Data details':'数据详情'} onClick={()=>{hide();onHelp?.();}}><InfoCircledIcon/></button>:<button type="button" disabled={syncing} className="accountTroubleshoot" onClick={()=>{if(paused)void enableSync();else{hide();onHelp?.();}}}>{paused?(syncing?(en?'Starting…':'正在启动…'):(en?'Enable sync':'启用同步')):(en?'Troubleshoot data':'排查数据问题')}<ArrowRightIcon/></button>}</div>{syncError&&<p role="alert">{syncError}</p>}
+  <div className={'accountSync '+state}><div className="accountSyncHeading"><StatusIcon/><strong>{label}</strong></div>{state!=='current'&&<p>{paused?(en?'Automatic sync is disabled.':'自动同步尚未启用。'):`${scanDiag.status} — ${scanDiag.hint}`}</p>}<div className="accountSyncTime">{en?'Last update:':'最后更新：'} <time dateTime={lastUpdated??undefined}>{date}</time></div>{state==='current'?<button type="button" className="accountSyncInfo" title={detail} aria-label={en?'Data details':'数据详情'} onClick={()=>{hide();onHelp?.();}}><InfoCircledIcon/></button>:paused?<button type="button" disabled={syncing} className="accountTroubleshoot" onClick={()=>void enableSync()}>{syncing?(en?'Starting…':'正在启动…'):(en?'Enable sync':'启用同步')}<ArrowRightIcon/></button>:<>
+   <button type="button" disabled={!native||syncing||fetching} className="accountTroubleshoot" onClick={()=>void enableSync()}>{syncing||fetching?(en?'Syncing…':'正在同步…'):(en?'Sync now':'立即同步')}<ArrowRightIcon/></button>
+   <button type="button" className="accountTroubleshoot" onClick={()=>{hide();onHelp?.();}}>{en?'Troubleshoot data':'排查数据问题'}<ArrowRightIcon/></button>
+  </>}</div>{syncError&&<p role="alert">{syncError}</p>}
  </div>,document.body)}
 </div>;
 }

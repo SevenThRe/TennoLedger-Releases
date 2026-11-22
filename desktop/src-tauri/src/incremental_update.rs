@@ -1,5 +1,7 @@
 //! Signed, per-file updates. Unchanged local files never enter the download plan.
 use base64::Engine;
+#[path="update_diagnostics.rs"] mod diagnostics;
+use std::time::Instant;
 use serde::{Deserialize,Serialize};
 use sha2::{Digest,Sha256};
 use std::{collections::BTreeSet,fs,io::Read,path::{Path,PathBuf},sync::Mutex};
@@ -40,23 +42,33 @@ fn validate(m:&Manifest)->Result<(),String>{
 fn changed_files(manifest:&Manifest,root:&Path)->Result<Vec<FileEntry>,String>{
  let mut changed=vec![];for file in &manifest.files{if hash(&target(root,&file.path)?)?.as_deref()!=Some(file.sha256.as_str()){changed.push(file.clone());}}Ok(changed)
 }
-fn client()->Result<reqwest::blocking::Client,String>{reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(300)).build().map_err(|e|e.to_string())}
-fn bounded(mut response:reqwest::blocking::Response,max:u64)->Result<Vec<u8>,String>{response.error_for_status_ref().map_err(|e|e.to_string())?;if response.content_length().is_some_and(|n|n>max){return Err("更新响应过大".into());}let mut data=vec![];response.by_ref().take(max+1).read_to_end(&mut data).map_err(|e|e.to_string())?;if data.len() as u64>max{return Err("更新响应过大".into());}Ok(data)}
+fn client()->Result<reqwest::blocking::Client,String>{reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(300)).build().map_err(|e|diagnostics::transport("client",&e,Instant::now()))}
+fn bounded(mut response:reqwest::blocking::Response,max:u64,stage:&str,start:Instant)->Result<Vec<u8>,String>{
+ if !response.status().is_success(){return Err(diagnostics::failure(stage,"http",start,Some(response.status().as_u16()),vec![]));}
+ if response.content_length().is_some_and(|n|n>max){return Err(diagnostics::failure(stage,"size",start,None,vec![]));}
+ let mut data=vec![];response.by_ref().take(max+1).read_to_end(&mut data).map_err(|e|diagnostics::io(stage,&e,start))?;
+ if data.len()as u64>max{return Err(diagnostics::failure(stage,"size",start,None,vec![]));}Ok(data)
+}
+fn manifest_body(response:reqwest::blocking::Response,start:Instant)->Result<Option<Vec<u8>>,String>{
+ if response.status()==reqwest::StatusCode::NOT_FOUND{return Ok(None);}
+ bounded(response,2*1024*1024,"manifest",start).map(Some)
+}
 fn decode(value:&str)->Result<String,String>{String::from_utf8(base64::engine::general_purpose::STANDARD.decode(value.trim()).map_err(|e|e.to_string())?).map_err(|e|e.to_string())}
 fn verify(raw:&[u8],sig:&str,key:&str)->Result<Manifest,String>{
- let key=minisign_verify::PublicKey::decode(&decode(key)?).map_err(|e|e.to_string())?;
- let signature=minisign_verify::Signature::decode(&decode(sig)?).map_err(|e|e.to_string())?;
- key.verify(raw,&signature,false).map_err(|_|"增量更新清单签名无效")?;
- let manifest:Manifest=serde_json::from_slice(raw).map_err(|e|e.to_string())?;validate(&manifest)?;Ok(manifest)
+ let start=Instant::now();let rejected=||diagnostics::failure("signature","signature",start,None,vec![]);
+ let key=minisign_verify::PublicKey::decode(&decode(key).map_err(|_|rejected())?).map_err(|_|rejected())?;
+ let signature=minisign_verify::Signature::decode(&decode(sig).map_err(|_|rejected())?).map_err(|_|rejected())?;
+ key.verify(raw,&signature,false).map_err(|_|rejected())?;
+ let manifest:Manifest=serde_json::from_slice(raw).map_err(|_|diagnostics::failure("manifest","parse",start,None,vec![]))?;
+ validate(&manifest).map_err(|_|diagnostics::failure("manifest","validation",start,None,vec![]))?;Ok(manifest)
 }
 #[tauri::command]pub async fn incremental_check(app:tauri::AppHandle)->Result<Option<Offer>,String>{tauri::async_runtime::spawn_blocking(move||{
  if app.config().identifier.starts_with("org.myframe.acceptance."){return Ok(None);}
- let http=client()?;let response=http.get(format!("{BASE}latest/download/incremental.json")).timeout(std::time::Duration::from_secs(15)).send().map_err(|e|e.to_string())?;
- if response.status()==reqwest::StatusCode::NOT_FOUND{return Ok(None);}
- let raw=bounded(response,2*1024*1024)?;
- let sig=bounded(http.get(format!("{BASE}latest/download/incremental.json.sig")).send().map_err(|e|e.to_string())?,4096)?;
+ let http=client()?;let started=Instant::now();let response=http.get(format!("{BASE}latest/download/incremental.json")).timeout(std::time::Duration::from_secs(15)).send().map_err(|e|diagnostics::transport("manifest",&e,started))?;
+ let Some(raw)=manifest_body(response,started)? else{return Ok(None);};
+ let started=Instant::now();let sig=bounded(http.get(format!("{BASE}latest/download/incremental.json.sig")).send().map_err(|e|diagnostics::transport("signature",&e,started))?,4096,"signature",started)?;
  let key=app.config().plugins.0.get("updater").and_then(|v|v["pubkey"].as_str()).ok_or("更新公钥缺失")?.to_owned();
- let manifest=verify(&raw,std::str::from_utf8(&sig).map_err(|e|e.to_string())?,&key)?;
+ let manifest=verify(&raw,std::str::from_utf8(&sig).map_err(|_|diagnostics::failure("signature","parse",started,None,vec![]))?,&key)?;
  let service=app.state::<Service>();let mut guard=service.0.try_lock().map_err(|_|"更新操作正在进行")?;
  *guard=None;
  if version(&manifest.version)?<=version(&app.package_info().version.to_string())?{return Ok(None);}
@@ -76,18 +88,19 @@ fn verify(raw:&[u8],sig:&str,key:&str)->Result<Manifest,String>{
  for f in &p.changed{
   let before=hash(&target(&p.root,&f.path)?)?;
   let end=f.offset+f.compressed_size-1;
-  let response=http.get(format!("{BASE}download/v{}/incremental.bin",p.manifest.version)).header(reqwest::header::RANGE,format!("bytes={}-{}",f.offset,end)).send().map_err(|e|e.to_string())?;
+  let started=Instant::now();let response=http.get(format!("{BASE}download/v{}/incremental.bin",p.manifest.version)).header(reqwest::header::RANGE,format!("bytes={}-{}",f.offset,end)).send().map_err(|e|diagnostics::transport("archive",&e,started))?;
+  if !response.status().is_success(){return Err(diagnostics::failure("archive","http",started,Some(response.status().as_u16()),vec![]));}
   let range=format!("bytes {}-{}/{}",f.offset,end,p.manifest.archive_size);
-  if response.status()!=reqwest::StatusCode::PARTIAL_CONTENT||response.headers().get(reqwest::header::CONTENT_RANGE).and_then(|v|v.to_str().ok())!=Some(range.as_str()){return Err("更新源未返回正确的增量文件范围".into());}
+  if response.status()!=reqwest::StatusCode::PARTIAL_CONTENT||response.headers().get(reqwest::header::CONTENT_RANGE).and_then(|v|v.to_str().ok())!=Some(range.as_str()){return Err(diagnostics::failure("archive","range",started,None,vec![]));}
   let mut response=response;let mut compressed=Vec::new();let mut buffer=[0;65536];
-  loop{let n=response.read(&mut buffer).map_err(|e|e.to_string())?;if n==0{break;}compressed.extend_from_slice(&buffer[..n]);if compressed.len()as u64>f.compressed_size{return Err("更新响应过大".into());}
+  loop{let n=response.read(&mut buffer).map_err(|e|diagnostics::io("archive",&e,started))?;if n==0{break;}compressed.extend_from_slice(&buffer[..n]);if compressed.len()as u64>f.compressed_size{return Err(diagnostics::failure("archive","size",started,None,vec![]));}
    let _=app.emit("incremental-progress",serde_json::json!({"downloaded":downloaded+compressed.len()as u64,"total":total}));
   }
-  if compressed.len() as u64!=f.compressed_size{return Err("更新文件下载不完整".into());}
+  if compressed.len() as u64!=f.compressed_size{return Err(diagnostics::failure("archive","body",started,None,vec![]));}
   let dest=target(&p.stage.join("files"),&f.path)?;fs::create_dir_all(dest.parent().unwrap()).map_err(|e|e.to_string())?;
   let mut output=fs::File::create(&dest).map_err(|e|e.to_string())?;let mut decoder=flate2::read::GzDecoder::new(compressed.as_slice());
   let written=std::io::copy(&mut decoder.by_ref().take(f.size+1),&mut output).map_err(|e|e.to_string())?;output.sync_all().map_err(|e|e.to_string())?;
-  if written!=f.size||hash(&dest)?.as_deref()!=Some(f.sha256.as_str()){return Err("更新文件校验失败".into());}
+  if written!=f.size||hash(&dest)?.as_deref()!=Some(f.sha256.as_str()){return Err(diagnostics::failure("archive","hash",started,None,vec![]));}
   changes.push(Change{path:f.path.clone(),sha256:f.sha256.clone(),size:f.size,before});downloaded+=f.compressed_size;
   let _=app.emit("incremental-progress",serde_json::json!({"downloaded":downloaded,"total":total}));
  }
@@ -136,6 +149,15 @@ pub fn recover_if_needed()->Result<bool,String>{
 }
 #[cfg(test)]mod tests{
  use super::*;
+ #[test]fn manifest_404_is_absent_but_other_http_errors_are_diagnostic(){
+  use std::{net::TcpListener,io::Write,time::Duration};
+  for status in [404,403,500,200]{
+   let listener=TcpListener::bind("127.0.0.1:0").unwrap();let addr=listener.local_addr().unwrap();
+   let server=std::thread::spawn(move||{let (mut stream,_)=listener.accept().unwrap();let mut buf=[0;2048];let _=stream.read(&mut buf);write!(stream,"HTTP/1.1 {status} Test\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();});
+   let start=Instant::now();let response=reqwest::blocking::Client::builder().no_proxy().timeout(Duration::from_secs(2)).build().unwrap().get(format!("http://{addr}/?credential=hidden")).send().unwrap();
+   let result=manifest_body(response,start);match status {404=>assert!(result.unwrap().is_none()),200=>assert_eq!(result.unwrap().unwrap(),b"{}"),_=>{let diagnostic=result.unwrap_err();let value:serde_json::Value=serde_json::from_str(&diagnostic).unwrap();assert_eq!(value["kind"],"http");assert_eq!(value["status"],status);assert!(!diagnostic.contains("hidden"));}}server.join().unwrap();
+  }
+ }
  #[test]fn paths_reject_escape_duplicates_and_unknown_roots(){for p in ["../x","collector/../x","helper/C:/x","collector/con.dll","collector/COM1.txt","collector/a.","collector/a ","collector//x","settings.json","collector/a\\b"]{assert!(!valid_path(p),"{p}");}for p in ["myframe-desktop.exe","collector/_internal/x.dll","helper/warframe-api-helper.exe"]{assert!(valid_path(p));}}
  #[test]fn versions_are_numeric_and_reject_invalid(){assert!(version("0.1.10").unwrap()>version("0.1.9").unwrap());for v in ["v1.2.3","1.2","1.2.3/../","1.2.3.4"]{assert!(version(v).is_err());}}
  #[test]fn only_changed_or_missing_files_are_selected(){

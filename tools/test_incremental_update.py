@@ -1,5 +1,5 @@
 """Exercise the real Windows updater in isolated directories, with tiny compiled apps."""
-import argparse,ctypes,hashlib,json,os,subprocess,tempfile,time
+import argparse,ctypes,hashlib,json,os,subprocess,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent.parent
 
@@ -39,7 +39,7 @@ def case(base,name,old,new,runner,fail=None):
         obsolete.replace(stage/'backup/helper/obsolete.dll');(stage/'state').write_text('applying')
     try:
         args=[str(runner),str(stage)]+(['--recover']if fail=='interrupted' else [])
-        result=subprocess.run(args,timeout=80)
+        subprocess.run(args,timeout=80)
     finally:
         if handle:
             kernel.CloseHandle.argtypes=[ctypes.c_void_p];kernel.CloseHandle(handle)

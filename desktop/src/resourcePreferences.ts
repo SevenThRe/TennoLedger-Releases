@@ -1,12 +1,12 @@
 import type {GoalResult} from './resourcePlan.ts';
-export type ResourcePreferences={view:'inventory'|'plan'|'shards';ownedOnly:boolean;inventoryOrder:'name'|'quantity';materialType:''|'resource'|'blueprint'|'component';materialOrder:'priority'|'name'|'shortage'|'owned';missingOnly:boolean};
+export type ResourcePreferences={view:'inventory'|'plan'|'mining'|'shards';ownedOnly:boolean;inventoryOrder:'name'|'quantity';materialType:''|'resource'|'blueprint'|'component';materialOrder:'priority'|'name'|'shortage'|'owned';missingOnly:boolean};
 export const resourceDefaults:ResourcePreferences={view:'plan',ownedOnly:true,inventoryOrder:'name',materialType:'',materialOrder:'priority',missingOnly:true};
 export function parseResourcePreferences(raw:string|null):ResourcePreferences{
  const value:unknown=raw===null?{}:JSON.parse(raw);
  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('Invalid resource preferences');
  const result={...resourceDefaults},saved=value as Record<string,unknown>;
  for(const key of Object.keys(result) as (keyof ResourcePreferences)[]){
-  const options:Record<string,unknown[]>={view:['inventory','plan','shards'],ownedOnly:[true,false],inventoryOrder:['name','quantity'],materialType:['','resource','blueprint','component'],materialOrder:['priority','name','shortage','owned'],missingOnly:[true,false]};
+  const options:Record<string,unknown[]>={view:['inventory','plan','mining','shards'],ownedOnly:[true,false],inventoryOrder:['name','quantity'],materialType:['','resource','blueprint','component'],materialOrder:['priority','name','shortage','owned'],missingOnly:[true,false]};
   if(options[key].includes(saved[key]))Object.assign(result,{[key]:saved[key]});
  }
  return result;

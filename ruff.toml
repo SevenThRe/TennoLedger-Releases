@@ -1,0 +1,19 @@
+# Ruff configuration for MyFrame
+target-version = "py311"
+line-length = 120
+
+exclude = [
+    ".venv",
+    "build-staging",
+    "__pycache__",
+    "builds",
+    ".backups",
+    "desktop/src-tauri/target",
+    "node_modules",
+]
+
+[lint]
+select = [
+    "E9",  # Syntax and runtime errors
+    "F",   # Pyflakes correctness (undefined names, unused imports/vars, etc.)
+]

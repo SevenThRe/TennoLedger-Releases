@@ -3,7 +3,8 @@ export type BulkContext={accountId:string;platform:string};
 export type BulkOrder={id:string;itemId:string;type:'sell'|'buy';platinum:number;quantity:number;visible?:boolean;rank?:number|null;subtype?:string|null;charges?:number|null;amberStars?:number|null;cyanStars?:number|null;perTrade?:number|null};
 export type BulkQuote=BulkOrder&{user?:{id?:string;status?:string;locale?:string}};
 export type BulkItem={order:BulkOrder;label:string;action:'update'|'delete'|'close'|null;body:Record<string,number|boolean>;reason:string;source:string;inventoryOwned?:number};
-export type BulkPlan={id:string;context:BulkContext;createdAt:string;action:BulkAction;items:BulkItem[]};
+export type BulkScope='all'|'filtered';
+export type BulkPlan={id:string;context:BulkContext;createdAt:string;action:BulkAction;items:BulkItem[];scope?:BulkScope;totalOrders?:number};
 export const sameBulkContext=(a:BulkContext,b:BulkContext)=>!!a.accountId&&a.accountId===b.accountId&&a.platform===b.platform;
 export const bulkVariant=(o:BulkOrder)=>JSON.stringify([o.itemId,o.type,o.rank??null,o.subtype??'',o.charges??null,o.amberStars??null,o.cyanStars??null,Math.max(1,o.perTrade??1)]);
 export const bulkOrderFingerprint=(o:BulkOrder)=>JSON.stringify([o.id,bulkVariant(o),o.platinum,o.quantity,o.visible!==false]);
@@ -11,7 +12,7 @@ export function matchingBulkPrice(order:BulkOrder,quotes:readonly BulkQuote[],ow
  const prices=quotes.filter(q=>q.user&&q.user.id!==accountId&&!ownIds.has(q.id)&&q.user.status==='ingame'&&q.user.locale==='en'&&q.visible!==false&&q.quantity>0&&bulkVariant(q)===bulkVariant(order)&&Number.isSafeInteger(q.platinum)&&q.platinum>0&&q.platinum<=800000).map(q=>q.platinum);
  return prices.length?(order.type==='sell'?Math.min(...prices):Math.max(...prices)):null;
 }
-export function buildBulkPlan(action:BulkAction,selected:readonly BulkOrder[],all:readonly BulkOrder[],context:BulkContext,options:{id:string;createdAt:string;label:(o:BulkOrder)=>string;prices?:ReadonlyMap<string,number|null>;priceErrors?:ReadonlySet<string>;owned?:ReadonlyMap<string,number|null>}):BulkPlan{
+export function buildBulkPlan(action:BulkAction,selected:readonly BulkOrder[],all:readonly BulkOrder[],context:BulkContext,options:{id:string;createdAt:string;label:(o:BulkOrder)=>string;prices?:ReadonlyMap<string,number|null>;priceErrors?:ReadonlySet<string>;owned?:ReadonlyMap<string,number|null>;scope?:BulkScope}):BulkPlan{
  if(!context.accountId||!['pc','ps4','xbox','switch'].includes(context.platform))throw Error('请重新登录并读取当前市场账号');
  const ids=new Set<string>();
  const chosen=selected.filter(o=>{if(!o.id||ids.has(o.id))return false;ids.add(o.id);return true;});
@@ -43,13 +44,35 @@ export function buildBulkPlan(action:BulkAction,selected:readonly BulkOrder[],al
   plannedPrices.add(priceKey);
   item.action='update';item.body={platinum:price};return item;
  });
- return {id:options.id,createdAt:options.createdAt,context:{...context},action,items};
+ return {id:options.id,createdAt:options.createdAt,context:{...context},action,items,scope:options.scope,totalOrders:all.length};
 }
 export type BulkStatus='pending'|'running'|'succeeded'|'unchanged'|'skipped'|'failed'|'uncertain'|'cancelled';
 export type BulkResult={id:string;status:BulkStatus;message:string};
+export function isGroupEndpointUnsupported(error:unknown):boolean{
+ const message=error instanceof Error?error.message:String(error??'');
+ return /^市场 HTTP (404|405)：/.test(message);
+}
+export function canUseGroupVisibility(plan:Pick<BulkPlan,'action'|'items'|'scope'|'totalOrders'>):boolean{
+ return (plan.action==='show'||plan.action==='hide')
+  &&plan.scope==='all'
+  &&typeof plan.totalOrders==='number'
+  &&plan.totalOrders>0
+  &&plan.items.length===plan.totalOrders
+  &&plan.items.filter(i=>i.action==='update').length>=2;
+}
+export function groupVisibilityResults(
+ plan:Pick<BulkPlan,'items'>,
+ status:'running'|'succeeded'|'failed'|'uncertain'|'cancelled',
+ message:string,
+):BulkResult[]{
+ return plan.items.map(i=>i.action==='update'
+  ?{id:i.order.id,status,message}
+  :{id:i.order.id,status:i.reason==='无需变更'||i.reason==='价格未变'?'unchanged':'skipped',message:i.reason});
+}
 export class MarketBulkRunner{
  private cancelled=false;private used=false;private started=false;
  cancel(){this.cancelled=true;}
+ isCancelled(){return this.cancelled;}
  async run(plan:Pick<BulkPlan,'id'|'context'|'items'>,io:{context:()=>BulkContext;read:()=>Promise<BulkOrder[]>;validate?:(item:BulkItem)=>Promise<string|null>;reserve?:(item:BulkItem)=>Promise<string|null>;write:(item:BulkItem)=>Promise<unknown>;wait:()=>Promise<void>;publish:(rows:BulkResult[])=>void}){
   if(this.used||this.started)throw Error('此任务已执行，请刷新订单后重新预览');this.used=true;this.started=true;
   const result=plan.items.map(i=>({id:i.order.id,status:(i.action?'pending':i.reason==='无需变更'||i.reason==='价格未变'?'unchanged':'skipped') as BulkStatus,message:i.reason}));

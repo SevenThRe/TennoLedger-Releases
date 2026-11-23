@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {buildBulkPlan,MarketBulkRunner,matchingBulkPrice,bulkOrderFingerprint,type BulkOrder,type BulkQuote,type BulkContext} from '../src/marketBulkModel.ts';
+import {buildBulkPlan,canUseGroupVisibility,groupVisibilityResults,isGroupEndpointUnsupported,MarketBulkRunner,matchingBulkPrice,bulkOrderFingerprint,type BulkOrder,type BulkQuote,type BulkContext} from '../src/marketBulkModel.ts';
 const ctx:BulkContext={accountId:'me',platform:'pc'};
 const order=(id='1',quantity=3):BulkOrder=>({id,itemId:'item',type:'sell',platinum:30,quantity,visible:true,rank:0});
 const plan=(action:'prices'|'show'|'hide'|'fix'|'delete',rows:BulkOrder[],options:any={})=>buildBulkPlan(action,rows,rows,ctx,{id:'task',createdAt:'2026-10-25T00:00:00Z',label:o=>o.id,...options});
@@ -54,4 +54,27 @@ test('receipt reservations block cross-window replays and cancellation while res
 });
 test('quote failures are distinguished from a valid market with no matching offers',()=>{
  const p=plan('prices',[order()],{priceErrors:new Set(['1'])});assert.match(p.items[0].reason,/读取失败/);assert.equal(p.items[0].action,null);
+});
+test('group visibility detection requires all scope, all orders, and at least two updates',()=>{
+ const rows=[{...order('1'),visible:true},{...order('2'),visible:true},{...order('3'),visible:false}];
+ const fullHide=buildBulkPlan('hide',rows,rows,ctx,{id:'t1',createdAt:'2026-11-23T00:00:00Z',label:o=>o.id,scope:'all'});
+ assert.equal(canUseGroupVisibility(fullHide),true);
+ assert.deepEqual(
+  groupVisibilityResults(fullHide,'succeeded','ok'),
+  [
+   {id:'1',status:'succeeded',message:'ok'},
+   {id:'2',status:'succeeded',message:'ok'},
+   {id:'3',status:'unchanged',message:'无需变更'},
+  ],
+ );
+ const singleChange=buildBulkPlan('show',rows,rows,ctx,{id:'t2',createdAt:'2026-11-23T00:00:00Z',label:o=>o.id,scope:'all'});
+ assert.equal(canUseGroupVisibility(singleChange),false);
+ const filteredHide=buildBulkPlan('hide',rows.slice(0,2),rows,ctx,{id:'t3',createdAt:'2026-11-23T00:00:00Z',label:o=>o.id,scope:'filtered'});
+ assert.equal(canUseGroupVisibility(filteredHide),false);
+ const fullDelete=buildBulkPlan('delete',rows,rows,ctx,{id:'t4',createdAt:'2026-11-23T00:00:00Z',label:o=>o.id,scope:'all'});
+ assert.equal(canUseGroupVisibility(fullDelete),false);
+ assert.equal(isGroupEndpointUnsupported(Error('市场 HTTP 404：未找到 [诊断编号 abc]')),true);
+ assert.equal(isGroupEndpointUnsupported(Error('市场 HTTP 405：不支持')),true);
+ assert.equal(isGroupEndpointUnsupported(Error('市场 HTTP 429：请求过快')),false);
+ assert.equal(isGroupEndpointUnsupported(Error('市场 HTTP 500：失败')),false);
 });

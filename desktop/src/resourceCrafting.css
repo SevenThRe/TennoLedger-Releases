@@ -68,3 +68,22 @@
 @container resources (max-width:980px){.craftWorkspace{grid-template-columns:220px minmax(0,1fr);gap:10px}.craftTableHeading,.craftMaterials article{grid-template-columns:minmax(125px,1fr) minmax(140px,.7fr) 95px;gap:10px;padding-left:8px;padding-right:8px}.craftMaterialIdentity img{width:30px;height:30px}}
 @container resources (max-width:740px){.craftWorkspace{display:flex;flex-direction:column;overflow-y:auto}.craftWorkspace>.craftGoals{width:100%;max-height:295px;flex:none}.craftGoalsToggle{display:inline-flex}.craftGoals:not(.expanded) .craftGoalList{display:none}.craftGoalList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.craftGoalList article{margin-bottom:0}.craftGoalEmpty{grid-column:1/-1;padding:12px}.craftGoalEmpty>span{display:none}.craftShopping{flex:none;min-height:300px}.craftMaterials{overflow:visible;flex:none}.craftTableHeading{position:static}.craftPickerResults{grid-template-columns:minmax(0,1fr)}}
 @container resources (max-width:470px){.craftGoalList{grid-template-columns:minmax(0,1fr)}.craftTableHeading{display:none}.craftMaterials article{grid-template-columns:minmax(0,1fr) 95px}.craftMaterialIdentity{grid-column:1/-1}.craftToolbar{flex-wrap:wrap}.craftSearch{flex-basis:100%}}
+.craftScopeSwitch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;margin:0 9px 9px;padding:3px;border:1px solid var(--ui-line);border-radius:8px;background:var(--color-bg-2);flex:none}
+.craftScopeSwitch button{display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 7px;border:1px solid transparent;border-radius:6px;background:transparent;color:var(--color-navigation-hover);font-size:12px;cursor:pointer;white-space:nowrap}
+.craftScopeSwitch button[aria-pressed=true]{background:var(--color-card-active);border-color:var(--color-tab-lighter);color:var(--color-text)}
+.craftScopeSwitch b{padding:1px 5px;border-radius:99px;background:rgba(255,255,255,.08);font-size:10px;font-weight:500;font-variant-numeric:tabular-nums}
+.craftGoalSearch{margin:0 9px 9px;height:34px;padding:0 10px;border:1px solid var(--ui-line);border-radius:7px;background:var(--color-bg-2);color:var(--color-text);font-size:12px;min-width:0;flex:none}
+.craftGoalTags{display:flex;align-items:center;flex-wrap:wrap;gap:5px}
+.craftGoalIdentity .craftNoMrTag,.craftPickerIdentity .craftNoMrTag{display:inline-flex;align-items:center;width:fit-content;margin-top:4px;padding:2px 6px;border-radius:4px;border:1px solid #e8aa6266;background:#e8aa6218;color:#f3cb93;font-size:10px;line-height:1.25}
+.craftRemove.muted{opacity:.55}.craftRemove.muted:hover{opacity:1}
+.craftGoalMore{width:100%;margin-top:4px;padding:7px 10px;border:1px solid var(--ui-line-strong);border-radius:7px;background:var(--color-card);color:var(--color-text);font-size:12px;cursor:pointer}
+.craftGoalMore:hover{background:var(--color-card-hover)}
+.craftGoalEmptyHint{margin:12px 4px;text-align:center;font-size:12px;color:var(--color-navigation-hover)}
+.craftGoalEmpty>button.craftScopeFallback{display:block;width:100%;margin-top:8px;border:1px solid var(--ui-line-strong);background:var(--color-card);border-radius:6px;padding:8px;font-size:12px;font-weight:500;color:var(--color-text);cursor:pointer}
+.craftGoalEmpty>button.craftScopeFallback:hover{background:var(--color-card-hover)}
+.craftTableHeading,.craftMaterials article{grid-template-columns:minmax(170px,1fr) minmax(130px,.65fr) minmax(150px,auto);gap:14px}
+.craftNext{grid-column:auto;flex-direction:column;align-items:flex-end;justify-content:center;gap:5px}
+.craftNext>button{flex-direction:column;align-items:flex-end;gap:3px;white-space:nowrap}
+.craftNext label{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+@container resources (max-width:980px){.craftTableHeading,.craftMaterials article{grid-template-columns:minmax(130px,1fr) minmax(115px,.6fr) minmax(135px,auto);gap:10px;padding-left:8px;padding-right:8px}}
+@container resources (max-width:470px){.craftMaterials article{grid-template-columns:minmax(0,1fr) auto}.craftMaterialIdentity{grid-column:1/-1}.craftNext{grid-column:2;align-items:flex-end}}

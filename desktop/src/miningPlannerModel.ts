@@ -7,6 +7,7 @@ import {
  RAW_MINERALS,
  RAW_MINERAL_BY_ID,
  ZONE_VENDOR,
+ isCraftedMechComponent,
  mineralZoneFromId,
  refinedMineralIds,
  type MineralRarity,
@@ -38,10 +39,13 @@ export type MiningPlannerOptions={
 export type MiningBlueprintGap={
  blueprintId:string;
  refinedId:string;
+ rawMineralIds:string[];
  zone:OpenWorldZone;
  vendor:MiningVendor;
  owned:number;
  craftsNeeded:number;
+ neededUnits:number;
+ outputPerCraft:number;
 };
 
 export type RefinedStep={
@@ -79,6 +83,7 @@ export type MiningGoalRow={
  masteryBlocked:boolean;
  owned:number;
  pending:number;
+ usedRawMinerals:string[];
  missingRawMinerals:string[];
  missingOtherMaterials:string[];
  miningOnlyBlocked:boolean;
@@ -95,8 +100,10 @@ export type ZoneMiningPlan={
  needsSunpointDrill:boolean;
  missingBlueprints:MiningBlueprintGap[];
  goalIds:string[];
+ allGoalIds:string[];
  miningOnlyGoalIds:string[];
  potentialXp:number;
+ allPotentialXp:number;
  miningOnlyXp:number;
 };
 
@@ -107,8 +114,11 @@ export type MiningPlanResult={
  scope:MiningTargetScope;
  totalGoals:number;
  goalsUsingMining:number;
+ allMiningGoalsCount:number;
+ coveredMiningGoalsCount:number;
  miningOnlyGoalsCount:number;
  totalPotentialXp:number;
+ allMiningPotentialXp:number;
  miningOnlyXp:number;
  zones:Record<OpenWorldZone,ZoneMiningPlan>;
  goalsById:Record<string,MiningGoalRow>;
@@ -176,11 +186,25 @@ export function buildMiningPlan(
 
  const refinedIds=refinedMineralIds(catalog.recipes);
  const unexpanded=new Set(catalog.resourceIds??catalog.ids);
+ for(const id of unexpanded){
+  if(isCraftedMechComponent(id,catalog.recipes))unexpanded.delete(id);
+ }
  if(options.expandRefined){
   for(const id of refinedIds)unexpanded.delete(id);
  }
 
  const plan=planResources(goalInputs,catalog.recipes,stock,prepared.outputs,inventoryKnown,unexpanded);
+
+ const usedRawByGoal=new Map<string,Set<string>>();
+ for(const meta of RAW_MINERALS){
+  const req=plan.requirements[meta.id];
+  if(!req)continue;
+  for(const goalId of req.usedBy){
+   let set=usedRawByGoal.get(goalId);
+   if(!set){set=new Set();usedRawByGoal.set(goalId,set);}
+   set.add(meta.id);
+  }
+ }
 
  const favoriteSet=new Set(snapshot?.favorites??[]);
  const goalsById:Record<string,MiningGoalRow>={};
@@ -192,6 +216,7 @@ export function buildMiningPlan(
   const xp=maxRank>0?Math.max(0,maxRank-rank)*xpPerRank:0;
   const masteryReq=item?.masteryReq??0;
   const masteryBlocked=masteryReq>0&&snapshot?.masteryRank!=null&&snapshot.masteryRank<masteryReq;
+  const usedRawMinerals=uniqueSorted(usedRawByGoal.get(g.itemId)??[]);
   const missingRawMinerals=g.missing.filter(id=>RAW_MINERAL_BY_ID.has(id));
   const missingOtherMaterials=g.missing.filter(id=>!RAW_MINERAL_BY_ID.has(id));
   goalsById[g.itemId]={
@@ -202,6 +227,7 @@ export function buildMiningPlan(
    masteryBlocked,
    owned:g.owned,
    pending:g.pending,
+   usedRawMinerals,
    missingRawMinerals,
    missingOtherMaterials,
    miningOnlyBlocked:missingRawMinerals.length>0&&missingOtherMaterials.length===0,
@@ -232,12 +258,13 @@ export function buildMiningPlan(
    if(inputZone&&inputZone!==zone)crossZones.add(inputZone);
   }
   const crossZoneInputs=OPEN_WORLD_ZONES.filter(z=>crossZones.has(z));
+  const outputPerCraft=Math.max(1,recipe.output);
 
   const step:RefinedStep={
    refinedId,
    zone,
    crafts:req.crafts,
-   outputPerCraft:Math.max(1,recipe.output),
+   outputPerCraft,
    needed:req.needed,
    missing:req.missing,
    owned:req.owned,
@@ -258,10 +285,13 @@ export function buildMiningPlan(
    blueprintGapsByZone[zone].push({
     blueprintId,
     refinedId,
+    rawMineralIds:uniqueSorted(rawInputs),
     zone,
     vendor:ZONE_VENDOR[zone],
     owned:inventoryKnown?(stock[blueprintId]??0):0,
     craftsNeeded:req.crafts,
+    neededUnits:Math.max(0,req.needed-req.allocated-req.pending),
+    outputPerCraft,
    });
   }
  }
@@ -271,8 +301,13 @@ export function buildMiningPlan(
  }
 
  const zoneGoals:Record<OpenWorldZone,Set<string>>={eidolon:new Set(),solaris:new Set(),deimos:new Set()};
+ const zoneAllGoals:Record<OpenWorldZone,Set<string>>={eidolon:new Set(),solaris:new Set(),deimos:new Set()};
  const zoneMiningOnlyGoals:Record<OpenWorldZone,Set<string>>={eidolon:new Set(),solaris:new Set(),deimos:new Set()};
  for(const goal of Object.values(goalsById)){
+  for(const rawId of goal.usedRawMinerals){
+   const zone=RAW_MINERAL_BY_ID.get(rawId)?.zone;
+   if(zone)zoneAllGoals[zone].add(goal.itemId);
+  }
   for(const rawId of goal.missingRawMinerals){
    const zone=RAW_MINERAL_BY_ID.get(rawId)?.zone;
    if(!zone)continue;
@@ -326,6 +361,7 @@ export function buildMiningPlan(
   const allMinerals=[...ores,...gems];
   const missingMinerals=allMinerals.filter(m=>m.missing>0);
   const zGoals=uniqueSorted(zoneGoals[zone]);
+  const zAllGoals=uniqueSorted(zoneAllGoals[zone]);
   const zReady=uniqueSorted(zoneMiningOnlyGoals[zone]);
   const missingBlueprints=blueprintGapsByZone[zone].sort((a,b)=>b.craftsNeeded-a.craftsNeeded||a.blueprintId.localeCompare(b.blueprintId));
   allMissingBlueprints.push(...missingBlueprints);
@@ -339,13 +375,17 @@ export function buildMiningPlan(
    needsSunpointDrill:missingMinerals.some(m=>m.meta.drillTier==='sunpoint'),
    missingBlueprints,
    goalIds:zGoals,
+   allGoalIds:zAllGoals,
    miningOnlyGoalIds:zReady,
    potentialXp:zGoals.reduce((sum,id)=>sum+goalsById[id].xp,0),
+   allPotentialXp:zAllGoals.reduce((sum,id)=>sum+goalsById[id].xp,0),
    miningOnlyXp:zReady.reduce((sum,id)=>sum+goalsById[id].xp,0),
   };
  }
 
  const miningGoals=Object.values(goalsById).filter(g=>g.missingRawMinerals.length>0);
+ const allMiningGoals=Object.values(goalsById).filter(g=>g.usedRawMinerals.length>0);
+ const coveredMiningGoals=allMiningGoals.filter(g=>g.missingRawMinerals.length===0);
  const miningOnlyGoals=miningGoals.filter(g=>g.miningOnlyBlocked);
 
  return {
@@ -355,8 +395,11 @@ export function buildMiningPlan(
   scope:options.scope,
   totalGoals:plan.goals.length,
   goalsUsingMining:miningGoals.length,
+  allMiningGoalsCount:allMiningGoals.length,
+  coveredMiningGoalsCount:coveredMiningGoals.length,
   miningOnlyGoalsCount:miningOnlyGoals.length,
   totalPotentialXp:miningGoals.reduce((sum,g)=>sum+g.xp,0),
+  allMiningPotentialXp:allMiningGoals.reduce((sum,g)=>sum+g.xp,0),
   miningOnlyXp:miningOnlyGoals.reduce((sum,g)=>sum+g.xp,0),
   zones,
   goalsById,

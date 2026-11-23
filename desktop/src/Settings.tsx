@@ -9,6 +9,7 @@ import ThemeSettings from './ThemeSettings';
 import NotificationPreferences from './NotificationPreferences';
 import WorldRewardPreferences from './WorldRewardPreferences';
 import {useAppPreferences} from './useAppPreferences';
+import type {CloseAction} from './appPreferencesModel';
 import {replayWelcome} from './Help';
 import {useEffect,useLayoutEffect,useRef,useState,type ReactNode} from 'react';
 import {useTranslation} from 'react-i18next';
@@ -40,7 +41,7 @@ export default function Settings({languages,onLanguageChange,onNavigate,onClose,
   {tab==='general'&&<>
    {group(L('应用与启动','App & startup'),<>
    {row(L('了解天诺手账','Get to know TennoLedger'),<button onClick={()=>{onClose();replayWelcome();}}>{L('重播欢迎引导','Replay welcome tour')}</button>)}
-   {toggle(L('关闭时确认','Confirm before closing'),appPreferences.warnOnClose,()=>setAppPreferences({...appPreferences,warnOnClose:!appPreferences.warnOnClose}))}
+   {row(L('关闭窗口行为','When closing window'),<select aria-label={L('关闭窗口行为','When closing window')} title={L('选择最小化时，右键已最小化的任务栏图标关闭窗口仍会退出应用','When minimized, closing from the already-minimized taskbar button exits the app.')} disabled={!preferenceReady||working} value={appPreferences.closeAction} onChange={e=>{const closeAction=e.target.value as CloseAction;void run(()=>setAppPreferences({...appPreferences,closeAction,warnOnClose:closeAction==='ask'}));}}><option value="ask">{L('每次询问','Ask every time')}</option><option value="minimize">{L('最小化','Minimize')}</option><option value="close">{L('直接关闭','Close app')}</option></select>)}
    {toggle(L('启动时移到副屏','Open on secondary monitor'),appPreferences.launchOnSecondary,()=>setAppPreferences({...appPreferences,launchOnSecondary:!appPreferences.launchOnSecondary}))}
    {toggle(L('仲裁开始时自动打开实时窗口','Open live Arbitration window when a run starts'),arbitration.status.autoOpen,async()=>{await invoke('arbitration_set_auto_live',{enabled:!arbitration.status.autoOpen});arbitration.refresh();},!arbitration.canEdit||arbitration.loading)}
    {toggle(L('显示资产总览','Show Stats page'),appPreferences.statsTabEnabled,()=>setAppPreferences({...appPreferences,statsTabEnabled:!appPreferences.statsTabEnabled}),!preferenceReady)}

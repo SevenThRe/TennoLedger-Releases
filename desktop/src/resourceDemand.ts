@@ -31,7 +31,7 @@ export function resourceDemand(catalog:DemandCatalog,snapshot:DemandSnapshot|nul
   if(isGoalSatisfied(id))return false;
   if(!((items.get(id)?.maxRank??0)>0)){
    const parents=parentsByPart.get(id);
-   if(parents?.length&&parents.every(isGoalSatisfied))return false;
+   if(parents?.length)return false;
   }
   return true;
  }).map(itemId=>({itemId,quantity:1})),catalog.recipes,stock,prepared.outputs,baseKnown&&snapshot?.masteryAccount?.ranksComplete===true,resources);

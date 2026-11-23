@@ -119,6 +119,9 @@ test('cross-open-world refined alloy expansion accounts for stock, pending queue
 
  assert.equal(result.zones.deimos.missingBlueprints.length,1);
  assert.equal(result.zones.deimos.missingBlueprints[0].blueprintId,adramalBp);
+ assert.deepEqual(result.zones.deimos.missingBlueprints[0].rawMineralIds,[adramalium,travoride].sort());
+ assert.equal(result.zones.deimos.missingBlueprints[0].neededUnits,19);
+ assert.equal(result.zones.deimos.missingBlueprints[0].outputPerCraft,20);
  assert.equal(result.goalsById.weapon.miningOnlyBlocked,false);
  assert.deepEqual(result.goalsById.weapon.missingOtherMaterials,[adramalBp]);
  assert.equal(result.miningOnlyGoalsCount,0);
@@ -216,6 +219,62 @@ test('shipped catalog.json and resource-index.json build clean full mining plan 
   assert.ok(plan.zones[zone].missingCount>0,`Expected missing minerals in zone ${zone}`);
   assert.ok(plan.zones[zone].potentialXp>0,`Expected potential XP in zone ${zone}`);
  }
+
+ // Necramechs and Archguns expand their mandatory /Resources/Mechs/ sub-parts cleanly.
+ const namalon=plan.zones.deimos.ores.find(r=>r.id==='/Lotus/Types/Items/Gems/Deimos/DeimosUncommonOreAItem')!;
+ const adramalium=plan.zones.deimos.ores.find(r=>r.id==='/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAItem')!;
+ const xenorhast=plan.zones.deimos.gems.find(r=>r.id==='/Lotus/Types/Items/Gems/Deimos/DeimosEidolonGemAItem')!;
+ const ferros=plan.zones.eidolon.ores.find(r=>r.id==='/Lotus/Types/Items/Gems/Eidolon/UncommonOreAItem')!;
+ const sentirum=plan.zones.eidolon.gems.find(r=>r.id==='/Lotus/Types/Items/Gems/Eidolon/EidolonGemAItem')!;
+ const nyth=plan.zones.eidolon.gems.find(r=>r.id==='/Lotus/Types/Items/Gems/Eidolon/EidolonGemBItem')!;
+ assert.ok(namalon.needed>=400,`Expected Namalon >= 400 with Mech expansion, got ${namalon.needed}`);
+ assert.ok(adramalium.needed>=480,`Expected Adramalium >= 480 with Mech expansion, got ${adramalium.needed}`);
+ assert.ok(xenorhast.needed>=30,`Expected Xenorhast >= 30 with Mech expansion, got ${xenorhast.needed}`);
+ assert.ok(ferros.needed>=640,`Expected Ferros >= 640 with Mech expansion, got ${ferros.needed}`);
+ assert.ok(namalon.usedByGoals.includes('/Lotus/Powersuits/EntratiMech/NechroTech'));
+ assert.ok(ferros.usedByGoals.includes('/Lotus/Weapons/Tenno/Archwing/Primary/ThanoTechArchGun/ThanoTechArchGun'));
+ // Exceptional Sentient Core remains an unexpanded farmable resource drop (keeps Nyth at 3 instead of 6).
+ assert.equal(sentirum.needed,12);
+ assert.equal(nyth.needed,3);
+});
+
+test('owning or building crafted Necramech sub-parts reduces mineral demand without double counting',()=>{
+ const adramalium='/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAItem';
+ const adramalAlloy='/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAAlloyItem';
+ const casing='/Lotus/Types/Gameplay/InfestedMicroplanet/Resources/Mechs/NecromechPartChassisItem';
+ const casingBp='/Lotus/Types/Recipes/Mechs/NecromechPartChassisBlueprint';
+ const engine='/Lotus/Types/Gameplay/InfestedMicroplanet/Resources/Mechs/NecromechPartEngineItem';
+ const engineBp='/Lotus/Types/Recipes/Mechs/NecromechPartEngineBlueprint';
+ const mech='/Lotus/Powersuits/EntratiMech/NechroTech';
+
+ const catalog:DemandCatalog={
+  ids:[adramalium,adramalAlloy,casing,engine],
+  resourceIds:[adramalium,adramalAlloy,casing,engine],
+  blueprintIds:[casingBp,engineBp],
+  goalIds:[mech],
+  recipes:{
+   [mech]:{output:1,parts:[{itemId:casing,quantity:1},{itemId:engine,quantity:1}]},
+   [casing]:{output:1,parts:[{itemId:casingBp,quantity:1},{itemId:adramalAlloy,quantity:20}]},
+   [engine]:{output:1,parts:[{itemId:engineBp,quantity:1},{itemId:adramalAlloy,quantity:20}]},
+   [adramalAlloy]:{output:20,parts:[{itemId:adramalium,quantity:20}]},
+  },
+ };
+ const items=new Map<string,MiningPlannerItem>([
+  [mech,{id:mech,name:'Voidrig',category:'warframe',maxRank:40,xpPerRank:200,masteryReq:0}],
+ ]);
+
+ // Base: needs 40 alloy -> 40 raw adramalium across both Mech sub-parts.
+ const basePlan=buildMiningPlan(catalog,baseSnapshot(),items,defaultOptions({scope:'unmastered_all'}));
+ assert.equal(basePlan.zones.deimos.ores.find(r=>r.id===adramalium)!.needed,40);
+
+ // 1 built casing in counts + 1 engine pending in Foundry -> 0 mineral demand.
+ const coveredPlan=buildMiningPlan(
+  catalog,
+  baseSnapshot({counts:{[casing]:1},pendingRecipes:{[engineBp]:1}}),
+  items,
+  defaultOptions({scope:'unmastered_all'}),
+ );
+ assert.equal(coveredPlan.zones.deimos.ores.find(r=>r.id===adramalium)!.needed,0);
 });
 
 test('optional progression groups, non-catalog Foundry jobs, null credits/queue, and ambiguity gates behave accurately',()=>{
@@ -303,4 +362,61 @@ test('optional progression groups, non-catalog Foundry jobs, null credits/queue,
   buildMiningPlan(ambiguousCatalog,baseSnapshot({pendingRecipes:{[sharedBp]:1}}),items,defaultOptions()).inventoryKnown,
   false,
  );
+});
+
+test('covered raw minerals retain zone and summary mining goal totals while still flagging missing refining BPs',()=>{
+ const ferros='/Lotus/Types/Items/Gems/Eidolon/UncommonOreAItem';
+ const fersteelAlloy='/Lotus/Types/Items/Gems/Eidolon/UncommonOreAAlloyAItem';
+ const fersteelBp='/Lotus/Types/Recipes/EidolonRecipes/Prospecting/UncommonOreAAlloyABlueprint';
+ const adramalium='/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAItem';
+ const adramalAlloy='/Lotus/Types/Items/Gems/Deimos/DeimosCommonOreAAlloyItem';
+ const adramalBp='/Lotus/Types/Recipes/DeimosRecipes/Prospecting/DeimosCommonOreAAlloyBlueprint';
+ const travoride='/Lotus/Types/Items/Gems/Solaris/SolarisCommonOreAItem';
+
+ const catalog:DemandCatalog={
+  ids:[ferros,fersteelAlloy,adramalium,adramalAlloy,travoride],
+  resourceIds:[ferros,fersteelAlloy,adramalium,adramalAlloy,travoride],
+  blueprintIds:[fersteelBp,adramalBp],
+  goalIds:['blade'],
+  recipes:{
+   blade:{output:1,parts:[{itemId:fersteelAlloy,quantity:30},{itemId:adramalAlloy,quantity:10}]},
+   [fersteelAlloy]:{output:20,parts:[{itemId:fersteelBp,quantity:1,reusable:true},{itemId:ferros,quantity:20}]},
+   [adramalAlloy]:{output:20,parts:[{itemId:adramalBp,quantity:1,reusable:true},{itemId:adramalium,quantity:20},{itemId:travoride,quantity:20}]},
+  },
+ };
+ const items=new Map<string,MiningPlannerItem>([
+  ['blade',{id:'blade',name:'Alloy Blade',category:'melee',maxRank:30,xpPerRank:100,masteryReq:0}],
+ ]);
+
+ // Player owns enough raw ores (ferros=100, adramalium=40, travoride=40) to craft everything,
+ // but owns 0 refined alloys and neither refining blueprint.
+ const snap=baseSnapshot({
+  counts:{[ferros]:100,[adramalium]:40,[travoride]:40},
+ });
+ const plan=buildMiningPlan(catalog,snap,items,defaultOptions());
+
+ assert.equal(plan.goalsUsingMining,0);
+ assert.equal(plan.allMiningGoalsCount,1);
+ assert.equal(plan.coveredMiningGoalsCount,1);
+ assert.equal(plan.allMiningPotentialXp,3000);
+ assert.deepEqual(plan.goalsById.blade.usedRawMinerals,[adramalium,ferros,travoride].sort());
+
+ assert.equal(plan.zones.eidolon.missingCount,0);
+ assert.equal(plan.zones.eidolon.goalIds.length,0);
+ assert.deepEqual(plan.zones.eidolon.allGoalIds,['blade']);
+ assert.equal(plan.zones.eidolon.allPotentialXp,3000);
+ assert.equal(plan.zones.eidolon.missingBlueprints.length,1);
+ assert.equal(plan.zones.eidolon.missingBlueprints[0].craftsNeeded,2);
+ assert.equal(plan.zones.eidolon.missingBlueprints[0].neededUnits,30);
+ assert.deepEqual(plan.zones.eidolon.missingBlueprints[0].rawMineralIds,[ferros]);
+
+ assert.equal(plan.zones.solaris.missingCount,0);
+ assert.deepEqual(plan.zones.solaris.allGoalIds,['blade']);
+ assert.equal(plan.zones.solaris.allPotentialXp,3000);
+
+ assert.equal(plan.zones.deimos.missingCount,0);
+ assert.deepEqual(plan.zones.deimos.allGoalIds,['blade']);
+ assert.equal(plan.zones.deimos.allPotentialXp,3000);
+ assert.equal(plan.zones.deimos.missingBlueprints.length,1);
+ assert.deepEqual(plan.zones.deimos.missingBlueprints[0].rawMineralIds,[adramalium,travoride].sort());
 });

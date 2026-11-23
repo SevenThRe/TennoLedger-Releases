@@ -101,6 +101,10 @@ export function isRefinedMineral(id:string,recipes:Readonly<Record<string,Resour
  return id.startsWith('/Lotus/Types/Items/Gems/')&&!RAW_MINERAL_BY_ID.has(id)&&Object.hasOwn(recipes,id);
 }
 
+export function isCraftedMechComponent(id:string,recipes:Readonly<Record<string,ResourceRecipe>>):boolean{
+ return id.includes('/Resources/Mechs/')&&Object.hasOwn(recipes,id);
+}
+
 export function refinedMineralIds(recipes:Readonly<Record<string,ResourceRecipe>>):Set<string>{
  const ids=new Set<string>();
  for(const id of Object.keys(recipes))if(isRefinedMineral(id,recipes))ids.add(id);

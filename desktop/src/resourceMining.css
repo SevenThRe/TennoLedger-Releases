@@ -25,10 +25,13 @@
 .miningZoneBar{height:4px;border-radius:99px;background:rgba(0,0,0,.3);overflow:hidden}
 .miningZoneBar>i{display:block;height:100%;border-radius:inherit;background:var(--color-tab-lighter);transition:width .2s ease}
 .miningZoneBar>i.ok{background:#7be0b0}
+.miningZoneBar>i.warn{background:#e8aa62}
 .miningStatusBadge{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:2px 7px;border-radius:99px;background:var(--color-card);border:1px solid var(--ui-line);color:var(--color-text);white-space:nowrap}
 .miningStatusBadge .statusDot{width:7px;height:7px;border-radius:50%;background:#e8aa62}
 .miningStatusBadge.ok{color:#a7dfcc;border-color:#6bc99966}
 .miningStatusBadge.ok .statusDot{background:#7be0b0}
+.miningStatusBadge.warn{color:#f5a3a3;border-color:#e76f6f66}
+.miningStatusBadge.warn .statusDot{background:#e76f6f}
 .miningStatusBadge.pending{color:var(--color-navigation-hover);border-color:var(--ui-line)}
 .miningStatusBadge.pending .statusDot{background:var(--color-navigation-hover)}
 
@@ -65,6 +68,7 @@
 .miningCard:hover{border-color:color-mix(in srgb,var(--vein-color,#66b7f0) 55%,var(--ui-line-strong));background-color:var(--color-card-hover);transform:translateY(-1px)}
 .miningCard.selected{border-color:var(--color-tab-lighter);background-color:var(--color-card-active)}
 .miningCard.covered{--vein-color:#7be0b0;border-color:#6bc99955}
+.miningCard.bpBlocked{--vein-color:#e8aa62;border-color:#e8aa6255}
 .miningCard.idle{opacity:.78}
 
 .miningCardHead{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:18px}
@@ -83,10 +87,12 @@
 .miningCardBar{height:6px;border-radius:99px;background:rgba(0,0,0,.34);border:1px solid rgba(255,255,255,.06);overflow:hidden}
 .miningCardBar>i{display:block;height:100%;border-radius:inherit;background:var(--vein-color,#66b7f0);transition:width .2s ease}
 .miningCardBar>i.ok,.miningCard.covered .miningCardBar>i{background:#7be0b0}
+.miningCard.bpBlocked .miningCardBar>i{background:#e8aa62}
 
 .miningCardFoot{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;font-variant-numeric:tabular-nums}
 .miningCardState{font-weight:500}
 .miningCardState.deficit{color:#f3cb93}
+.miningCardState.bpGap{color:#f5a3a3}
 .miningCardState.ok{color:#a7dfcc}
 .miningCardState.pending,.miningCardState.idle{color:var(--color-navigation-hover)}
 .miningCardMeta{color:var(--color-navigation-hover)}
@@ -102,7 +108,7 @@
 .miningBlueprintRow>span{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .miningBlueprintRow strong{font-size:12px;font-weight:500}
 .miningBlueprintRow small{font-size:11px;color:var(--color-navigation-hover)}
-.miningBlueprintRow>b{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums}
+.miningBlueprintRow>b{font-size:12px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;flex:none}
 
 .miningDetailShade{position:fixed;inset:0;z-index:60;background:rgba(6,9,14,.74);backdrop-filter:blur(4px);display:grid;place-items:center;padding:20px}
 .miningDetailDialog{width:min(560px,100%);max-height:min(82vh,680px);display:flex;flex-direction:column;gap:12px;padding:16px;border:1px solid var(--ui-line-strong);border-radius:12px;background:var(--color-bg-1);color:var(--color-text);box-shadow:0 24px 60px rgba(0,0,0,.55)}

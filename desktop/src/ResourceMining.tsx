@@ -200,14 +200,16 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
  );
 
  const hoveredMineral=hoveredMineralId?activeZoneMinerals.find(m=>m.id===hoveredMineralId)??null:null;
- const hoverXp=hoveredZone?plan.zones[hoveredZone].potentialXp:hoveredMineral?hoveredMineral.potentialXp:0;
+ const hoverZonePlan=hoveredZone?plan.zones[hoveredZone]:null;
+ const hoverXp=hoverZonePlan?(hoverZonePlan.potentialXp>0?hoverZonePlan.potentialXp:hoverZonePlan.allPotentialXp):hoveredMineral?hoveredMineral.potentialXp:0;
  const xpWidths=masteryProgress?previewWidths(masteryProgress.percent,masteryProgress.needed,favXp,hoverXp):{fav:0,hover:0};
 
  const activeZoneMeta=MINING_ZONE_LABELS[activeZone];
  const activeVendorLabel=en?MINING_VENDOR_LABELS[activePlan.vendor].en:MINING_VENDOR_LABELS[activePlan.vendor].zh;
 
- const oreRows=prefs.missingOnly&&plan.inventoryKnown?activePlan.ores.filter(r=>r.missing>0):activePlan.ores;
- const gemRows=prefs.missingOnly&&plan.inventoryKnown?activePlan.gems.filter(r=>r.missing>0):activePlan.gems;
+ const needsAttention=(row:MineralDemandRow)=>row.missing>0||row.refinedSteps.some(s=>s.blueprintMissing);
+ const oreRows=prefs.missingOnly&&plan.inventoryKnown?activePlan.ores.filter(needsAttention):activePlan.ores;
+ const gemRows=prefs.missingOnly&&plan.inventoryKnown?activePlan.gems.filter(needsAttention):activePlan.gems;
 
  const openItem=(id:string,fallbackId?:string)=>{
   const target=items.get(id)??(fallbackId?items.get(fallbackId):undefined);
@@ -219,27 +221,31 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
   const label=itemName(item,en);
   const pct=mineralCompletion(row,plan.inventoryKnown);
   const rawOwned=plan.inventoryKnown?row.owned:snapshot?.counts?.[row.id];
-  const covered=plan.inventoryKnown&&row.needed>0&&row.missing===0;
+  const rawCovered=plan.inventoryKnown&&row.needed>0&&row.missing===0;
+  const hasMissingBp=plan.inventoryKnown&&row.refinedSteps.some(s=>s.blueprintMissing);
+  const covered=rawCovered&&!hasMissingBp;
+  const bpBlockedOnly=rawCovered&&hasMissingBp;
   const idle=plan.inventoryKnown&&row.needed===0;
   const veinKey=row.meta.vein==='gem'?'blue':activeZoneMeta.oreColor;
   const veinHex=VEIN_HEX[veinKey];
   const fillColor=covered
    ?'rgba(107,201,153,0.20)'
-   :!plan.inventoryKnown||idle
-    ?'rgba(148,163,184,0.06)'
-    :veinKey==='blue'
-     ?'rgba(102,183,240,0.17)'
-     :veinKey==='yellow'
-      ?'rgba(231,193,90,0.16)'
-      :'rgba(231,111,111,0.16)';
-  const hasMissingBp=plan.inventoryKnown&&row.refinedSteps.some(s=>s.blueprintMissing);
-  const fillPct=covered?'100%':`${pct}%`;
+   :bpBlockedOnly
+    ?'rgba(232,170,98,0.16)'
+    :!plan.inventoryKnown||idle
+     ?'rgba(148,163,184,0.06)'
+     :veinKey==='blue'
+      ?'rgba(102,183,240,0.17)'
+      :veinKey==='yellow'
+       ?'rgba(231,193,90,0.16)'
+       :'rgba(231,111,111,0.16)';
+  const fillPct=(covered||bpBlockedOnly)?'100%':`${pct}%`;
 
   return (
    <button
     key={row.id}
     type="button"
-    className={'miningCard'+(covered?' covered':idle?' idle':'')+(openedMineralId===row.id?' selected':'')}
+    className={'miningCard'+(covered?' covered':bpBlockedOnly?' bpBlocked':idle?' idle':'')+(openedMineralId===row.id?' selected':'')}
     style={{
      '--vein-color':veinHex,
      '--fill-pct':fillPct,
@@ -262,7 +268,7 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
         {L('阳点','Sunpoint')}
        </span>
       )}
-      {hasMissingBp&&(
+      {hasMissingBp&&row.missing>0&&(
        <span
         className="miningBpTag"
         title={L('关联精炼成品缺少蓝图','Missing refining blueprint for alloy/cut gem')}
@@ -280,7 +286,7 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
 
     <div className="miningCardProgress">
      <div className="miningCardRatio">
-      <b className={covered?'ok':plan.inventoryKnown&&row.missing>0?'deficit':'muted'}>
+      <b className={covered?'ok':bpBlockedOnly||(plan.inventoryKnown&&row.missing>0)?'deficit':'muted'}>
        {!plan.inventoryKnown||idle?'—':`${pct}%`}
       </b>
       <span>
@@ -290,19 +296,24 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
       </span>
      </div>
      <div className="miningCardBar">
-      <i style={{width:covered?'100%':`${pct}%`}}/>
+      <i style={{width:(covered||bpBlockedOnly)?'100%':`${pct}%`}}/>
      </div>
     </div>
 
     <div className="miningCardFoot">
-     <span className={'miningCardState '+( !plan.inventoryKnown?'pending':row.missing>0?'deficit':covered?'ok':'idle')}>
+     <span
+      className={'miningCardState '+(!plan.inventoryKnown?'pending':row.missing>0?'deficit':bpBlockedOnly?'bpGap':covered?'ok':'idle')}
+      title={bpBlockedOnly?L('原矿已挖齐，需在矿商处购买精炼蓝图','Raw mineral covered; buy refining BP from vendor'):undefined}
+     >
       {!plan.inventoryKnown
        ?'—'
        :row.missing>0
         ?`${L('缺 ','Need ')}${compactNumber(row.missing)}`
-        :covered
-         ?L('已齐','Done')
-         :L('无需','None')}
+        :bpBlockedOnly
+         ?L('缺蓝图','Need BP')
+         :covered
+          ?L('已齐','Done')
+          :L('无需','None')}
      </span>
      <span className={'miningCardMeta'+(plan.inventoryKnown&&row.readyAfterMiningGoals.length>0?' ready':'')}>
       {plan.inventoryKnown&&row.readyAfterMiningGoals.length>0
@@ -326,6 +337,11 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
   const pct=zoneCompletion(zonePlan,plan.inventoryKnown);
   const active=activeZone===zone;
   const vendorName=en?vendorMeta.en:vendorMeta.zh;
+  const needBpsOnly=zonePlan.missingCount===0&&zonePlan.missingBlueprints.length>0;
+  const allDone=zonePlan.missingCount===0&&zonePlan.missingBlueprints.length===0;
+  const showAllGoals=zonePlan.goalIds.length===0&&zonePlan.allGoalIds.length>0;
+  const displayGoalsCount=showAllGoals?zonePlan.allGoalIds.length:zonePlan.goalIds.length;
+  const displayXp=showAllGoals?zonePlan.allPotentialXp:zonePlan.potentialXp;
   return (
    <button
     key={zone}
@@ -341,24 +357,33 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
     <header>
      <strong>{en?zoneMeta.en:zoneMeta.zh}</strong>
      {plan.inventoryKnown&&(
-      <span className={'miningStatusBadge'+(zonePlan.missingCount===0?' ok':'')}>
+      <span
+       className={'miningStatusBadge'+(allDone?' ok':needBpsOnly?' warn':'')}
+       title={needBpsOnly?L('原矿已齐，需在矿商处购买精炼蓝图','Raw minerals covered; buy refining BPs from vendor'):undefined}
+      >
        <i className="statusDot"/>
        {zonePlan.missingCount>0
         ?`${L('缺','Need')} ${zonePlan.missingCount} ${L('种','')}`.trim()
-        :L('已齐备','Covered')}
+        :needBpsOnly
+         ?L('缺蓝图','Need BPs')
+         :L('已齐备','Covered')}
       </span>
      )}
     </header>
     <div className="miningZoneBar" aria-hidden="true">
-     <i className={plan.inventoryKnown&&zonePlan.missingCount===0?'ok':''} style={{width:`${pct}%`}}/>
+     <i className={plan.inventoryKnown?(allDone?'ok':needBpsOnly?'warn':''):''} style={{width:`${pct}%`}}/>
     </div>
     <div className="miningZoneMetrics">
-     <span title={L(`${zonePlan.miningOnlyGoalIds.length} 件仅缺矿可直接开工`,`${zonePlan.miningOnlyGoalIds.length} mining-ready`)}>
-      {L('解锁','Unlocks')} <b>{plan.inventoryKnown?zonePlan.goalIds.length:'—'}</b>
+     <span
+      title={showAllGoals
+       ?L(`${zonePlan.allGoalIds.length} 件涉矿装备原矿已齐`,`${zonePlan.allGoalIds.length} mining gear covered by stock`)
+       :L(`${zonePlan.miningOnlyGoalIds.length} 件仅缺矿可直接开工`,`${zonePlan.miningOnlyGoalIds.length} mining-ready`)}
+     >
+      {showAllGoals||displayGoalsCount===0?L('关联','Gear'):L('解锁','Unlocks')} <b>{plan.inventoryKnown?displayGoalsCount:'—'}</b>
      </span>
      <span>
       {plan.inventoryKnown?(
-       <><b>{pct}%</b>{' · '}<b>+{compactNumber(zonePlan.potentialXp)}</b> XP</>
+       <><b>{pct}%</b>{' · '}<b>+{compactNumber(displayXp)}</b> XP</>
       ):(
        <><b>—</b> XP</>
       )}
@@ -441,7 +466,7 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
       type="button"
       className="miningToggle"
       aria-pressed={prefs.missingOnly}
-      title={L('仅显示当前仍有缺口的矿物','Show only minerals with missing units')}
+      title={L('仅显示仍有原矿缺口或缺少精炼蓝图的矿物','Show only minerals with raw shortages or missing refining blueprints')}
       onClick={()=>updatePrefs({missingOnly:!prefs.missingOnly})}
      >
       {L('仅缺口','Missing')}
@@ -490,14 +515,31 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
       )}
       <div className="miningXpSummary">
        <span title={L('悬停矿区或矿石可预览对应经验收益','Hover a zone or mineral to preview XP gain')}>
-        <b>{plan.inventoryKnown?`+${(hoverXp>0?hoverXp:plan.totalPotentialXp).toLocaleString()}`:'—'}</b> XP
+        <b>{plan.inventoryKnown?`+${(hoverXp>0?hoverXp:(plan.totalPotentialXp>0?plan.totalPotentialXp:plan.allMiningPotentialXp)).toLocaleString()}`:'—'}</b> XP
        </span>
-       <span
-        className="miningReadyCounter"
-        title={L('其余非矿石材料均已备齐，挖完矿即可制造的装备数量','Gear with all non-mineral materials already covered')}
-       >
-        {L('可开工','Ready')} <b>{plan.inventoryKnown?plan.miningOnlyGoalsCount:'—'}</b>/{plan.inventoryKnown?plan.goalsUsingMining:'—'}
-       </span>
+       {!plan.inventoryKnown?(
+        <span className="miningReadyCounter">
+         {L('可开工','Ready')} <b>—</b>/—
+        </span>
+       ):plan.goalsUsingMining>0?(
+        <span
+         className="miningReadyCounter"
+         title={L('其余非矿石材料均已备齐，挖完矿即可制造的装备数量','Gear with all non-mineral materials already covered')}
+        >
+         {L('可开工','Ready')} <b>{plan.miningOnlyGoalsCount}</b>/{plan.goalsUsingMining}
+        </span>
+       ):plan.allMiningGoalsCount>0?(
+        <span
+         className="miningReadyCounter"
+         title={L('当前筛选下所有涉矿装备的原矿库存均已齐备','Raw mineral stock covers all mining-dependent gear in scope')}
+        >
+         {L('齐矿','Ores OK')} <b>{plan.coveredMiningGoalsCount}</b>/{plan.allMiningGoalsCount}
+        </span>
+       ):(
+        <span className="miningReadyCounter">
+         {L('关联','Gear')} <b>0</b>
+        </span>
+       )}
       </div>
      </section>
     );
@@ -510,7 +552,11 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
    <div className="miningScroll">
     {oreRows.length===0&&gemRows.length===0?(
      <div className="miningZoneCovered">
-      <span className="miningStatusBadge ok"><i className="statusDot"/>{L('需求已齐备','All covered')}</span>
+      {activePlan.missingBlueprints.length>0?(
+       <span className="miningStatusBadge warn"><i className="statusDot"/>{L('原矿已齐，缺精炼蓝图','Need refining BPs')}</span>
+      ):(
+       <span className="miningStatusBadge ok"><i className="statusDot"/>{L('需求已齐备','All covered')}</span>
+      )}
       <strong>{en?activeZoneMeta.en:activeZoneMeta.zh}</strong>
      </div>
     ):(
@@ -540,27 +586,33 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
 
     {plan.inventoryKnown&&activePlan.missingBlueprints.length>0&&(
      <details className="miningCollapsed">
-      <summary>
-       <span>{L('缺失精炼蓝图','Missing refining BPs')}</span>
+      <summary title={L('可重复蓝图：在矿商处一次性购买后，即可在铸造厂把原矿精炼为合金/切割宝石','Reusable blueprints bought once from the vendor to refine raw minerals in the Foundry')}>
+       <span>{L('未购精炼蓝图','Refining BPs to buy')}</span>
        <b className="miningBpTag">{activePlan.missingBlueprints.length}</b>
       </summary>
       <div className="miningBlueprintList">
        {activePlan.missingBlueprints.map(bp=>{
         const refinedItem=items.get(bp.refinedId);
+        const refinedLabel=itemName(refinedItem,en);
+        const rawNames=bp.rawMineralIds.map(id=>itemName(items.get(id),en)).join(' + ');
+        const subtitle=rawNames?`${rawNames} → ${refinedLabel} · ${activeVendorLabel}`:activeVendorLabel;
         return (
          <button
           key={bp.blueprintId}
           type="button"
           className="miningBlueprintRow"
-          title={L(`前往 ${activeVendorLabel} 购买蓝图`,`Buy blueprint from ${activeVendorLabel}`)}
+          title={L(
+           `在 ${activeVendorLabel} 购买 1 张可重复蓝图 · 共需精炼 ${bp.neededUnits}（${bp.craftsNeeded} × ${bp.outputPerCraft}）`,
+           `Buy 1 reusable BP from ${activeVendorLabel} · refine ${bp.neededUnits} (${bp.craftsNeeded} × ${bp.outputPerCraft})`
+          )}
           onClick={()=>openItem(bp.blueprintId,bp.refinedId)}
          >
           <Artwork item={refinedItem}/>
           <span>
-           <strong>{itemName(refinedItem,en)}</strong>
-           <small>{activeVendorLabel}</small>
+           <strong>{`${refinedLabel} ${L('蓝图','BP')}`}</strong>
+           <small>{subtitle}</small>
           </span>
-          <b>×{bp.craftsNeeded} {L('批','')}</b>
+          <b>{`${bp.craftsNeeded} ${L('批',bp.craftsNeeded===1?'batch':'batches')}`}</b>
          </button>
         );
        })}
@@ -690,7 +742,7 @@ export default function ResourceMining({catalog,items,snapshot,en,busy,canFavori
               </small>
              </div>
              <div className="miningStepBadges">
-              <b>{plan.inventoryKnown?`×${step.crafts} ${L('批','')}`.trim():'—'}</b>
+              <b>{plan.inventoryKnown?`${step.crafts} ${L('批',step.crafts===1?'batch':'batches')}`:'—'}</b>
               {plan.inventoryKnown&&step.blueprintMissing&&(
                <span className="miningBpTag" title={L(`在 ${stepVendor} 处缺少蓝图`,`Missing blueprint at ${stepVendor}`)}>
                 {L('缺蓝图','No BP')}

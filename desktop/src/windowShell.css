@@ -45,3 +45,20 @@ html,body,#root{height:100%;overflow:hidden}.windowShell{height:100%;position:re
 .windowTitlebar .windowTools button:focus-visible{outline:2px solid var(--color-tab-lighter)}
 
 .windowLiveTitle{font-size:14px;color:var(--color-navigation-hover);flex:none}.windowTitlebar:has(.windowLiveTitle) .windowDrag{min-width:0}
+.windowCloseConfirm{position:fixed;inset:0;z-index:220;background:rgba(6,10,19,.74);backdrop-filter:blur(3px);display:grid;place-items:center;padding:16px}
+.windowShell>.windowCloseConfirm>section,.windowCloseConfirm>section{width:min(400px,100%);display:flex;flex-direction:column;gap:14px;padding:20px 22px;background:var(--color-bg-2,#1a2235);border:1px solid var(--ui-line-strong,#44516c);border-radius:12px;color:var(--color-text,#eef2ff);box-shadow:0 20px 60px rgba(0,0,0,.55);text-align:left}
+.windowCloseConfirm .windowCloseHeader{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;width:100%;margin:0;padding:0;height:auto}
+.windowCloseConfirm .windowCloseHeader h2{margin:0;font-size:17px;font-weight:600;line-height:1.3;text-align:left;flex:1}
+.windowCloseConfirm .windowCloseDismiss{width:28px;height:28px;padding:0;margin:0;border:0;border-radius:6px;background:transparent;color:var(--color-navigation-hover,#aeb9d0);font-size:20px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.windowCloseConfirm .windowCloseDismiss:hover:not(:disabled){background:var(--color-card-hover,#2a334d);color:var(--color-text,#eef2ff)}
+.windowCloseConfirm p{margin:0;font-size:13px;line-height:1.5;color:var(--color-navigation-hover,#aeb9d0)}
+.windowCloseRemember{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;font-size:13px;color:var(--color-text,#eef2ff);cursor:pointer;user-select:none}
+.windowCloseRemember input[type=checkbox]{width:15px;height:15px;margin:0;accent-color:var(--color-tab-active,#6f48c9);cursor:pointer}
+.windowCloseActions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:4px}
+.windowCloseConfirm .windowCloseActions button{margin:0;padding:8px 16px;border:1px solid var(--ui-line-strong,#48536b);border-radius:7px;font-size:13px;font-weight:500;cursor:pointer;color:var(--color-text,#eef2ff)}
+.windowCloseConfirm .windowCloseMinimize{background:var(--color-tab-active,#5923cb);border-color:var(--color-tab-lighter,#a68df2)}
+.windowCloseConfirm .windowCloseMinimize:hover:not(:disabled){background:var(--color-tab-hover,#6b36db)}
+.windowCloseConfirm .windowCloseQuit{background:#6e242c;border-color:#b84c57}
+.windowCloseConfirm .windowCloseQuit:hover:not(:disabled){background:#8b2c36}
+.windowCloseConfirm button:disabled{opacity:.55;cursor:default}
+.windowCloseConfirm :is(button,input):focus-visible{outline:2px solid var(--color-tab-lighter,#b19bf3);outline-offset:2px}

@@ -288,8 +288,22 @@ fn main() {
         .on_window_event(|window, event| {
             // A confirmed main-window close ends synchronization and auxiliary
             // windows too. Closing an arbitration/overlay window stays local.
-            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) {
-                window.app_handle().exit(0);
+            if window.label() == "main" {
+                match event {
+                    tauri::WindowEvent::CloseRequested { .. } => {
+                        if app_preferences::cached_close_action()
+                            == app_preferences::CloseAction::Ask
+                        {
+                            if let Some(main) = window.app_handle().get_webview_window("main") {
+                                app_preferences::reveal_main_window(&main);
+                            }
+                        }
+                    }
+                    tauri::WindowEvent::Destroyed => {
+                        window.app_handle().exit(0);
+                    }
+                    _ => {}
+                }
             } else if window.label() == "arbitration-live" {
                 match event {
                     tauri::WindowEvent::CloseRequested { api, .. } => {
@@ -316,7 +330,9 @@ fn main() {
             let db =
                 store::Store::open(&dir.join("myframe.sqlite3")).map_err(std::io::Error::other)?;
             if isolated {db.set_auto_collect(false).map_err(std::io::Error::other)?;}
-            app_preferences::place_window(app.handle(),&app_preferences::read(&db.db).unwrap_or_default());
+            let prefs=app_preferences::read(&db.db).unwrap_or_default();
+            app_preferences::sync_cached(&prefs);
+            app_preferences::place_window(app.handle(),&prefs);
             let enabled=db.auto_collect().map_err(std::io::Error::other)?;
             let collector=collector::Collector::default();
             if let Ok(Some(snapshot))=db.load_collection(){collector.restore(&snapshot);}
@@ -428,6 +444,7 @@ fn main() {
             riven_services::riven_similar,
             app_preferences::app_preferences,
             app_preferences::app_set_preferences,
+            app_preferences::app_focus_main_window,
             app_preferences::app_diagnostics,
             diagnostics::diagnostics_log_status,
             diagnostics::diagnostics_client_event,

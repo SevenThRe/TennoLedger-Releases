@@ -27,3 +27,8 @@
 .resourceNeeds{width:100%;padding-top:4px;border-top:1px solid var(--ui-line);display:flex;flex-direction:column;gap:8px}.resourceNeeds>span{display:flex;justify-content:space-between;gap:8px;text-align:left;font-size:11px}.resourceNeeds>span>span{color:var(--color-navigation-hover)}.resourceNeeds strong{font-weight:400;color:var(--color-text);text-align:right}.resourceSourceLink{display:flex;justify-content:center;align-items:center;gap:5px;color:var(--color-navigation-hover);font-size:12px}.resourceSourceLink svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
 .resourceShowMore{display:block;margin:12px auto;padding:7px 12px;border:1px solid var(--ui-line-strong);border-radius:7px;background:var(--color-bg-1);color:var(--color-text);font-size:12px;cursor:pointer}.resourceCards:focus-visible{outline:2px solid var(--color-tab-lighter)}
 @container resources (max-width:470px){.resourceCards{grid-template-columns:repeat(2,minmax(0,1fr))}.resourceCards>.resourceInventoryCard{padding:12px 9px}.resourceToolbar{flex-wrap:wrap}.resourceToolbar input:not([type=radio]):not([type=checkbox]){flex-basis:100%}.resourceToolbar select{max-width:none;flex:1}}
+.resourceCardProgress{display:flex;align-items:center;gap:8px;width:100%;margin-top:2px;font-variant-numeric:tabular-nums}
+.resourceCardBar{flex:1;height:4px;border-radius:99px;background:rgba(0,0,0,.35);overflow:hidden}
+.resourceCardBar>i{display:block;height:100%;border-radius:inherit;background:#9e7cf5;transition:width .2s ease}
+.resourceCardBar>i.ok{background:#7be0b0}
+.resourceCardProgress>b{font-size:10px;font-weight:500;color:var(--color-navigation-hover);white-space:nowrap}

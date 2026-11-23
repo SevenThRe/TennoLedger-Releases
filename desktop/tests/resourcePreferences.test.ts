@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import {parseResourcePreferences,resourceDefaults,sortCraftingGoals,craftingGoalStatus} from '../src/resourcePreferences.ts';
 import type {GoalResult} from '../src/resourcePlan.ts';
 test('view and independent inventory/material filters survive serialization',()=>{
- const prefs={...resourceDefaults,view:'plan',ownedOnly:false,inventoryOrder:'quantity',materialType:'blueprint',materialOrder:'owned',missingOnly:false};
+ const prefs={...resourceDefaults,view:'plan',ownedOnly:false,inventoryFilter:'missing' as const,inventoryOrder:'shortage' as const,materialType:'blueprint',materialOrder:'owned',missingOnly:false,craftingScope:'remaining' as const};
  assert.deepEqual(parseResourcePreferences(JSON.stringify(prefs)),prefs);
  assert.deepEqual(parseResourcePreferences(null),resourceDefaults);
  assert.equal(parseResourcePreferences('{"view":"shards"}').view,'shards');
  assert.equal(parseResourcePreferences('{"view":"mining"}').view,'mining');
+ assert.equal(parseResourcePreferences('{"inventoryOrder":"needed","craftingScope":"remaining"}').inventoryOrder,'needed');
+ assert.equal(parseResourcePreferences('{"ownedOnly":false}').inventoryFilter,'all');
 });
 test('invalid fields use defaults and malformed storage is reported without accepting transient state',()=>{
  assert.throws(()=>parseResourcePreferences('{'));

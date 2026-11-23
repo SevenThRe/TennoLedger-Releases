@@ -3,7 +3,7 @@
  */
 export type ResourceRecipe={output:number;credits?:number;parts:{itemId:string;quantity:number;reusable?:boolean}[]};
 export type ResourceGoal={itemId:string;quantity:number;paused?:boolean};
-export type ResourceRequirement={needed:number;owned:number;allocated:number;pending:number;fromBatches:number;missing:number;crafts:number;usedBy:string[];reusable?:boolean};
+export type ResourceRequirement={needed:number;owned:number;allocated:number;pending:number;fromBatches:number;missing:number;crafts:number;usedBy:string[];reusable?:boolean;demandByGoal?:Record<string,number>};
 export type GoalResult=ResourceGoal&{owned:number;pending:number;toCraft:number;missing:string[];unknown:boolean;waiting:boolean};
 type Dependency={materials:Set<string>;missing:Set<string>;unknown:boolean;waiting:boolean};
 export function planResources(goals:ResourceGoal[],recipes:Record<string,ResourceRecipe>,counts:Record<string,number>,pending:Record<string,number>={},inventoryKnown=true,unexpandedResources:ReadonlySet<string>=new Set()){
@@ -27,13 +27,15 @@ export function planResources(goals:ResourceGoal[],recipes:Record<string,Resourc
  }
  function consume(id:string,n:number,isReusable:boolean,owner:string,state:Dependency,path:Set<string>){
   if(!id||!valid(n)||path.size>48){state.unknown=true;return;}
-  const row=requirements[id]??={needed:0,owned:amount(counts,id),allocated:0,pending:0,fromBatches:0,missing:0,crafts:0,usedBy:[]};
+  const row=requirements[id]??={needed:0,owned:amount(counts,id),allocated:0,pending:0,fromBatches:0,missing:0,crafts:0,usedBy:[],demandByGoal:{}};
   if(!row.usedBy.includes(owner))row.usedBy.push(owner);
   state.materials.add(id);
   if(isReusable)row.reusable=true;
   let demand=n;
   if(isReusable){demand=Math.max(0,n-(reusable[id]??0));reusable[id]=Math.max(n,reusable[id]??0);}
   row.needed=checked(row.needed+demand);
+  if(!isReusable&&demand>0)row.demandByGoal![owner]=checked((row.demandByGoal![owner]??0)+demand);
+  else if(isReusable&&n>0)row.demandByGoal![owner]=Math.max(row.demandByGoal![owner]??0,n);
   const owned=take(stock,id,demand),waiting=take(queue,id,demand-owned),batch=take(surplus,id,demand-owned-waiting);
   row.allocated=checked(row.allocated+owned);row.pending=checked(row.pending+waiting);row.fromBatches=checked(row.fromBatches+batch);
   state.waiting ||= waiting>0;

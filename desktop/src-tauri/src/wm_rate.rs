@@ -11,12 +11,12 @@ pub fn wait() {
     if *next > now {
         std::thread::sleep(*next - now);
     }
-    *next = Instant::now() + Duration::from_millis(510);
+    *next = Instant::now() + Duration::from_millis(370);
 }
 pub fn backoff(seconds: u64) {
     let mut next = NEXT
         .get_or_init(|| Mutex::new(Instant::now()))
         .lock()
         .unwrap_or_else(|e| e.into_inner());
-    *next = (*next).max(Instant::now() + Duration::from_secs(seconds.min(3600)));
+    *next = (*next).max(Instant::now() + Duration::from_secs(seconds.clamp(1, 3600)));
 }

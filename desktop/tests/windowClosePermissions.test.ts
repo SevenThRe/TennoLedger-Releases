@@ -11,7 +11,7 @@ test('main window can finish the installed Tauri close-request handler',()=>{
  assert.match(handler,/await this\.destroy\(\)/);
  const capability=JSON.parse(readFileSync(new URL('../src-tauri/capabilities/default.json',import.meta.url),'utf8'));
  assert.ok(capability.windows.includes('main'));
- for(const permission of ['core:window:allow-close','core:window:allow-destroy']){
+ for(const permission of ['core:window:allow-close','core:window:allow-destroy','core:window:allow-minimize','core:window:allow-is-minimized','core:window:allow-unminimize','core:window:allow-show','core:window:allow-set-focus']){
   assert.ok(capability.permissions.includes(permission),`Close confirmation requires ${permission}`);
  }
 });

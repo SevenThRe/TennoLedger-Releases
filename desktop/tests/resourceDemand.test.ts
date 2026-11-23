@@ -34,15 +34,32 @@ test('resource recipes expand as explicit goals but stay unexpanded as ingredien
  assert.equal(d.favorites.requirements.forma.missing,2);
 });
 
-test('complete shipped crafting catalog resolves every remaining target',()=>{
+test('complete shipped crafting catalog resolves every remaining target without double-counting sub-components',()=>{
  const c=JSON.parse(readFileSync(new URL('../public/resource-index.json',import.meta.url),'utf8'));
  const rows=JSON.parse(readFileSync(new URL('../public/catalog.json',import.meta.url),'utf8')).items;
+ const itemMap=new Map<string,{id:string;name:string;maxRank?:number}>([...rows,...c.items].map((item:{id:string;name:string;maxRank?:number})=>[item.id,item]));
  const s=snapshot();s.counts={};s.favorites=c.goalIds;
- const d=resourceDemand(c,s,new Map(rows.map((item:{id:string;name:string;maxRank?:number})=>[item.id,item])));
- assert.ok(d.remaining.goals.length>1000);
+ const d=resourceDemand(c,s,itemMap);
+ assert.ok(d.favorites.goals.length>1000);
+ assert.ok(d.remaining.goals.length>600&&d.remaining.goals.length<750);
  assert.deepEqual(d.remaining.goals.filter(g=>g.unknown).map(g=>g.itemId),[]);
  assert.equal(d.remaining.incomplete,false);
  assert.equal(d.favorites.incomplete,false);
+
+ const goalSet=new Set(c.goalIds);
+ const childGoals=new Set<string>();
+ for(const gid of c.goalIds){
+  for(const part of c.recipes[gid]?.parts??[]){
+   if(!part.reusable&&goalSet.has(part.itemId)&&part.itemId!==gid)childGoals.add(part.itemId);
+  }
+ }
+ const leakedSubParts=d.remaining.goals.filter(g=>!((itemMap.get(g.itemId)?.maxRank??0)>0)&&childGoals.has(g.itemId));
+ assert.deepEqual(leakedSubParts,[]);
+ assert.equal(d.remaining.goals.some(g=>g.itemId==='/Lotus/Types/Friendly/Pets/CreaturePets/CreaturePetParts/Deimos/InfestedCritterAntigenA'),true);
+
+ const cryo=d.remaining.requirements['/Lotus/Types/Items/MiscItems/Cryotic'];
+ assert.equal(cryo?.needed,123590);
+ assert.equal(Object.values(cryo?.demandByGoal??{}).reduce((sum,n)=>sum+n,0),123590);
 });
 
 test('selected resource crafting expands ingredients and can be switched back',()=>{
@@ -69,7 +86,7 @@ test('Forma adapter queues resolve even when absent from the crafting tree',()=>
  assert.equal(resourceDemand(c,s,new Map()).favorites.inventoryKnown,true);
 });
 
-test('non-mastery sub-components are excluded from remaining once parent gear is mastered or owned',()=>{
+test('non-mastery sub-components are excluded from remaining so parent and built parts are not double-counted',()=>{
  const frame='/Lotus/Powersuits/TestFrame',chassis='/Lotus/Types/Recipes/TestChassisComponent';
  const c:DemandCatalog={
   ids:['ore'],
@@ -83,8 +100,14 @@ test('non-mastery sub-components are excluded from remaining once parent gear is
  const frameItems=new Map([[frame,{name:'Test Frame',maxRank:30}],[chassis,{name:'Test Chassis',maxRank:0}]]);
  const unowned=snapshot();unowned.counts={};unowned.ranks={};unowned.favorites=[];
  const unownedDemand=resourceDemand(c,unowned,frameItems).remaining;
- assert.equal(unownedDemand.goals.some(g=>g.itemId===chassis),true);
- assert.ok((unownedDemand.requirements.ore?.needed??0)>=10);
+ assert.deepEqual(unownedDemand.goals.map(g=>g.itemId),[frame]);
+ assert.equal(unownedDemand.requirements.ore?.needed,10);
+ assert.equal(unownedDemand.requirements.ore?.demandByGoal?.[frame],10);
+
+ const ownedChassis=snapshot();ownedChassis.counts={[chassis]:1};ownedChassis.ranks={};ownedChassis.favorites=[];
+ const withBuiltChassis=resourceDemand(c,ownedChassis,frameItems).remaining;
+ assert.deepEqual(withBuiltChassis.goals.map(g=>g.itemId),[frame]);
+ assert.equal(withBuiltChassis.requirements.ore?.needed,3);
 
  const masteredSold=snapshot();masteredSold.counts={};masteredSold.ranks={[frame]:30};masteredSold.favorites=[];
  const afterMastery=resourceDemand(c,masteredSold,frameItems).remaining;

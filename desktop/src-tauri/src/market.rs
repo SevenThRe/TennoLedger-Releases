@@ -8,7 +8,6 @@ use std::{
 };
 struct Gateway {
     client: reqwest::blocking::Client,
-    last: Option<Instant>,
     last_riven: Option<Instant>,
     cache: HashMap<String, (Instant, Value)>,
     session: Option<Session>,
@@ -138,6 +137,13 @@ fn route(action: &str, key: &str) -> Result<(&'static str, String, bool), String
         "review" => ("POST", format!("/v1/profile/{}/review", reputation_partner(key)?), true),
         "create" => ("POST", "/v2/order".into(), true),
         "update" => ("PATCH", format!("/v2/order/{}", segment(key)?), true),
+        "update_group" => {
+            if matches!(key, "all" | "ungrouped") {
+                ("PATCH", format!("/v2/orders/group/{key}"), true)
+            } else {
+                return Err("不支持的订单分组".into());
+            }
+        }
         "delete" => ("DELETE", format!("/v2/order/{}", segment(key)?), true),
         "close" => ("POST", format!("/v2/order/{}/close", segment(key)?), true),
         "auction" => (
@@ -167,6 +173,13 @@ fn validate(action: &str, body: &Value) -> Result<(), String> {
     }
     if action.starts_with("auction_") {
         return validate_auction(action, body);
+    }
+    if action == "update_group" {
+        let o = body.as_object().ok_or("需要订单分组对象")?;
+        if o.len() != 1 || body.get("visible").and_then(Value::as_bool).is_none() {
+            return Err("订单分组仅支持更新可见性".into());
+        }
+        return Ok(());
     }
     if matches!(action, "create" | "update" | "close") {
         let o = body.as_object().ok_or("需要订单对象")?;
@@ -330,7 +343,6 @@ fn new_gateway()->Gateway {
                 .user_agent("MyFrame/0.5.0 (desktop companion)")
                 .build()
                 .expect("HTTP client"),
-            last: None,
             last_riven: None,
             cache: HashMap::new(),
             session: None,
@@ -407,12 +419,6 @@ fn session_view(s: Option<&Session>) -> Value {
 }
 fn pace(g: &mut Gateway, riven: bool) {
     crate::wm_rate::wait();
-    if let Some(at) = g.last {
-        let d = Duration::from_millis(400);
-        if at.elapsed() < d {
-            std::thread::sleep(d - at.elapsed());
-        }
-    }
     if riven {
         if let Some(at) = g.last_riven {
             let d = Duration::from_millis(6100);
@@ -422,7 +428,25 @@ fn pace(g: &mut Gateway, riven: bool) {
         }
         g.last_riven = Some(Instant::now());
     }
-    g.last = Some(Instant::now());
+}
+fn retry_after_seconds(headers: &reqwest::header::HeaderMap) -> u64 {
+    headers
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .map(|s| s.clamp(1, 3600))
+        .unwrap_or(10)
+}
+fn clear_opposite_group_write(
+    writes: &mut HashMap<String, Instant>,
+    key: &str,
+    platform: &str,
+    body: &Value,
+) {
+    if let Some(vis) = body.get("visible").and_then(Value::as_bool) {
+        let opposite = format!("update_group:{key}:{platform}:{}", json!({"visible": !vis}));
+        writes.remove(&opposite);
+    }
 }
 fn definite_rejection(status:u16)->bool {matches!(status,400|401|403|404|405|409|410|413|415|422|429)}
 fn error_codes(body:&Value)->Vec<String>{
@@ -528,7 +552,11 @@ fn handle_market_response_with(
     } else {
         None
     };
+    let retry_after = (status == 429).then(|| retry_after_seconds(r.headers()));
     let result = response(r);
+    if let Some(seconds) = retry_after {
+        crate::wm_rate::backoff(seconds);
+    }
     if result.is_ok() {
         if let Some(new_token) = rotated {
             apply_rotated_token(g, new_token);
@@ -1429,6 +1457,9 @@ fn request_scoped(
         return Err(format!("{message} [诊断编号 {}]", trace.id()));
     }
     let result=result.map_err(|e|format!("{e} [诊断编号 {}]",trace.id()))?;
+    if action == "update_group" {
+        clear_opposite_group_write(&mut g.writes, &key, &platform, &body);
+    }
     let data = if path.starts_with("/v1/") {
         match action.as_str() {
             "rivens" => result.pointer("/payload/auctions").cloned(),
@@ -1513,6 +1544,42 @@ mod bulk_context_tests {
         let session = Session { token:"SECRET".into(), platform:"pc".into(), profile:json!({"id":"a"}) };
         let view = session_view(Some(&session));
         assert_eq!(view["accountId"], "a"); assert!(!view.to_string().contains("SECRET"));
+    }
+
+    #[test]
+    fn update_group_allows_only_expected_groups_and_visible_flag() {
+        assert_eq!(route("update_group", "all").unwrap(), ("PATCH", "/v2/orders/group/all".into(), true));
+        assert_eq!(route("update_group", "ungrouped").unwrap(), ("PATCH", "/v2/orders/group/ungrouped".into(), true));
+        for bad in ["", "../all", "custom", "all/extra"] {
+            assert!(route("update_group", bad).is_err(), "expected rejection for {bad}");
+        }
+        assert!(validate("update_group", &json!({"visible": true})).is_ok());
+        assert!(validate("update_group", &json!({"visible": false})).is_ok());
+        for bad in [
+            json!(null),
+            json!({}),
+            json!({"visible": "true"}),
+            json!({"visible": 1}),
+            json!({"visible": true, "platinum": 10}),
+        ] {
+            assert!(validate("update_group", &bad).is_err(), "expected invalid body rejection for {bad}");
+        }
+    }
+
+    #[test]
+    fn clear_opposite_group_write_resets_only_inverted_visibility() {
+        let mut writes = HashMap::new();
+        let hide_fp = "update_group:all:pc:{\"visible\":false}".to_string();
+        let show_fp = "update_group:all:pc:{\"visible\":true}".to_string();
+        let other_fp = "update:o1:pc:{\"visible\":false}".to_string();
+        writes.insert(hide_fp.clone(), Instant::now());
+        writes.insert(show_fp.clone(), Instant::now());
+        writes.insert(other_fp.clone(), Instant::now());
+
+        clear_opposite_group_write(&mut writes, "all", "pc", &json!({"visible": true}));
+        assert!(!writes.contains_key(&hide_fp));
+        assert!(writes.contains_key(&show_fp));
+        assert!(writes.contains_key(&other_fp));
     }
 }
 #[cfg(test)]
@@ -1633,6 +1700,24 @@ mod async_session_tests {
         for status in [400,401,403,404,405,409,410,413,415,422,429]{assert!(definite_rejection(status));}
         for status in [200,408,500,502,503,504]{assert!(!definite_rejection(status));}
     }
+
+    #[test]
+    fn retry_after_header_parses_and_clamps_bounds() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        assert_eq!(retry_after_seconds(&headers), 10);
+
+        headers.insert(reqwest::header::RETRY_AFTER, "5".parse().unwrap());
+        assert_eq!(retry_after_seconds(&headers), 5);
+
+        headers.insert(reqwest::header::RETRY_AFTER, "0".parse().unwrap());
+        assert_eq!(retry_after_seconds(&headers), 1);
+
+        headers.insert(reqwest::header::RETRY_AFTER, "9999".parse().unwrap());
+        assert_eq!(retry_after_seconds(&headers), 3600);
+
+        headers.insert(reqwest::header::RETRY_AFTER, "Wed, 21 Oct 2026 07:28:00 GMT".parse().unwrap());
+        assert_eq!(retry_after_seconds(&headers), 10);
+    }
 }
 
 #[cfg(all(test,windows))] mod remembered_session_tests {
@@ -1654,8 +1739,10 @@ mod async_session_tests {
         std::fs::remove_dir(path.parent().unwrap()).unwrap();
     }
     use super::*;
+    static TEST_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     fn fixture()->(Gateway,PathBuf){
-        let directory=std::env::temp_dir().join(format!("wm-session-state-{}-{}",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap()));
+        let seq=TEST_SEQ.fetch_add(1,std::sync::atomic::Ordering::Relaxed);
+        let directory=std::env::temp_dir().join(format!("wm-session-state-{}-{}-{seq}",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap()));
         let path=crate::market_credentials::path(&directory);let mut g=new_gateway();
         g.session=Some(Session{token:"synthetic-native-only-token".into(),platform:"pc".into(),profile:json!({"id":"fixture-user","slug":"fixture-user","verification":true})});
         (g,path)
@@ -1745,6 +1832,8 @@ mod async_session_tests {
 
 #[cfg(test)] mod http_rejection_tests {
     use super::*;
+    static TEST_401_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    fn temp_seq_401() -> u64 { TEST_401_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed) }
     fn http_response_with(status:u16,content_type:&str,extra_header:Option<&str>,body:&str)->reqwest::blocking::Response{
         use std::io::{Read,Write};
         let listener=std::net::TcpListener::bind("127.0.0.1:0").unwrap();let address=listener.local_addr().unwrap();
@@ -1765,7 +1854,8 @@ mod async_session_tests {
         assert!(handle_market_response(&mut g,true,true,true,key,unknown).is_err());assert!(g.writes.contains_key(key));
     }
     #[test] fn html_401_and_v1_401_do_not_wipe_saved_session(){
-        let directory=std::env::temp_dir().join(format!("wm-session-401-{}-{}",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap()));
+        let seq = temp_seq_401();
+        let directory=std::env::temp_dir().join(format!("wm-session-401-{}-{}-{seq}",std::process::id(),chrono::Utc::now().timestamp_nanos_opt().unwrap()));
         let path=crate::market_credentials::path(&directory);
         let mut g=new_gateway();
         g.session=Some(Session{token:"original-token".into(),platform:"pc".into(),profile:json!({"id":"u1","slug":"u1","verification":true})});

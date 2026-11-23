@@ -8,7 +8,7 @@ export function itemName(item:Pick<NamedItem,'name'|'zh'>|undefined,en=false){
  return parts[value]??value;
 }
 /** Qualify generic parts only when their actual recipe owner is unambiguous. */
-export function craftingNames(items:Map<string,NamedItem>,en=false,marketNames:Readonly<Record<string,string>>={}){
+export function craftingNames(items:ReadonlyMap<string,NamedItem>,en=false,marketNames:Readonly<Record<string,string>>={}){
  const owners=new Map<string,Set<string>>();
  for(const owner of items.values())for(const part of [...(owner.recipe?.parts??[]),...(owner.displayParts??[])]){
   if(part.itemId===owner.id)continue;

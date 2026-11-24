@@ -13,4 +13,6 @@ test('preparing, active interval and intermission have distinct clocks',()=>{
 test('completed rotation advances to next running rotation rather than staying in intermission',()=>{
  const survival={...run,intervals:[{index:1,kind:'rotation',start:100,end:400,complete:true,drones:8}]} as ArbitrationRun;
  assert.deepEqual(livePhase(survival,445),{phase:'running',index:2,seconds:45,breakSeconds:null});
+ const clientDefense={...run,isHost:false,droneTelemetry:false,droneSpawns:0,wavesCompleted:0,rewardCycles:2,intervals:[{index:1,kind:'rotation',start:100,end:280,complete:true,drones:0},{index:2,kind:'rotation',start:280,end:460,complete:true,drones:0}]} as ArbitrationRun;
+ assert.deepEqual(livePhase(clientDefense,500),{phase:'running',index:3,seconds:40,breakSeconds:null});
 });

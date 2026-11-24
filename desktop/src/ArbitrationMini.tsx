@@ -221,11 +221,11 @@ export default function ArbitrationMini({
        <span>{L('任务时长','Mission time')}</span>
        <strong>{durationLabel(run?missionSeconds(run,clock):null)}</strong>
       </article>
-      <article title={L('距上次仲裁无人机生成已过时间','Elapsed since last Arbitration drone')}>
+      <article title={run?.isHost===false&&!run.droneTelemetry?L('队员视角：游戏仅在房主端记录无人机生成','Client view: Warframe logs drone spawns on the Host only'):L('距上次仲裁无人机生成已过时间','Elapsed since last Arbitration drone')}>
        <span>{L('无人机间隔','Drone gap')}</span>
        <strong>{durationLabel(run?.droneTelemetry&&last!=null?Math.max(0,clock-last):null)}</strong>
       </article>
-      <article className="arbMiniMetricVitus">
+      <article className="arbMiniMetricVitus" title={run?.isHost===false&&!run.droneTelemetry?L('队员视角：游戏仅在房主端记录无人机生成，无法估算精华','Client view: Warframe logs drone spawns on the Host only'):undefined}>
        <span>{L('预估精华','Expected VE')}</span>
        <strong>{estimate?rangeLabel(estimate.low,estimate.high):'—'}</strong>
       </article>

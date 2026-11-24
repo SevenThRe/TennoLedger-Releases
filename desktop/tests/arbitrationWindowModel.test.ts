@@ -36,7 +36,10 @@ test('miniStatusBadge summarizes run and watcher states concisely with hover tit
  assert.equal(miniStatusBadge({status:'recording',hasGap:false,lastLogSeconds:100},105,'watching',false).label,'实时');
  assert.equal(miniStatusBadge({status:'recording',hasGap:false,lastLogSeconds:100},120,'watching',false).label,'计时推算');
  assert.equal(miniStatusBadge({status:'completed',hasGap:false,lastLogSeconds:100},120,'watching',false).label,'已结束');
+ assert.equal(miniStatusBadge({status:'recording',hasGap:false,lastLogSeconds:100},105,'live-unlinked',false).label,'仅监控');
  assert.equal(miniStatusBadge(null,0,'waiting-account',false).label,'未同步');
+ assert.equal(miniStatusBadge(null,0,'live-unlinked',false).label,'仅监控');
+ assert.equal(miniStatusBadge(null,0,'live-unlinked',true).label,'Live only');
  assert.equal(miniStatusBadge(null,0,'log-unavailable',false).label,'无日志');
  assert.equal(miniStatusBadge(null,0,'watching',false).label,'监听中');
 });

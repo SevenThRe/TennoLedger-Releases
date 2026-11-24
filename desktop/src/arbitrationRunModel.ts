@@ -11,6 +11,8 @@ export const emptyCapture:CaptureStatus={code:'waiting-account',error:null,curre
 export function missionSeconds(r:ArbitrationRun,nowLogSeconds=r.lastLogSeconds){return r.gameplayStart===null?null:Math.max(0,(r.gameplayEnd??nowLogSeconds)-r.gameplayStart);}
 export function durationLabel(seconds:number|null){if(seconds===null||!Number.isFinite(seconds))return '—';const s=Math.max(0,Math.floor(seconds));return s>=3600?`${Math.floor(s/3600)}:${String(Math.floor(s/60)%60).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`:`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;}
 export const runStatus=(status:string,en=false)=>en?({recording:'Recording',completed:'Completed',failed:'Failed',aborted:'Aborted',ended:'Ended',interrupted:'Interrupted'}[status]??status):({recording:'进行中',completed:'已完成',failed:'失败',aborted:'已中止',ended:'已结束',interrupted:'采集中断'}[status]??status);
+export const isLiveRecording=(r:Pick<ArbitrationRun,'status'>|null|undefined)=>r?.status==='recording';
+export const summaryIntervalMode=(r:Pick<ArbitrationRun,'intervals'|'wavesCompleted'>):'wave'|'rotation'=>(r.intervals.some(i=>i.kind==='wave')||r.wavesCompleted>0)?'wave':'rotation';
 export const vitusAssumptions='按原版 arbi.guide 模型：资源与掉落概率加成、18% 寻回兽双倍概率，假设所有已生成无人机均被击杀并拾取。祝福未知时显示区间；这不是实得掉落。';
 // Independent expression of the published arbi.guide expectation model used in AlecaFrame 3.0.4.
 export function expectedVitus(drones:number,cycles:number,blessed=false,mirror=false){return drones*(blessed?.354:.2832)+cycles+(mirror?2:3)*(.07*Math.min(cycles,4)+.10*Math.max(cycles-4,0));}

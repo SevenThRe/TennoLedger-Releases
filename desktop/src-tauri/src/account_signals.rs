@@ -2,7 +2,7 @@
 use std::{fs::File,io::{Read,Seek,SeekFrom},path::Path,time::SystemTime};
 #[derive(Default)] pub struct Signals {pub refresh:bool,pub login:bool}
 #[derive(Default)] pub struct Tail {offset:u64,created:Option<SystemTime>,initialized:bool,pending:Vec<u8>,discard:bool}
-fn is_sys_info_event(line: &str, event_prefix: &str) -> bool {
+pub(crate) fn is_sys_info_event(line: &str, event_prefix: &str) -> bool {
     let Some((prefix, rest)) = line.split_once(" Sys [Info]: ") else {
         return false;
     };

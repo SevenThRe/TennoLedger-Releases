@@ -27,9 +27,11 @@ export function miniStatusBadge(run:{status:string;hasGap:boolean;lastLogSeconds
   if(run.hasGap)return {tone:'warn',label:en?'Partial':'残缺记录',title:en?'Partial capture due to a log gap':'日志存在断点，当前为不完整采集'};
   if(run.status!=='recording')return {tone:'ended',label:en?'Ended':'已结束',title:en?'Arbitration run ended':'本局仲裁记录已结束'};
   if(clock-run.lastLogSeconds>10)return {tone:'warn',label:en?'Estimated':'计时推算',title:en?'Waiting for new logs; clock is estimated':'等待新日志 · 计时推算中'};
+  if(captureCode==='live-unlinked')return {tone:'live',label:en?'Live only':'仅监控',title:en?'Receiving live logs; run history saves once account sync is ready':'正在接收实时日志；账号同步就绪后才会保存历史记录'};
   return {tone:'live',label:en?'Live':'实时',title:en?'Receiving live Arbitration logs':'正在实时接收仲裁日志'};
  }
  if(captureCode==='waiting-account')return {tone:'muted',label:en?'Waiting sync':'未同步',title:en?'Enable auto-sync and log in to begin recording':'开启自动同步并登录游戏后开始采集'};
+ if(captureCode==='live-unlinked')return {tone:'watching',label:en?'Live only':'仅监控',title:en?'Watching EE.log for live display; enable sync to save history':'已监听日志用于实时显示；开启自动同步后保存历史'};
  if(captureCode==='log-unavailable')return {tone:'warn',label:en?'No EE.log':'无日志',title:en?'Warframe EE.log not found; start the game':'未找到 Warframe EE.log，请确认游戏已启动'};
  return {tone:'watching',label:en?'Watching':'监听中',title:en?'Ready; recording starts upon entering an Arbitration':'已就绪，进入仲裁任务后自动开始记录'};
 }

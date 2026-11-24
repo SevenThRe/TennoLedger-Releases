@@ -18,9 +18,15 @@ pub struct Status {
     pub observed_items: usize,
     pub last_relic: Option<serde_json::Value>,
 }
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ArbitrationState {
+    pub binding: Option<(String, u64)>,
+    pub scope_epoch: u64,
+    pub game_exiting: bool,
+}
 #[derive(Clone)]
 struct CaptureBinding { scope:String, epoch:u64, started_at:String }
-struct Runtime { refresh_requested:bool, manual_refresh_requested:bool, child: Option<Child>, helper_active:bool, generation: u64, account_generation:u64, scope_epoch:u64, live_scope:Option<String>, captures:BTreeMap<String,CaptureBinding>, last_live_read: Option<std::time::Instant>, status: Status }
+struct Runtime { refresh_requested:bool, manual_refresh_requested:bool, child: Option<Child>, helper_active:bool, game_exiting:bool, generation: u64, account_generation:u64, scope_epoch:u64, live_scope:Option<String>, captures:BTreeMap<String,CaptureBinding>, last_live_read: Option<std::time::Instant>, status: Status }
 impl Runtime {
  fn reject(&mut self,reason:&str)->bool{self.status.scan_code=format!("helper-invalid-inventory:{reason}");false}
  fn token(&self)->(u64,u64){(self.generation,self.account_generation)}
@@ -31,7 +37,40 @@ impl Runtime {
   if self.status.scan_code=="helper-fetching"{self.status.scan_code=if self.status.enabled{"waiting-data"}else{"stopped"}.into();return true;}
   false
  }
- fn invalidate_account(&mut self){self.account_generation+=1;self.scope_epoch+=1;self.live_scope=None;self.captures.clear();self.last_live_read=None;self.status.last_read_at=None;self.status.last_inventory_at=None;self.status.inventory_source=None;self.status.last_relic=None;self.status.observed_items=0;self.status.account_code="waiting-data".into();self.status.scan_code="waiting-data".into();self.refresh_requested=true;self.manual_refresh_requested=true;}
+ fn invalidate_account(&mut self){self.account_generation+=1;self.scope_epoch+=1;self.game_exiting=false;self.live_scope=None;self.captures.clear();self.last_live_read=None;self.status.last_read_at=None;self.status.last_inventory_at=None;self.status.inventory_source=None;self.status.last_relic=None;self.status.observed_items=0;self.status.account_code="waiting-data".into();self.status.scan_code="waiting-data".into();self.refresh_requested=true;self.manual_refresh_requested=true;}
+ fn begin_game_exit(&mut self) -> bool {
+  if self.live_scope.is_some() && !self.game_exiting {
+   self.game_exiting = true;
+   return true;
+  }
+  false
+ }
+ fn finish_game_exit(&mut self) {
+  let was_live = self.live_scope.is_some() || !self.captures.is_empty() || self.game_exiting;
+  self.game_exiting = false;
+  self.last_live_read = None;
+  self.live_scope = None;
+  self.captures.clear();
+  if was_live {
+   self.scope_epoch += 1;
+  }
+  self.status.scan_code = "game-not-running".into();
+  self.status.account_code = if self.status.inventory_source.as_deref() == Some("alecaframe-cache") {
+   "cached"
+  } else if self.status.inventory_source.is_some() {
+   "saved"
+  } else {
+   "game-not-running"
+  }
+  .into();
+ }
+ fn invalidate_if_epoch(&mut self, expected_epoch: u64) -> bool {
+  if !self.status.enabled || self.scope_epoch != expected_epoch {
+   return false;
+  }
+  self.invalidate_account();
+  true
+ }
  fn capture_start(&mut self,id:&str,started:&str,active:&str){
   if id.is_empty()||id.len()>80||!id.bytes().all(|c|c.is_ascii_alphanumeric()||b":-_".contains(&c)){return;}
   let Ok(time)=chrono::DateTime::parse_from_rfc3339(started) else{return;};
@@ -47,7 +86,7 @@ impl Runtime {
 #[derive(Clone)]
 pub struct Collector(Arc<Mutex<Runtime>>);
 impl Default for Collector {
-    fn default() -> Self { Self(Arc::new(Mutex::new(Runtime { refresh_requested:false, manual_refresh_requested:false, child: None, helper_active:false, generation: 0, account_generation:0,scope_epoch:0,live_scope:None,captures:BTreeMap::new(),last_live_read:None, status: Status {enabled:false,running:false,code:"stopped".into(),account_code:"waiting-data".into(),inventory_source:None,scan_code:"waiting-data".into(),last_read_at:None,scan:serde_json::json!({}),last_inventory_at:None,observed_items:0,last_relic:None} }))) }
+    fn default() -> Self { Self(Arc::new(Mutex::new(Runtime { refresh_requested:false, manual_refresh_requested:false, child: None, helper_active:false, game_exiting:false, generation: 0, account_generation:0,scope_epoch:0,live_scope:None,captures:BTreeMap::new(),last_live_read:None, status: Status {enabled:false,running:false,code:"stopped".into(),account_code:"waiting-data".into(),inventory_source:None,scan_code:"waiting-data".into(),last_read_at:None,scan:serde_json::json!({}),last_inventory_at:None,observed_items:0,last_relic:None} }))) }
 }
 #[derive(Deserialize)]
 #[serde(rename_all="camelCase")]
@@ -121,7 +160,35 @@ fn merge_inventory(old: Option<collection::Snapshot>, input: &str, catalog: &col
     collection::validate(&s,catalog)?; Ok(s)
 }
 impl Collector {
-    pub fn arbitration_binding(&self)->Option<(String,u64)>{let r=self.0.lock().ok()?;if !r.status.enabled{return None;}r.live_scope.clone().map(|scope|(scope,r.scope_epoch))}
+    pub fn arbitration_state(&self) -> ArbitrationState {
+        let Some(r) = self.0.lock().ok() else {
+            return ArbitrationState {
+                binding: None,
+                scope_epoch: 0,
+                game_exiting: false,
+            };
+        };
+        ArbitrationState {
+            binding: if r.status.enabled {
+                r.live_scope.clone().map(|scope| (scope, r.scope_epoch))
+            } else {
+                None
+            },
+            scope_epoch: r.scope_epoch,
+            game_exiting: r.status.enabled && r.game_exiting,
+        }
+    }
+    pub fn arbitration_binding(&self) -> Option<(String, u64)> {
+        self.arbitration_state().binding
+    }
+    pub fn invalidate_if_epoch(&self, app: &tauri::AppHandle, expected_epoch: u64) -> bool {
+        let mut r = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if !r.invalidate_if_epoch(expected_epoch) {
+            return false;
+        }
+        let _ = app.emit("collector-updated", &r.status);
+        true
+    }
     pub fn with_arbitration_binding<T>(
         &self,
         app: &tauri::AppHandle,
@@ -203,10 +270,13 @@ impl Collector {
                 if pid.is_none() {
                     helper.reset();
                     let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());
-                    r.last_live_read=None;r.live_scope=None;r.captures.clear();r.scope_epoch+=1;r.status.scan_code="game-not-running".into();
-                    r.status.account_code=if r.status.inventory_source.as_deref()==Some("alecaframe-cache"){"cached"}else if r.status.inventory_source.is_some(){"saved"}else{"game-not-running"}.into();
+                    if r.begin_game_exit() {
+                        let _=app.emit("collector-updated",&r.status);continue;
+                    }
+                    r.finish_game_exit();
                     let _=app.emit("collector-updated",&r.status);continue;
                 }
+                this.0.lock().unwrap_or_else(|e|e.into_inner()).game_exiting=false;
                 if std::time::Instant::now()<due {continue;}
                 last_attempt=Some(std::time::Instant::now());
                 let generation={let mut r=this.0.lock().unwrap_or_else(|e|e.into_inner());r.helper_active=true;r.status.scan_code="helper-fetching".into();r.status.scan=serde_json::json!({"provider":"warframe-api-helper","pid":pid,"refreshSeconds":120});let _=app.emit("collector-updated",&r.status);r.token()};
@@ -296,8 +366,8 @@ impl Collector {
         if live {
             match db.save_live_collection(&snapshot) {Ok(true)=>{let _=app.emit("ledger-updated",());},Ok(false)=>{},Err(_)=>{runtime.status.scan_code="history-save-failed".into();return false;}}
         } else if (decision!=crate::acquisition::Decision::Unchanged||switched) && db.save_collection(&snapshot).is_err(){return runtime.reject("storage-save");}
-        if switched{runtime.scope_epoch+=1;runtime.captures.clear();runtime.live_scope=None;runtime.last_live_read=None;runtime.status.last_read_at=None;runtime.status.last_relic=None;let _=app.emit("ledger-updated",());}
-        if live {runtime.live_scope=snapshot.account_scope.clone();runtime.last_live_read=Some(std::time::Instant::now());runtime.status.last_read_at=Some(chrono::Utc::now().to_rfc3339());}
+        if switched{runtime.scope_epoch+=1;runtime.game_exiting=false;runtime.captures.clear();runtime.live_scope=None;runtime.last_live_read=None;runtime.status.last_read_at=None;runtime.status.last_relic=None;let _=app.emit("ledger-updated",());}
+        if live {runtime.game_exiting=false;runtime.live_scope=snapshot.account_scope.clone();runtime.last_live_read=Some(std::time::Instant::now());runtime.status.last_read_at=Some(chrono::Utc::now().to_rfc3339());}
         runtime.status.account_code=if live{"synced"}else{"cached"}.into();
         runtime.status.inventory_source=Some(source.into());runtime.status.last_inventory_at=Some(snapshot.captured_at);runtime.status.observed_items=snapshot.counts.len();
         if should_emit_collection_updated(switched,decision) {let _=app.emit("collection-updated",());}
@@ -306,7 +376,7 @@ impl Collector {
     pub fn status(&self)->Status { self.0.lock().unwrap_or_else(|e|e.into_inner()).status.clone() }
     pub fn stop(&self) {
         let mut r=self.0.lock().unwrap_or_else(|e|e.into_inner());
-        r.generation+=1;r.last_live_read=None;r.live_scope=None;r.captures.clear();r.scope_epoch+=1;
+        r.generation+=1;r.game_exiting=false;r.last_live_read=None;r.live_scope=None;r.captures.clear();r.scope_epoch+=1;
         if let Some(mut child)=r.child.take() { let _=child.kill(); let _=child.wait(); }
         r.status.enabled=false;r.status.running=false;r.status.code="stopped".into();r.status.scan_code="stopped".into();
         drop(r);
@@ -543,6 +613,58 @@ pub fn collector_request_refresh(state:tauri::State<Collector>)->bool {
         assert!(!should_latch_cache_stamp(false, false, "waiting-data"));
         assert!(!should_latch_cache_stamp(false, true, "helper-invalid-inventory:storage-lock"));
         assert!(should_latch_cache_stamp(false, true, "helper-invalid-inventory:identity-selection-blocked"));
+    }
+
+    #[test]
+    fn invalidate_if_epoch_clears_live_scope_only_when_enabled_and_epoch_matches() {
+        let collector = Collector::default();
+        let mut r = collector.0.lock().unwrap();
+        r.status.enabled = false;
+        r.live_scope = Some("acct-v1-a".into());
+        r.scope_epoch = 3;
+        assert!(!r.invalidate_if_epoch(3));
+        assert_eq!(r.live_scope.as_deref(), Some("acct-v1-a"));
+        assert_eq!(r.scope_epoch, 3);
+
+        r.status.enabled = true;
+        assert!(!r.invalidate_if_epoch(2));
+        assert_eq!(r.live_scope.as_deref(), Some("acct-v1-a"));
+        assert_eq!(r.scope_epoch, 3);
+
+        assert!(r.invalidate_if_epoch(3));
+        assert!(r.live_scope.is_none());
+        assert_eq!(r.scope_epoch, 4);
+        assert_eq!(r.account_generation, 1);
+        assert!(r.refresh_requested);
+        assert!(r.manual_refresh_requested);
+    }
+
+    #[test]
+    fn game_exit_grace_preserves_binding_for_one_tick_and_clears_on_finish_or_invalidate() {
+        let collector = Collector::default();
+        {
+            let mut r = collector.0.lock().unwrap();
+            r.status.enabled = true;
+            r.live_scope = Some("acct-v1-a".into());
+            r.scope_epoch = 2;
+            assert!(r.begin_game_exit());
+            assert!(r.game_exiting);
+        }
+        let s1 = collector.arbitration_state();
+        assert_eq!(s1.binding, Some(("acct-v1-a".into(), 2)));
+        assert!(s1.game_exiting);
+
+        {
+            let mut r = collector.0.lock().unwrap();
+            assert!(!r.begin_game_exit());
+            r.finish_game_exit();
+            assert!(!r.game_exiting);
+            assert_eq!(r.scope_epoch, 3);
+            assert!(r.live_scope.is_none());
+            // Subsequent finish_game_exit while closed does not spin scope_epoch.
+            r.finish_game_exit();
+            assert_eq!(r.scope_epoch, 3);
+        }
     }
 
 }

@@ -37,9 +37,9 @@ export function useArbitrationLiveWindow():ArbitrationLiveWindowState{
    setStatus(emptyCapture);
    return;
   }
-  let alive=true,pending=false;
+  let alive=true,pending=false,again=false;
   const read=async()=>{
-   if(pending)return;
+   if(pending){again=true;return;}
    pending=true;
    try{
     const next=await invoke<CaptureStatus>('arbitration_capture_status',{expectedScope:scope});
@@ -52,6 +52,7 @@ export function useArbitrationLiveWindow():ArbitrationLiveWindowState{
     if(alive)setError(String(e));
    }finally{
     pending=false;
+    if(alive&&again){again=false;void read();}
    }
   };
   void read();

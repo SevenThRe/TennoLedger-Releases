@@ -27,6 +27,13 @@ function captureBadge(state:ArbitrationLiveWindowState,en:boolean){
    title:en?'Enable auto-sync and log in to begin recording':'开启自动同步并登录游戏后开始监听',
   };
  }
+ if(state.captureCode==='live-unlinked'){
+  return {
+   tone:'watching',
+   label:en?'Live only':'仅监控',
+   title:en?'Watching EE.log in live-only mode; enable sync to save run history':'正在实时监听日志；开启自动同步并登录后自动保存历史',
+  };
+ }
  if(state.captureCode==='log-unavailable'){
   return {
    tone:'warn',

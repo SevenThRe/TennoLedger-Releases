@@ -1,6 +1,6 @@
 [package]
 name = "myframe-desktop"
-version = "0.1.12"
+version = "0.1.13"
 license = "MIT"
 edition = "2021"
 default-run = "myframe-desktop"

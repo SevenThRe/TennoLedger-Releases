@@ -11,8 +11,12 @@ fn re(s: &str) -> Regex {
 static TIME: LazyLock<Regex> = LazyLock::new(|| re(r"^!?(\d+(?:\.\d+)?)\s+(?:.*?\]:\s*)?(.*)$"));
 static NODE: LazyLock<Regex> =
     LazyLock::new(|| re(r"\b([A-Za-z][A-Za-z0-9]*Node\d+)(_EliteAlert)?\b"));
-static NAME: LazyLock<Regex> =
-    LazyLock::new(|| re(r"Mission name:\s*(.+?)\s+\(([^)]+)\)(?:\s*-\s*(Arbitration|仲裁))?\s*$"));
+static NAME: LazyLock<Regex> = LazyLock::new(|| {
+    re(r"Mission name:\s*(.+?)\s*[(\u{ff08}]([^)\u{ff09}]+)[)\u{ff09}](?:\s*-\s*(.+?))?\s*$")
+});
+static ARBY_SUFFIX: LazyLock<Regex> = LazyLock::new(|| {
+    re(r"(?i)^(?:Arbitration|仲裁|アービトレーション|중재|Арбитраж|Арбітраж|Schiedsgericht|Arbitrage|Arbitramento|Arbitragem|Arbitrato|Arbitraż|Tahkim)$")
+});
 static TYPE: LazyLock<Regex> =
     LazyLock::new(|| re(r"(?:mission type=|missionType=|for mission )(MT_[A-Z_]+)"));
 static WAVE: LazyLock<Regex> = LazyLock::new(|| {
@@ -42,6 +46,13 @@ fn is_host_migration(msg: &str) -> bool {
         return false;
     }
     MIGRATION.is_match(msg)
+}
+
+fn has_elite_marker(line: &str) -> bool {
+    line.contains("_EliteAlert")
+        || line.contains("eliteAlert=1")
+        || line.contains("\"eliteAlert\":true")
+        || line.contains("\"eliteAlert\": true")
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]
@@ -175,6 +186,10 @@ pub struct Parser {
     candidate: Option<(String, f64)>,
     last_activity: f64,
     last_reward: Option<f64>,
+    pending_loading_time: Option<f64>,
+    pending_elite_node: Option<String>,
+    state_started_at: Option<f64>,
+    explicit_elite_at: Option<f64>,
     pending: Vec<u8>,
     discard: bool,
 }
@@ -199,6 +214,10 @@ impl Parser {
             candidate: None,
             last_activity: 0.,
             last_reward: None,
+            pending_loading_time: None,
+            pending_elite_node: None,
+            state_started_at: None,
+            explicit_elite_at: None,
             pending: vec![],
             discard: false,
         }
@@ -247,17 +266,30 @@ impl Parser {
         self.spawn_counter = None;
         self.candidate = None;
         self.last_reward = None;
+        self.state_started_at = None;
+        self.explicit_elite_at = None;
     }
-    pub fn reset(&mut self, reason: &str) {
+    fn clear_session(&mut self, reason: &str) {
         self.interrupt(reason);
-        self.origin = None;
-        self.session_header.clear();
-        self.previous = None;
         self.node.clear();
         self.mission_type.clear();
         self.host = None;
+        self.pending_loading_time = None;
+        self.pending_elite_node = None;
+        self.state_started_at = None;
+        self.explicit_elite_at = None;
         self.pending.clear();
         self.discard = false;
+    }
+    pub fn boundary(&mut self, reason: &str) {
+        self.clear_session(reason);
+        self.account_boundary = true;
+    }
+    pub fn reset(&mut self, reason: &str) {
+        self.clear_session(reason);
+        self.origin = None;
+        self.session_header.clear();
+        self.previous = None;
     }
     fn utc(&self, t: f64) -> Option<String> {
         self.origin
@@ -270,6 +302,10 @@ impl Parser {
         self.spawn_counter = None;
         self.last_reward = None;
         self.candidate = None;
+        self.pending_loading_time = None;
+        self.pending_elite_node = None;
+        self.state_started_at = None;
+        self.explicit_elite_at = None;
         self.last_activity = t;
         let identity = format!(
             "{}:{}:{}:{:.3}",
@@ -319,20 +355,47 @@ impl Parser {
             }
             (t, c.get(2).unwrap().as_str())
         } else {
-            if let Some(r)=self.active.as_mut().filter(|r|r.status=="recording"){retain_line(r,line);}
             if let Some(c) = TYPE.captures(line) {
                 self.mission_type = mode(&c[1]).into();
-                if let Some(r) = &mut self.active {
+                if let Some(r) = self.active.as_mut().filter(|r| r.status == "recording") {
                     r.mission_type = self.mission_type.clone();
                 }
             }
             if line.trim_start().starts_with("location=") {
                 if let Some(c) = NODE.captures(line) {
                     self.node = c[1].into();
-                    if let Some(r) = &mut self.active {
-                        r.node_id = self.node.clone();
+                    if let Some(r) = self.active.as_mut().filter(|r| r.status == "recording") {
+                        if r.node_id.is_empty() || has_elite_marker(line) {
+                            r.node_id = self.node.clone();
+                        }
                     }
                 }
+            } else if let Some(c) = NODE.captures(line) {
+                if has_elite_marker(line) {
+                    self.node = c[1].into();
+                    if let Some(r) = &mut self.active {
+                        if r.status == "recording" && r.node_id.is_empty() {
+                            r.node_id = self.node.clone();
+                        }
+                    }
+                }
+            }
+            if has_elite_marker(line) && self.active.is_none() {
+                if let Some(start_t) = self.pending_loading_time {
+                    self.start(start_t);
+                    self.explicit_elite_at = Some(start_t);
+                    if let Some(r) = &mut self.active {
+                        if r.node_id.is_empty() && !self.node.is_empty() {
+                            r.node_id = self.node.clone();
+                        }
+                        if r.mission_type.is_empty() && !self.mission_type.is_empty() {
+                            r.mission_type = self.mission_type.clone();
+                        }
+                    }
+                }
+            }
+            if let Some(r) = self.active.as_mut().filter(|r| r.status == "recording") {
+                retain_line(r, line);
             }
             return;
         };
@@ -353,34 +416,63 @@ impl Parser {
                 }
             }
         }
-        if msg.contains("LoginDone result=true") {
-            self.reset("登录账户发生变化");
-            self.account_boundary = true;
+        if msg.contains("LoginDone result=true")
+            || crate::account_signals::is_sys_info_event(line, "Logged in ")
+            || crate::account_signals::is_sys_info_event(line, "Logged out")
+        {
+            self.boundary("登录账户发生变化");
             return;
         }
         let loading = msg.contains("Host loading")
             || msg.contains("Host_StartMatch")
             || msg.contains("Client loading")
+            || msg.contains("Client_StartMatch")
             || msg.contains("Client joining mission in-progress");
-        if (msg.contains("Mission name:") && !NAME.is_match(msg))
-            || (loading
-                && !msg.contains("_EliteAlert")
-                && self
-                    .active
-                    .as_ref()
-                    .is_some_and(|r| r.status != "recording"))
+        let client_loading = msg.contains("Client loading")
+            || msg.contains("Client_StartMatch")
+            || msg.contains("Client joining mission in-progress");
+        let elite_marker = has_elite_marker(msg);
+        if msg.contains("Starting session on HOST")
+            || msg.contains("Host loading")
+            || msg.contains("Host_StartMatch")
+        {
+            self.host = Some(true);
+        } else if msg.contains("Starting session on CLIENT") || client_loading {
+            self.host = Some(false);
+        }
+        if loading {
+            self.pending_loading_time = Some(t);
+        } else if self.pending_loading_time.is_some_and(|lt| t - lt > 5.0) {
+            self.pending_loading_time = None;
+        }
+        if loading
+            && !elite_marker
+            && self
+                .active
+                .as_ref()
+                .is_some_and(|r| r.status != "recording")
         {
             self.interrupt("进入非仲裁任务");
             self.node.clear();
             self.mission_type.clear();
         }
         if let Some(c) = NODE.captures(msg) {
-            if loading
-                || msg.contains("Pending mission:")
-                || msg.contains("Set squad mission:")
-                || msg.contains("SyncAutoPopulatedConsumables")
-            {
+            let is_pending_decl =
+                msg.contains("Pending mission:") || msg.contains("Set squad mission:");
+            if is_pending_decl {
+                if c.get(2).is_some() || elite_marker {
+                    self.pending_elite_node = Some(c[1].to_string());
+                } else {
+                    self.pending_elite_node = None;
+                }
+            }
+            if loading || is_pending_decl || msg.contains("SyncAutoPopulatedConsumables") {
                 let node = c[1].to_string();
+                let loading_is_elite = loading
+                    && (c.get(2).is_some()
+                        || elite_marker
+                        || (client_loading
+                            && self.pending_elite_node.as_deref() == Some(node.as_str())));
                 if loading
                     && self.active.as_ref().is_some_and(|r| {
                         r.status != "recording" || (!r.node_id.is_empty() && r.node_id != node)
@@ -389,8 +481,9 @@ impl Parser {
                     self.interrupt("进入另一任务");
                 }
                 self.node = node;
-                if loading && c.get(2).is_some() && self.active.is_none() {
+                if loading_is_elite && self.active.is_none() {
                     self.start(t);
+                    self.explicit_elite_at = Some(t);
                 }
                 if let Some(r) = &mut self.active {
                     if r.status == "recording" && r.node_id.is_empty() {
@@ -399,30 +492,56 @@ impl Parser {
                 }
             }
         }
-        if let Some(c) = NAME.captures(msg) {
-            if c.get(3).is_some() {
-                if self.active.as_ref().is_some_and(|r| {
-                    r.status != "recording" || (!r.node.is_empty() && r.node != c[1])
-                }) {
-                    self.interrupt("进入另一任务");
+        if let Some((_, tail)) = msg.split_once("Mission name:") {
+            if !tail.trim().is_empty() {
+                if let Some(c) = NAME.captures(msg) {
+                    let node_name = c[1].trim();
+                    let planet_name = c[2].trim();
+                    if c.get(3).is_some_and(|m| ARBY_SUFFIX.is_match(m.as_str())) {
+                        if self.active.as_ref().is_some_and(|r| {
+                            r.status != "recording" || (!r.node.is_empty() && r.node != node_name)
+                        }) {
+                            self.interrupt("进入另一任务");
+                        }
+                        if self.active.is_none() {
+                            self.start(t);
+                        }
+                        if let Some(r) = &mut self.active {
+                            r.node = node_name.into();
+                            r.planet = planet_name.into();
+                        }
+                    } else if self
+                        .active
+                        .as_ref()
+                        .is_some_and(|r| r.status == "recording")
+                        && self.explicit_elite_at.is_some_and(|at| (t - at).abs() <= 5.0)
+                    {
+                        if let Some(r) = &mut self.active {
+                            if r.node.is_empty() {
+                                r.node = node_name.into();
+                            }
+                            if r.planet.is_empty() {
+                                r.planet = planet_name.into();
+                            }
+                        }
+                    } else {
+                        self.interrupt("进入非仲裁任务");
+                        self.node.clear();
+                        self.mission_type.clear();
+                        self.pending_elite_node = None;
+                    }
+                } else {
+                    self.interrupt("进入非仲裁任务");
+                    self.node.clear();
+                    self.mission_type.clear();
+                    self.pending_elite_node = None;
                 }
-                if self.active.is_none() {
-                    self.start(t);
-                }
-                if let Some(r) = &mut self.active {
-                    r.node = c[1].into();
-                    r.planet = c[2].into();
-                }
-            } else {
-                self.interrupt("进入非仲裁任务");
-                self.node.clear();
-                self.mission_type.clear();
             }
         }
         // A published arbitration schedule or vote does not constitute a started run.
         if let Some(c) = TYPE.captures(msg) {
             self.mission_type = mode(&c[1]).into();
-            if let Some(r) = &mut self.active {
+            if let Some(r) = self.active.as_mut().filter(|r| r.status == "recording") {
                 r.mission_type = self.mission_type.clone();
             }
         }
@@ -436,18 +555,30 @@ impl Parser {
                 r.gap("半途开始采集，缺少任务起点");
             }
         }
-        if msg.contains("Starting session on HOST") || msg.contains("Host loading") {
-            self.host = Some(true);
-        } else if msg.contains("Starting session on CLIENT") || msg.contains("Client loading") {
-            self.host = Some(false);
-        }
-        if self.active.as_ref().is_some_and(|r| {
-            r.status == "recording"
-                && (r.start_observed || r.gameplay_start.is_some())
-                && (msg.contains("Level=/Lotus/Levels/Proc/PlayerShip/")
-                    || msg.contains("EIDOLONMP: Going back to hub"))
-        }) {
-            self.interrupt("已返回飞船或中继站");
+        if self.active.as_ref().is_some_and(|r| r.status == "recording")
+            && (msg.contains("Level=/Lotus/Levels/Proc/PlayerShip/")
+                || msg.contains("EIDOLONMP: Going back to hub"))
+        {
+            if self.active.as_ref().is_some_and(|r| {
+                r.start_observed
+                    || r.gameplay_start.is_some()
+                    || r.drone_spawns > 0
+                    || !r.intervals.is_empty()
+            }) {
+                self.interrupt("已返回飞船或中继站");
+            } else {
+                self.active = None;
+                self.drones.clear();
+                self.agents.clear();
+                self.positioned.clear();
+                self.spawn_counter = None;
+                self.candidate = None;
+                self.last_reward = None;
+                self.state_started_at = None;
+                self.explicit_elite_at = None;
+            }
+            self.pending_elite_node = None;
+            self.pending_loading_time = None;
             return;
         }
         let Some(r) = &mut self.active else {
@@ -498,6 +629,9 @@ impl Parser {
         }
         if msg.contains("OnStateStarted, mission type=") {
             r.start_observed = true;
+            if self.state_started_at.is_none() {
+                self.state_started_at = Some(t);
+            }
         }
         if (r.start_observed || !r.intervals.is_empty() || r.drone_spawns > 0)
             && is_host_migration(msg)
@@ -507,6 +641,7 @@ impl Parser {
             self.spawn_counter = None;
         }
         let wave = WAVE.captures(msg).and_then(|c| c[1].parse::<u32>().ok());
+        let lower_msg = msg.to_ascii_lowercase();
         let gameplay = wave == Some(1)
             || msg.contains("Survival: Starting survival")
             || msg.contains("PurifyMission.lua: ModeState = 2")
@@ -514,12 +649,43 @@ impl Parser {
             || (msg.contains("Disruption: State change: ARTIFACT_ROUND")
                 && !msg.contains("ARTIFACT_ROUND_DONE"))
             || (msg.contains("TerritoryMission.lua:")
-                && (msg.to_lowercase().contains("control")
-                    || msg.to_lowercase().contains("captured")));
+                && (lower_msg.contains("control")
+                    || lower_msg.contains("captured")
+                    || lower_msg.contains("starting round")
+                    || lower_msg.contains("round 1")))
+            || (msg.contains("ExcavateMission.lua:")
+                && (lower_msg.contains("start")
+                    || lower_msg.contains("spawn")
+                    || lower_msg.contains("artifact")
+                    || lower_msg.contains("excavator")))
+            || (msg.contains("EvacuationMission.lua:")
+                && (lower_msg.contains("start") || lower_msg.contains("spawn")))
+            || msg.contains("VoidCascade")
+            || msg.contains("CascadeMission")
+            || msg.contains("AlchemyMission");
         if gameplay && r.gameplay_start.is_none() {
             r.gameplay_start = Some(t);
             r.reward_cycles = if r.has_gap { None } else { Some(0) };
             r.event(t, "start", "任务计时开始");
+        }
+        if r.gameplay_start.is_none() {
+            if let Some(st) = self.state_started_at {
+                if r.is_host == Some(false)
+                    || matches!(
+                        r.mission_type.as_str(),
+                        "Excavation"
+                            | "Defection"
+                            | "Void Cascade"
+                            | "Void Flood"
+                            | "Alchemy"
+                            | "Void Armageddon"
+                    )
+                {
+                    r.gameplay_start = Some(st);
+                    r.reward_cycles = if r.has_gap { None } else { Some(0) };
+                    r.event(st, "start", "任务计时开始");
+                }
+            }
         }
         if let Some(index) = wave {
             if !r
@@ -552,13 +718,25 @@ impl Parser {
         {
             r.complete_wave(t);
         }
-        let reward = msg.contains("Survival: Gave reward tier")
+        let reward = msg.contains("Gave reward tier")
             || msg.contains("Disruption: State change: ARTIFACT_ROUND_DONE")
-            || msg.contains("Disruption: Endless mission reward given")
-            || msg.contains("ZarimanSurvivalMission.lua: Gave reward tier")
-            || (["Interception", "Infested Salvage", "Mirror Defense"]
+            || msg.contains("Endless mission reward given")
+            || (msg.contains("Created /Lotus/Interface/DefenseReward.swf")
+                && ([
+                    "Interception",
+                    "Infested Salvage",
+                    "Defection",
+                    "Void Armageddon",
+                ]
                 .contains(&r.mission_type.as_str())
-                && msg.contains("Created /Lotus/Interface/DefenseReward.swf"));
+                    || (matches!(r.mission_type.as_str(), "Defense" | "Mirror Defense")
+                        && r.waves_completed == 0)));
+        if reward && r.gameplay_start.is_none() {
+            let st = self.state_started_at.unwrap_or(r.start_log_seconds);
+            r.gameplay_start = Some(st);
+            r.reward_cycles = if r.has_gap { None } else { Some(0) };
+            r.event(st, "start", "任务计时开始");
+        }
         if reward && self.last_reward.is_none_or(|p| t - p > 30.) {
             let interval_start = self
                 .last_reward
@@ -608,6 +786,10 @@ impl Parser {
                 else if r.agent_types.len()<2048{r.agent_types.push(AgentType{name,kind:kind.into(),count:1});}
             }
             if drone && self.drones.len() < 200000 && self.drones.insert(agent) {
+                if !r.start_observed && r.gameplay_start.is_none() {
+                    r.gameplay_start = Some(t);
+                    r.event(t, "start", "任务计时开始");
+                }
                 r.drone_spawns += 1;
                 r.drone_times.push(t);
                 r.drone_telemetry = true;
@@ -624,7 +806,10 @@ impl Parser {
                         r.enemy_spawns =
                             Some(r.enemy_spawns.unwrap_or(0).saturating_add(count - prev));
                     } else {
-                        r.gap("敌人生成计数器重置");
+                        let note = "敌人生成计数器已分段重置";
+                        if !r.quality_notes.iter().any(|s| s == note) {
+                            r.quality_notes.push(note.into());
+                        }
                     }
                 } else {
                     r.enemy_spawns = Some(0);
@@ -679,6 +864,10 @@ fn mode(s: &str) -> &str {
         "MT_EXCAVATE" => "Excavation",
         "MT_MIRROR_DEFENSE" => "Mirror Defense",
         "MT_VOID_CASCADE" => "Void Cascade",
+        "MT_EVACUATION" => "Defection",
+        "MT_CORRUPTION" => "Void Flood",
+        "MT_ALCHEMY" => "Alchemy",
+        "MT_ARMAGEDDON" => "Void Armageddon",
         _ => s,
     }
 }
@@ -870,5 +1059,174 @@ mod tests {
         assert!(p.active.is_none());
         assert_eq!(p.finished.len(), 1);
         assert_eq!(p.finished[0].status, "interrupted");
+    }
+    #[test]
+    fn client_defense_tracks_gameplay_start_and_defense_reward_rotations() {
+        let mut p = parser();
+        p.line("10.0 Net [Info]: **** Starting session on CLIENT");
+        p.line("12.0 Script [Info]: ThemedSquadOverlay.lua: Mission name: Hyf (Deimos) - Arbitration");
+        p.line("12.0 Script [Info]: ThemedSquadOverlay.lua: Client loading SolNode707_EliteAlert");
+        p.line("15.0 Game [Info]: OnStateStarted, mission type=MT_DEFENSE");
+        p.line("180.0 Sys [Info]: Created /Lotus/Interface/DefenseReward.swf");
+        p.line("360.0 Sys [Info]: Created /Lotus/Interface/DefenseReward.swf");
+        let r = p.active.as_ref().unwrap();
+        assert_eq!(r.is_host, Some(false));
+        assert_eq!(r.gameplay_start, Some(15.0));
+        assert_eq!(r.reward_cycles, Some(2));
+        assert_eq!(r.intervals.len(), 2);
+        assert_eq!(r.intervals[0].kind, "rotation");
+        assert!(!r.drone_telemetry);
+        assert!(!r.has_gap);
+    }
+    #[test]
+    fn client_multiline_mission_info_starts_arbitration_run() {
+        let mut p = parser();
+        p.feed(
+            concat!(
+                "10.0 Script [Info]: ThemedSquadOverlay.lua: Client loading with MissionInfo:\n",
+                "    location=SolNode707_EliteAlert\n",
+                "    missionType=MT_SURVIVAL\n",
+                "15.0 Game [Info]: OnStateStarted, mission type=MT_SURVIVAL\n",
+            )
+            .as_bytes(),
+        );
+        let r = p.active.as_ref().unwrap();
+        assert_eq!(r.status, "recording");
+        assert_eq!(r.node_id, "SolNode707");
+        assert_eq!(r.mission_type, "Survival");
+        assert_eq!(r.is_host, Some(false));
+        assert_eq!(r.gameplay_start, Some(15.0));
+    }
+    #[test]
+    fn host_excavation_tracks_start_drones_and_reward_cycles() {
+        let mut p = parser();
+        p.line("10.0 Script [Info]: Host loading SolNode123_EliteAlert");
+        p.line("12.0 Game [Info]: OnStateStarted, mission type=MT_EXCAVATE");
+        p.line("40.0 AI [Info]: OnAgentCreated /Npc/CorpusEliteShieldDroneAgent1 Live 4 Spawned 1");
+        p.line("140.0 Script [Info]: ExcavateMission.lua: Gave reward tier A");
+        let r = p.active.as_ref().unwrap();
+        assert_eq!(r.mission_type, "Excavation");
+        assert_eq!(r.gameplay_start, Some(12.0));
+        assert_eq!(r.reward_cycles, Some(1));
+        assert_eq!(r.drone_spawns, 1);
+        assert!(!r.has_gap);
+    }
+    #[test]
+    fn multilingual_and_empty_mission_names_after_elite_load_do_not_abort() {
+        let mut p = parser();
+        p.line("10.0 Script [Info]: ThemedSquadOverlay.lua: Host loading SolNode707_EliteAlert");
+        p.line("10.1 Script [Info]: ThemedSquadOverlay.lua: Mission name: ");
+        p.line("10.2 Script [Info]: ThemedSquadOverlay.lua: Mission name: Hyf（ダイモス） - アービトレーション");
+        let r = p.active.as_ref().unwrap();
+        assert_eq!(r.status, "recording");
+        assert_eq!(r.node, "Hyf");
+        assert_eq!(r.planet, "ダイモス");
+
+        let mut p2 = parser();
+        p2.line("20.0 Script [Info]: Host loading SolNode450_EliteAlert");
+        p2.line("20.1 Script [Info]: Mission name: Tyana Pass (Mars) - UnknownLocale");
+        let r2 = p2.active.as_ref().unwrap();
+        assert_eq!(r2.status, "recording");
+        assert_eq!(r2.node, "Tyana Pass");
+    }
+    #[test]
+    fn spawn_counter_reset_notes_segment_without_clearing_reward_cycles() {
+        let mut p = parser();
+        p.feed(START.as_bytes());
+        p.line("232.0 AI [Info]: OnAgentCreated /Npc/Enemy1 Live 3 Spawned 10");
+        p.line("240.0 AI [Info]: OnAgentCreated /Npc/Enemy2 Live 2 Spawned 2");
+        p.line("250.0 Script [Info]: WaveDefend.lua: _SleepBetweenWaves(3)");
+        let r = p.active.as_ref().unwrap();
+        assert!(!r.has_gap);
+        assert_eq!(r.reward_cycles, Some(0));
+        assert!(r.quality_notes.iter().any(|n| n.contains("分段重置")));
+    }
+    #[test]
+    fn import_preserves_utc_origin_and_id_dedup_across_login_done() {
+        let log = concat!(
+            "0.021 Sys [Diag]: Current time: [UTC: Sat Oct 24 15:09:14 2026]\n",
+            "15.0 Script [Info]: MainMenu::LoginDone result=true\n",
+            "20.0 Sys [Info]: Logged in TennoA (id)\n",
+            "100.0 Script [Info]: ThemedSquadOverlay.lua: Mission name: Hyf (火卫二) - 仲裁\n",
+            "100.0 Script [Info]: Host loading SolNode707_EliteAlert\n",
+            "102.0 Game [Info]: OnStateStarted, mission type=MT_DEFENSE\n",
+            "105.0 Script [Info]: WaveDefend.lua: Defense wave: 1\n",
+            "140.0 Script [Info]: TopMenu.lua: Abort:\n",
+        );
+        let mut p1 = Parser::new("import-ee-log", "key-1");
+        p1.feed(log.as_bytes());
+        p1.eof();
+        let mut p2 = Parser::new("import-ee-log", "key-2");
+        p2.feed(log.as_bytes());
+        p2.eof();
+        let r1 = &p1.finished[0];
+        let r2 = &p2.finished[0];
+        assert!(r1.start_utc.is_some());
+        assert!(r1.end_utc.is_some());
+        assert!(r1.retained_log.starts_with("0.021 Sys [Diag]: Current time:"));
+        assert_eq!(r1.id, r2.id);
+    }
+    #[test]
+    fn sys_logged_out_and_logged_in_trigger_boundary_while_chat_does_not() {
+        let mut p = Parser::new("live-ee-log", "test");
+        p.feed(START.as_bytes());
+        p.line("240 Chat [Info]: Sys [Info]: Logged out");
+        assert!(!p.account_boundary);
+        assert!(p.active.is_some());
+        p.line("250.0 Sys [Info]: Logged out");
+        assert!(p.account_boundary);
+        assert!(p.active.is_none());
+
+        let mut p2 = Parser::new("live-ee-log", "test2");
+        p2.feed(START.as_bytes());
+        p2.line("250.0 Sys [Info]: Logged in TennoB (id)");
+        assert!(p2.account_boundary);
+        assert!(p2.active.is_none());
+    }
+    #[test]
+    fn orbiter_return_before_state_started_discards_phantom_run() {
+        let mut p = parser();
+        p.line("10.0 Script [Info]: ThemedSquadOverlay.lua: Mission name: Hyf (Deimos) - Arbitration");
+        p.line("10.0 Script [Info]: Host loading SolNode707_EliteAlert");
+        assert!(p.active.is_some());
+        p.line("15.0 Sys [Info]: Level=/Lotus/Levels/Proc/PlayerShip/PlayerShip");
+        assert!(p.active.is_none());
+        assert!(p.finished.is_empty());
+    }
+    #[test]
+    fn ended_run_metadata_is_not_mutated_by_subsequent_type_or_location_lines() {
+        let mut p = parser();
+        p.feed(START.as_bytes());
+        p.line("250.0 Script [Info]: TopMenu.lua: Abort:");
+        assert_eq!(p.active.as_ref().unwrap().status, "aborted");
+        p.line("    missionType=MT_EXCAVATE");
+        p.line("    location=SolNode123");
+        p.line("255.0 Game [Info]: OnStateStarted, mission type=MT_SURVIVAL");
+        let r = p.active.as_ref().unwrap();
+        assert_eq!(r.mission_type, "Defense");
+        assert_eq!(r.node_id, "SolNode707");
+    }
+    #[test]
+    fn mirror_defense_reward_swf_tracks_client_without_mixing_host_waves() {
+        let mut host = parser();
+        host.line("10.0 Script [Info]: Host loading SolNode450_EliteAlert");
+        host.line("12.0 Game [Info]: OnStateStarted, mission type=MT_MIRROR_DEFENSE");
+        host.line("20.0 Script [Info]: LoopDefend.lua: Loop Defense wave: 1");
+        host.line("150.0 Script [Info]: LoopDefend.lua: Loop Defense wave: 2");
+        host.line("180.0 Script [Info]: LoopDefend.lua: Loop Defense wave: 3");
+        host.line("181.0 Sys [Info]: Created /Lotus/Interface/DefenseReward.swf");
+        let h = host.active.as_ref().unwrap();
+        assert!(h.intervals.iter().all(|i| i.kind == "wave"));
+        assert_eq!(h.reward_cycles, Some(1));
+
+        let mut client = parser();
+        client.line("10.0 Net [Info]: **** Starting session on CLIENT");
+        client.line("11.0 Script [Info]: Client loading SolNode450_EliteAlert");
+        client.line("12.0 Game [Info]: OnStateStarted, mission type=MT_MIRROR_DEFENSE");
+        client.line("180.0 Sys [Info]: Created /Lotus/Interface/DefenseReward.swf");
+        let c = client.active.as_ref().unwrap();
+        assert_eq!(c.intervals.len(), 1);
+        assert_eq!(c.intervals[0].kind, "rotation");
+        assert_eq!(c.reward_cycles, Some(1));
     }
 }

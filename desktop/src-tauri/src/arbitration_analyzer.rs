@@ -13,6 +13,7 @@ fn response(request: &str, port: u16, token: &str) -> (u16, bool) {
     match first[0] {"GET"=>(200,true),"OPTIONS" if header("access-control-request-method")==Some("GET")=>(204,false),_=>(405,false)}
 }
 fn serve(mut stream:TcpStream,port:u16,token:&str,log:&str)->std::io::Result<bool>{
+    stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(Duration::from_secs(2)))?;
     stream.set_write_timeout(Some(Duration::from_secs(5)))?;
     let mut bytes=Vec::new();let mut one=[0u8;1];
@@ -36,4 +37,5 @@ pub fn open(log:String)->Result<(),String>{
 #[cfg(test)]mod tests{use super::*;
  #[test]fn requires_origin_host_and_capability(){let token="0123456789abcdef0123456789abcdef";let req=format!("GET /v1/arbExports/{token} HTTP/1.1\r\nHost: 127.0.0.1:1234\r\nOrigin: https://arbi.guide\r\n\r\n");assert_eq!(response(&req,1234,token),(200,true));assert_eq!(response(&req.replace("https://arbi.guide","https://example.com"),1234,token),(403,false));assert_eq!(response(&req,1235,token),(403,false));assert_eq!(response(&req,1234,"different"),(404,false));assert_eq!(response(&req.replace("GET ","OPTIONS ").replace("\r\n\r\n","\r\nAccess-Control-Request-Method: GET\r\n\r\n"),1234,token),(204,false));}
  #[test]fn serves_exact_log_over_loopback(){let listener=TcpListener::bind(("127.0.0.1",0)).unwrap();let port=listener.local_addr().unwrap().port();let worker=std::thread::spawn(move||serve(listener.accept().unwrap().0,port,"token","仲裁\nline 2").unwrap());let mut client=TcpStream::connect(("127.0.0.1",port)).unwrap();write!(client,"GET /v1/arbExports/token HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: https://arbi.guide\r\n\r\n").unwrap();let mut output=String::new();client.read_to_string(&mut output).unwrap();assert!(output.ends_with("\r\n\r\n仲裁\nline 2"));assert!(worker.join().unwrap());}
+ #[test]fn nonblocking_listener_serves_delayed_client_request(){let listener=TcpListener::bind(("127.0.0.1",0)).unwrap();let port=listener.local_addr().unwrap().port();listener.set_nonblocking(true).unwrap();let worker=std::thread::spawn(move||{loop{match listener.accept(){Ok((stream,_))=>return serve(stream,port,"token","delayed-ok").unwrap(),Err(e) if e.kind()==std::io::ErrorKind::WouldBlock=>std::thread::sleep(Duration::from_millis(10)),Err(e)=>panic!("accept failed: {e}"),}}});let mut client=TcpStream::connect(("127.0.0.1",port)).unwrap();std::thread::sleep(Duration::from_millis(50));write!(client,"GET /v1/arbExports/token HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nOrigin: https://arbi.guide\r\n\r\n").unwrap();let mut output=String::new();client.read_to_string(&mut output).unwrap();assert!(output.ends_with("\r\n\r\ndelayed-ok"));assert!(worker.join().unwrap());}
 }
